@@ -1,0 +1,1455 @@
+/* Readable teaching surface. The original compact dashboard remains available
+   as Free Experiment, but no longer determines the default learning flow. */
+:root {
+  font-size: 16px;
+}
+.learning-shell {
+  font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+  color: #e7edf5;
+  min-height: 100vh;
+  background: #0c1017;
+  font-size: 18px;
+  line-height: 1.8;
+}
+.learning-header {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #303c4b;
+}
+.learning-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.4;
+}
+.learning-brand > svg {
+  color: #7ee4bf;
+}
+.learning-brand small {
+  display: block;
+  font-size: 14px;
+  color: #a6b6ca;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.learning-main {
+  max-width: 1080px;
+  padding: 38px 32px 0;
+  margin: 0 auto;
+}
+.lesson-kicker {
+  color: #9bc7b8;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+  font-weight: 550;
+}
+.lesson-welcome h1 {
+  font-size: clamp(32px, 4.3vw, 48px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -1px;
+  margin: 16px 0 24px;
+}
+.lesson-mobile-break {
+  display: none;
+}
+.lesson-intro {
+  font-size: 20px;
+  line-height: 1.95;
+  color: #c3cfdd;
+  max-width: 870px;
+  margin: 0 0 19px;
+}
+.lesson-key-idea {
+  font-size: 18px;
+  font-weight: 600;
+  color: #94e5c9;
+  line-height: 1.8;
+  margin: 16px 0 24px;
+}
+.lesson-overview {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  justify-content: space-between;
+  border-top: 1px solid #303c4b;
+  border-bottom: 1px solid #303c4b;
+  padding: 28px 0;
+  margin: 30px 0 34px;
+}
+.lesson-overview > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.lesson-overview b {
+  font:
+    24px Consolas,
+    monospace;
+  color: #7ee4bf;
+}
+.lesson-overview span {
+  font-size: 19px;
+  color: #e2eaf4;
+  font-weight: 550;
+}
+.lesson-overview small {
+  font-size: 15px;
+  color: #a8b8cc;
+  display: block;
+  font-weight: 400;
+  margin-top: 3px;
+}
+.lesson-overview > svg {
+  width: 20px;
+  color: #78908c;
+}
+.learning-shell button {
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 48px;
+}
+.lesson-primary,
+.lesson-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 7px;
+  min-height: 48px;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 550;
+  touch-action: manipulation;
+}
+.lesson-primary {
+  background: #88e0bc;
+  color: #0b2118;
+  border: 1px solid #9af1cd;
+  padding: 14px 22px;
+  min-height: 54px !important;
+}
+.lesson-primary:hover {
+  background: #acf4d6;
+}
+.lesson-secondary {
+  background: #17212d;
+  border: 1px solid #43546a;
+  color: #d4e3f1;
+  padding: 12px 18px;
+}
+.lesson-secondary:hover {
+  background: #223345;
+  border-color: #7a9aab;
+}
+.lesson-start p {
+  font-size: 17px;
+  color: #bccbdd;
+  line-height: 1.9;
+  margin-top: 16px;
+}
+.lesson-start p.lesson-fineprint {
+  font-size: 14px;
+  color: #9dadc1;
+  margin-top: 5px;
+}
+.lesson-scope {
+  margin-top: 38px;
+  padding-top: 26px;
+  border-top: 1px solid #303c4b;
+}
+.lesson-scope strong {
+  font-size: 18px;
+  font-weight: 550;
+}
+.lesson-scope p {
+  color: #a8b9ce;
+  font-size: 16px;
+  line-height: 1.9;
+  margin-top: 9px;
+}
+.lesson-scope button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9cdbc5;
+  margin-top: 8px;
+}
+.lesson-progress {
+  display: flex;
+  gap: 14px;
+  margin: 24px 0 30px;
+}
+.lesson-progress button {
+  flex: 1;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 2px solid #344251;
+  color: #a4b3c7;
+  padding: 11px 5px;
+  font-size: 17px;
+  min-width: 0;
+}
+.lesson-progress b {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #243140;
+  font:
+    15px Consolas,
+    monospace;
+}
+.lesson-progress button.current {
+  border-color: #81e3bf;
+  color: #c9f3e2;
+}
+.lesson-progress button.current b {
+  background: #29483b;
+  color: #b3f5d6;
+}
+.lesson-progress button.complete {
+  border-color: #538d75;
+  color: #a6d8c3;
+}
+.lesson-step-title {
+  font-size: clamp(27px, 3.4vw, 36px);
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: -0.6px;
+  margin: 0 0 12px;
+}
+.lesson-step-title:focus {
+  outline: 0;
+}
+.lesson-instruction {
+  margin: 20px 0 24px;
+}
+.lesson-instruction > strong {
+  display: block;
+  color: #9bb4c5;
+  font-size: 15px;
+  font-weight: 550;
+  margin-bottom: 7px;
+}
+.lesson-instruction p {
+  font-size: 18px;
+  color: #c4d0df;
+  line-height: 1.95;
+}
+.lesson-instruction p strong {
+  font-weight: 600;
+  color: #e6eff9;
+}
+.lesson-panel {
+  min-width: 0;
+  background: #131c27;
+  border: 1px solid #334457;
+  border-radius: 10px;
+  padding: 26px;
+}
+.lesson-captures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.lesson-capture {
+  margin: 0;
+  min-width: 0;
+}
+.lesson-capture figcaption {
+  font-size: 17px;
+  color: #e2ecf5;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+.lesson-capture figcaption > span:last-child {
+  display: block;
+  font-size: 14px;
+  color: #adbed2;
+  padding-left: 16px;
+}
+.lesson-dot {
+  display: inline-block;
+  vertical-align: middle;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 9px;
+}
+.lesson-image {
+  position: relative;
+  line-height: 0;
+  border: 1px solid #647387;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: crosshair;
+  touch-action: none;
+}
+.lesson-image canvas {
+  display: block;
+  width: 100%;
+  height: 142px;
+}
+.lesson-crosshair {
+  position: absolute;
+  width: 17px;
+  height: 17px;
+  border: 2px solid #9cffe0;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px #103b2c,
+    0 0 8px #09120e;
+}
+.lesson-crosshair:before,
+.lesson-crosshair:after {
+  content: "";
+  position: absolute;
+  background: #9cffe0;
+  opacity: 0.8;
+}
+.lesson-crosshair:before {
+  height: 31px;
+  width: 1px;
+  left: 6px;
+  top: -9px;
+}
+.lesson-crosshair:after {
+  width: 31px;
+  height: 1px;
+  top: 6px;
+  left: -9px;
+}
+.lesson-caption {
+  font-size: 16px;
+  color: #b7c6d8;
+  line-height: 1.9;
+  margin: 21px 0;
+}
+.lesson-takeaway {
+  padding: 26px 0;
+  margin-top: 4px;
+}
+.lesson-takeaway > strong {
+  font-size: 16px;
+  color: #95dbc1;
+}
+.lesson-takeaway p {
+  font-size: 18px;
+  color: #c2d0df;
+  line-height: 1.95;
+  margin-top: 8px;
+}
+.lesson-takeaway .lesson-quality {
+  font-size: 15px;
+  color: #9bafc4;
+  margin-top: 13px;
+}
+.lesson-plot-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.lesson-plot-heading h2 {
+  font-size: 22px;
+  line-height: 1.6;
+  font-weight: 550;
+}
+.lesson-plot-heading > span {
+  font-size: 15px;
+  color: #a8bcd0;
+}
+.lesson-readings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 24px;
+}
+.lesson-readings > div {
+  padding: 13px 0 15px;
+  border-bottom: 2px solid var(--reading-color);
+  color: var(--reading-color);
+}
+.lesson-readings span {
+  display: block;
+  font-size: 16px;
+}
+.lesson-readings b {
+  display: block;
+  font:
+    30px/1.6 Consolas,
+    monospace;
+}
+.lesson-axis-description {
+  font-size: 15px;
+  color: #afc1d4;
+  margin: 0 0 12px;
+}
+.lesson-plot-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.lesson-plot-footer > span {
+  font-size: 15px;
+  color: #b1c3d6;
+}
+.lesson-phase-result {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 32px;
+  align-items: center;
+  padding-bottom: 28px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #354657;
+}
+.lesson-phase-result > div > span {
+  font-size: 16px;
+  color: #b8c6da;
+}
+.lesson-phase-result strong {
+  display: block;
+  color: #d1b8ff;
+  font:
+    40px/1.7 Consolas,
+    monospace;
+  font-weight: 400;
+}
+.lesson-phase-result small {
+  font:
+    18px system-ui,
+    sans-serif;
+  color: #adbed1;
+}
+.lesson-phase-result p {
+  font-size: 17px;
+  line-height: 1.9;
+  color: #b9cbdc;
+}
+.lesson-phase-result p strong {
+  display: inline;
+  font: inherit;
+  font-weight: 600;
+  color: #dfebf5;
+}
+.lesson-chart-legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+.lesson-unwrap-explanation {
+  font-size: 18px;
+  color: #94e5c9;
+  margin-top: 18px;
+  font-weight: 550;
+}
+.lesson-formula {
+  border-top: 1px solid #354657;
+  margin-top: 26px;
+  padding-top: 16px;
+}
+.lesson-formula summary {
+  font-size: 16px;
+  color: #afc5d6;
+  cursor: pointer;
+  min-height: 48px;
+  padding: 8px 0;
+}
+.lesson-formula p {
+  font-size: 16px;
+  color: #b3c4d7;
+  line-height: 1.9;
+  margin: 13px 0;
+}
+.lesson-formula code {
+  font:
+    16px/1.9 Consolas,
+    monospace;
+  display: block;
+  color: #bae4d4;
+  background: #0f1823;
+  padding: 18px;
+  border-radius: 5px;
+  overflow-wrap: anywhere;
+}
+.lesson-actions {
+  position: static;
+  background: #0c1017f5;
+  border-top: 1px solid #3a4c60;
+  padding: 18px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  z-index: 3;
+  margin-top: 8px;
+}
+.learning-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 36px;
+  padding: 24px 0 28px;
+  border-top: 1px solid #303c4b;
+}
+.learning-footer button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #afcbd8;
+}
+.learning-footer span {
+  font-size: 14px;
+  color: #a0b4c7;
+}
+/* Readable Free Experiment, including narrow desktop preview panes. */
+.page-heading h1 {
+  font-size: 34px;
+}
+.page-heading p {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.eyebrow,
+.sidebar-label {
+  font-size: 12px;
+}
+.breadcrumbs,
+.top-meta,
+.local-label,
+.linear-pill {
+  font-size: 14px;
+}
+.brand {
+  font-size: 21px;
+}
+.main-nav button {
+  font-size: 16px;
+}
+.roadmap-item strong {
+  font-size: 13px;
+  white-space: normal;
+}
+.roadmap-item small {
+  font-size: 12px;
+}
+.sidebar-bottom p {
+  font-size: 16px;
+}
+.sidebar-version {
+  font-size: 11px;
+}
+.model-badge {
+  font-size: 14px;
+}
+.experiment-toolbar {
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.experiment-title strong {
+  font-size: 17px;
+}
+.subtle-badge {
+  font-size: 13px;
+}
+.toolbar-actions {
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.toolbar-actions button {
+  min-height: 44px;
+  font-size: 15px;
+  padding: 8px 12px;
+}
+.help-button {
+  font-size: 15px;
+  min-height: 44px;
+  height: auto;
+}
+.help-button > span {
+  display: inline;
+}
+.page-heading {
+  flex-wrap: wrap;
+}
+.section-heading {
+  padding: 22px 24px;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+.section-heading h2 {
+  font-size: 20px;
+  line-height: 1.6;
+}
+.section-heading h2 > span {
+  font-size: 12px;
+}
+.section-number {
+  font-size: 13px;
+  padding: 3px 7px;
+}
+.segmented button {
+  min-height: 40px;
+  font-size: 14px;
+  padding: 6px 10px;
+}
+.segmented.mini button {
+  font-size: 14px;
+  min-height: 36px;
+}
+.capture-label {
+  font-size: 14px;
+}
+.capture-label > span:first-child {
+  font-size: 17px;
+}
+.capture-footer {
+  font-size: 12px;
+}
+.raster-wrap canvas {
+  height: 140px;
+}
+.phase-map-area .raster-wrap canvas {
+  height: 150px;
+}
+.capture-grid {
+  padding: 0 24px 22px;
+  gap: 18px;
+}
+.card-footnote {
+  font-size: 14px;
+  line-height: 1.9;
+  padding: 15px 24px;
+}
+.push-right {
+  display: none;
+}
+.chart-instruction,
+.axis-title,
+.legend,
+.legend > span,
+.legend small {
+  font-size: 14px;
+}
+.chart-instruction {
+  line-height: 1.6;
+}
+.chart-meta {
+  padding: 0 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.legend {
+  gap: 18px;
+}
+.legend i {
+  height: 3px;
+  width: 14px;
+}
+.chart-tick {
+  font-size: 14px;
+  fill: #b3c1d4;
+}
+.chart-bottom {
+  font-size: 14px;
+  line-height: 1.8;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 24px 17px;
+  color: #a0b2c9;
+}
+.probe-strip {
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px 24px;
+}
+.probe-position strong,
+.probe-intensities {
+  font-size: 16px;
+}
+.probe-position > span:first-of-type,
+.probe-position .muted {
+  font-size: 14px;
+}
+.probe-intensities {
+  gap: 18px;
+}
+.valid-label {
+  font-size: 12px;
+  padding: 3px 7px;
+}
+.text-button {
+  font-size: 15px;
+  min-height: 44px;
+}
+.phase-upper {
+  padding: 0 24px 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
+  gap: 24px;
+}
+.map-title {
+  font-size: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.phase-colorbar {
+  font-size: 14px;
+}
+.phase-chart-head {
+  margin: 0 24px;
+  padding: 18px 0 4px;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.equation-label {
+  font-size: 14px;
+}
+.equation {
+  font-size: 25px;
+  gap: 7px;
+}
+.atan2-args {
+  font-size: 20px;
+}
+.equation-area p {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.estimated-value {
+  font-size: 15px;
+  padding-top: 14px;
+  margin-top: 16px;
+}
+.estimated-value strong {
+  font-size: 28px;
+}
+.estimated-value small,
+.probe-radiometry {
+  font-size: 14px;
+}
+.probe-radiometry {
+  line-height: 1.9;
+}
+.switch-label {
+  font-size: 15px;
+  min-height: 44px;
+}
+.switch {
+  width: 34px;
+  height: 20px;
+}
+.switch:after {
+  width: 12px;
+  height: 12px;
+  top: 3px;
+  left: 3px;
+}
+.switch-label input:checked + .switch:after {
+  transform: translateX(14px);
+}
+.lab-layout {
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 24px;
+}
+.experiment-content {
+  gap: 24px;
+}
+.parameters {
+  gap: 24px;
+}
+.parameters-card {
+  padding: 0 24px 22px;
+}
+.parameter-title {
+  padding: 20px 0;
+  gap: 10px;
+}
+.parameter-title h2,
+.metrics-title h2 {
+  font-size: 18px;
+}
+.parameter-title button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.parameter-section-label {
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 22px 0;
+}
+.mini-tag {
+  font-size: 12px;
+}
+.control {
+  margin-bottom: 25px;
+}
+.control label {
+  font-size: 16px;
+  line-height: 1.6;
+  gap: 8px;
+}
+.control label i {
+  font-size: 16px;
+}
+.control output {
+  font-size: 16px;
+  padding: 5px 8px;
+  min-width: 60px;
+}
+.control input[type="range"] {
+  height: 44px;
+  margin: 0;
+  background-size: 100% 4px;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.control input[type="range"]::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+}
+.range-limits,
+.control-hint {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.range-limits {
+  margin-top: -3px;
+}
+.control-hint {
+  color: #a2b5ca;
+}
+.seed-control > label {
+  font-size: 16px;
+}
+.seed-control > label span {
+  font-size: 14px;
+}
+.seed-control input {
+  font-size: 16px;
+  min-height: 44px;
+}
+.seed-control button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.advanced summary {
+  font-size: 15px;
+  min-height: 44px;
+  gap: 10px;
+}
+.sensor-note {
+  font-size: 14px;
+  line-height: 1.9;
+  color: #a2b5ca;
+}
+.resolution-label,
+.resolution-label select {
+  font-size: 15px;
+}
+.resolution-label select {
+  min-height: 44px;
+}
+.metrics-card {
+  padding: 24px;
+}
+.metric > div:first-child {
+  font-size: 15px;
+  line-height: 1.7;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.metric strong {
+  font-size: 32px;
+}
+.metric-unit,
+.metric-small,
+.metrics-note {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.live-pill {
+  font-size: 12px;
+}
+.metrics-note {
+  color: #a4c1b3;
+}
+.learning-tip > span {
+  font-size: 16px;
+}
+.learning-tip p {
+  font-size: 16px;
+  line-height: 1.9;
+}
+.learning-tip button {
+  font-size: 15px;
+  min-height: 44px;
+}
+.page-footer {
+  font-size: 13px;
+  line-height: 1.9;
+  flex-wrap: wrap;
+}
+.page-footer button {
+  min-height: 44px;
+}
+.toast {
+  font-size: 16px;
+  line-height: 1.8;
+  padding: 16px 20px;
+}
+.toast button {
+  min-height: 44px;
+  min-width: 44px;
+}
+.no-valid {
+  font-size: 16px;
+}
+.temporal-layout {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 18px 16px;
+}
+.temporal-copy {
+  display: none;
+}
+.scene-badge,
+.scene-note {
+  font-size: 13px;
+}
+.reading-card {
+  padding: 32px;
+}
+.reading-card p {
+  font-size: 17px;
+  line-height: 2;
+}
+.reading-card h2 {
+  font-size: 28px;
+}
+.reading-card h3 {
+  font-size: 22px;
+}
+.reading-card code,
+.formula-block {
+  font-size: 16px;
+  line-height: 2;
+}
+.symbol-grid dd {
+  font-size: 17px;
+}
+.symbol-grid small {
+  font-size: 15px;
+}
+.reading-notice p {
+  font-size: 16px;
+}
+.primary-button {
+  font-size: 16px;
+  min-height: 48px;
+}
+.reading-aside > div {
+  font-size: 15px;
+}
+.boundary-grid p {
+  font-size: 16px;
+}
+.boundary-grid h3 {
+  font-size: 20px;
+}
+.roadmap-details article p {
+  font-size: 16px;
+}
+.roadmap-details article h3 small {
+  font-size: 13px;
+}
+.source-note {
+  font-size: 14px !important;
+}
+.large-equation {
+  font-size: 28px;
+}
+@media (max-width: 1400px) {
+  .phase-upper {
+    grid-template-columns: 1fr;
+  }
+  .equation-area {
+    border-left: 0;
+    border-top: 1px solid #354657;
+    padding: 22px 0 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .equation-area p {
+    display: block;
+  }
+  .estimated-value {
+    flex-direction: row;
+    align-items: center;
+  }
+  .equation {
+    margin: 18px 0;
+  }
+  .lab-layout {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+@media (max-width: 1080px) {
+  .sidebar {
+    display: none;
+  }
+  .main-shell {
+    margin-left: 0;
+  }
+  .lab-layout {
+    grid-template-columns: 1fr;
+  }
+  .parameters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .parameters-card {
+    grid-row: span 2;
+  }
+  .experiment-title .subtle-badge {
+    display: inline;
+  }
+  .topbar {
+    padding: 0 24px;
+  }
+  .section-heading h2 > span {
+    display: none;
+  }
+  .phase-upper {
+    grid-template-columns: 1fr;
+  }
+  .experiment-title strong {
+    font-size: 17px;
+  }
+  .page-heading h1 {
+    font-size: 32px;
+  }
+  .page-heading p {
+    font-size: 16px;
+  }
+  .card-footnote {
+    font-size: 14px;
+  }
+  .raster-wrap canvas {
+    height: 140px;
+  }
+}
+@media (max-width: 680px) {
+  .learning-header {
+    padding: 18px 20px;
+  }
+  .learning-brand {
+    font-size: 17px;
+    gap: 8px;
+  }
+  .learning-brand small {
+    font-size: 12px;
+  }
+  .learning-header > .lesson-secondary {
+    padding: 10px 13px;
+    font-size: 15px;
+    gap: 7px;
+  }
+  .learning-main {
+    padding: 28px 20px 0;
+  }
+  .lesson-intro {
+    font-size: 18px;
+  }
+  .lesson-welcome h1 {
+    font-size: 34px;
+  }
+  .lesson-overview {
+    gap: 14px;
+  }
+  .lesson-overview > div {
+    gap: 10px;
+  }
+  .lesson-overview span {
+    font-size: 16px;
+  }
+  .lesson-overview small {
+    font-size: 14px;
+  }
+  .lesson-overview > svg {
+    width: 14px;
+  }
+  .lesson-overview b {
+    font-size: 20px;
+  }
+  .lesson-panel {
+    padding: 20px;
+  }
+  .lesson-captures {
+    gap: 14px;
+  }
+  .lesson-readings {
+    gap: 14px;
+  }
+  .lesson-readings b {
+    font-size: 27px;
+  }
+  .lesson-readings span {
+    font-size: 14px;
+  }
+  .lesson-phase-result {
+    grid-template-columns: 1fr;
+    gap: 13px;
+  }
+  .lesson-progress {
+    gap: 9px;
+  }
+  .lesson-progress button {
+    font-size: 16px;
+    gap: 8px;
+  }
+  .lesson-step-title {
+    font-size: 28px;
+  }
+  .lesson-actions {
+    gap: 12px;
+  }
+  .lesson-actions button {
+    padding: 12px 16px;
+  }
+  .learning-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .learning-footer span {
+    font-size: 14px;
+  }
+  .parameters {
+    grid-template-columns: 1fr;
+  }
+  .parameters-card {
+    grid-row: auto;
+  }
+  .topbar {
+    height: auto;
+    min-height: 60px;
+    padding: 12px 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .breadcrumbs,
+  .top-meta {
+    font-size: 13px;
+  }
+  .main-shell main {
+    padding: 28px 20px 20px;
+  }
+  .page-heading h1 {
+    font-size: 30px;
+  }
+  .experiment-title .subtle-badge {
+    font-size: 12px;
+  }
+  .toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 7px;
+    padding-top: 12px;
+  }
+  .toolbar-actions button {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  .toolbar-actions > button:first-child {
+    margin-right: 0;
+  }
+  .capture-grid {
+    grid-template-columns: 1fr;
+    padding: 0 22px 22px;
+    gap: 20px;
+  }
+  .capture-label {
+    font-size: 15px;
+  }
+  .capture-footer {
+    font-size: 13px;
+  }
+  .capture-footer > span:last-child {
+    display: block;
+  }
+  .section-heading h2 {
+    font-size: 20px;
+  }
+  .probe-strip {
+    padding: 16px 22px;
+  }
+  .probe-position > span:first-of-type {
+    display: inline;
+  }
+  .probe-intensities {
+    font-size: 15px;
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
+  .phase-upper {
+    padding: 0 22px 22px;
+    grid-template-columns: 1fr;
+  }
+  .phase-chart-head {
+    margin: 0 22px;
+  }
+  .equation-area {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .equation {
+    font-size: 25px;
+  }
+  .atan2-args {
+    font-size: 20px;
+  }
+  .equation-area p {
+    font-size: 15px;
+  }
+  .estimated-value strong {
+    font-size: 28px;
+  }
+  .card-footnote {
+    font-size: 14px;
+    padding: 15px 22px;
+  }
+  .map-title {
+    font-size: 16px;
+  }
+  .segmented.mini button {
+    font-size: 14px;
+  }
+  .legend > span,
+  .legend small {
+    font-size: 14px;
+  }
+  .chart-bottom {
+    font-size: 14px;
+    padding: 10px 22px 16px;
+  }
+  .control label {
+    font-size: 16px;
+  }
+  .control output {
+    font-size: 16px;
+  }
+  .control-hint,
+  .sensor-note,
+  .metrics-note {
+    font-size: 14px;
+  }
+  .seed-control > label {
+    font-size: 16px;
+  }
+  .advanced summary {
+    font-size: 15px;
+  }
+  .page-footer {
+    font-size: 13px;
+  }
+  .subtle-badge {
+    white-space: normal;
+  }
+  .reading-card {
+    padding: 26px 22px;
+  }
+  .reading-card p {
+    font-size: 17px;
+  }
+  .reading-card h2 {
+    font-size: 26px;
+  }
+  .reading-card h3 {
+    font-size: 20px;
+  }
+  .symbol-grid {
+    grid-template-columns: 1fr;
+  }
+  .formula-block {
+    padding: 18px 14px;
+  }
+  .boundary-grid {
+    grid-template-columns: 1fr;
+  }
+  .large-equation {
+    font-size: 23px;
+  }
+  .toast {
+    right: 12px;
+    bottom: 12px;
+    font-size: 15px;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .help-button {
+    margin-top: 0;
+  }
+  .help-button > span {
+    display: inline;
+  }
+  .reading-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .lesson-mobile-break {
+    display: block;
+  }
+  .lesson-overview {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+    padding: 23px 0;
+  }
+  .lesson-overview > div {
+    gap: 18px;
+  }
+  .lesson-overview > svg {
+    display: none;
+  }
+  .lesson-overview span {
+    font-size: 18px;
+  }
+  .lesson-overview small {
+    font-size: 15px;
+  }
+  .lesson-overview b {
+    font-size: 23px;
+    width: 25px;
+  }
+  .lesson-captures {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .lesson-capture figcaption > span:last-child {
+    display: inline;
+    margin-left: 12px;
+    padding: 0;
+  }
+  .lesson-image canvas {
+    height: 126px;
+  }
+  .lesson-progress {
+    gap: 6px;
+  }
+  .lesson-progress button {
+    font-size: 15px;
+    gap: 6px;
+  }
+  .lesson-progress b {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+  .lesson-panel {
+    padding: 18px;
+  }
+  .lesson-step-title {
+    font-size: 26px;
+  }
+  .lesson-readings {
+    gap: 10px;
+  }
+  .lesson-readings b {
+    font-size: 24px;
+  }
+  .lesson-readings span {
+    font-size: 14px;
+  }
+  .lesson-plot-heading h2 {
+    font-size: 21px;
+  }
+  .lesson-instruction p,
+  .lesson-takeaway p {
+    font-size: 18px;
+  }
+  .lesson-actions {
+    gap: 10px;
+  }
+  .lesson-actions .lesson-secondary {
+    font-size: 15px;
+    padding: 12px;
+  }
+  .lesson-actions .lesson-primary {
+    font-size: 15px;
+    padding: 12px;
+    gap: 7px;
+  }
+  .lesson-actions > button {
+    max-width: 75%;
+  }
+  .learning-header {
+    padding-left: 18px;
+    padding-right: 18px;
+    gap: 10px;
+  }
+  .learning-brand > svg {
+    width: 21px;
+  }
+  .learning-header > .lesson-secondary > svg {
+    display: none;
+  }
+  .learning-main {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+  .learning-header > .lesson-secondary {
+    font-size: 14px;
+  }
+  .lesson-formula code {
+    font-size: 15px;
+    padding: 14px;
+  }
+  .lesson-caption {
+    font-size: 16px;
+  }
+  .lesson-axis-description {
+    font-size: 15px;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .lesson-actions {
+    background: #0c1017;
+  }
+}
+@media (prefers-contrast: more) {
+  .learning-shell,
+  .learning-shell p,
+  .lesson-scope p,
+  .lesson-caption,
+  .lesson-instruction p,
+  .lesson-takeaway p {
+    color: #e5edf7;
+  }
+  .lesson-panel {
+    border-color: #8196ac;
+  }
+}

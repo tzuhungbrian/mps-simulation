@@ -1,0 +1,42 @@
+.learning-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sandbox-entry-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 16px;
+  min-height: 48px;
+  padding: 11px 15px;
+  background: #19332e;
+  border: 1px solid #639b87;
+  border-radius: 6px;
+  color: #b9f0d6;
+}
+.sandbox-entry-button:hover {
+  background: #27503f;
+}
+.roadmap-item.sandbox-ready strong {
+  color: #b5d4c8;
+}
+.roadmap-item.sandbox-ready small {
+  color: #8fb0a1;
+}
+@media (max-width: 680px) {
+  .learning-header {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .learning-header-actions {
+    gap: 8px;
+  }
+  .learning-header-actions button {
+    font-size: 14px;
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+}

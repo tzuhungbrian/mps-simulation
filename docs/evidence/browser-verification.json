@@ -1,0 +1,14 @@
+{
+  "viewportDesktop": [1440, 1100],
+  "viewportMobile": [390, 844],
+  "defaultRmseDisplay": "< 10⁻¹²",
+  "defaultValidRatio": "100.0%",
+  "webgl": {
+    "available": true,
+    "contextLost": false,
+    "width": 766,
+    "height": 203
+  },
+  "mobileOverflow": false,
+  "pageErrors": []
+}

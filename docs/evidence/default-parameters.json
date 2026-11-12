@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "model": "three-step-1d",
+  "config": {
+    "width": 512,
+    "height": 192,
+    "frequency": 6,
+    "phaseOffset": 0.6,
+    "mean": 0.5,
+    "amplitude": 0.4,
+    "noiseSigma": 0,
+    "minModulation": 0.02,
+    "seed": 42
+  }
+}

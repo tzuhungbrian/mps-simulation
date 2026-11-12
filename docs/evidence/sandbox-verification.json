@@ -1,0 +1,12 @@
+{
+  "desktopViewport": [1600, 1050],
+  "previewWidth": 620,
+  "mobileWidth": 390,
+  "metrics": "重建有效像素 / 全部像素\n3906 / 6912\n\n56.5% · Projector 未直接照明 790 px\n\nDepth RMSE · Camera Z\n＜ 0.001 mm\n\n真值只供評估；理想合成的微小誤差不代表實機精度。\n\n選中像素的深度\n3.703 m\n\nCamera pixel (48, 36)",
+  "csvDataRows": 6912,
+  "csvColumns": 14,
+  "pngSize": [1211, 550],
+  "previewOverflow": false,
+  "mobileOverflow": false,
+  "pageErrors": []
+}
