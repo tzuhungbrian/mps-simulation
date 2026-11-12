@@ -17,6 +17,13 @@ interface Props {
   testId?: string;
   compact?: boolean;
   markers?: { x: number; y: number; color: string }[];
+  annotations?: {
+    id: string;
+    x: number;
+    y: number;
+    text: string;
+    color: string;
+  }[];
 }
 export default function LineChart({
   series,
@@ -29,6 +36,7 @@ export default function LineChart({
   testId,
   compact,
   markers,
+  annotations,
 }: Props) {
   const id = useId().replaceAll(":", "");
   const svg = useRef<SVGSVGElement>(null),
@@ -215,6 +223,48 @@ export default function LineChart({
           />
         ))}
       </g>
+      {annotations
+        ?.filter((a) => Number.isFinite(a.y))
+        .map((a) => {
+          const px = L + a.x * plotW,
+            py = y(a.y),
+            labelWidth = a.text.length * 8.4 + 16;
+          const left = Math.max(
+            L + 4,
+            Math.min(W - R - labelWidth - 4, px + 12),
+          );
+          const top = Math.max(T + 4, Math.min(H - B - 28, py - 28));
+          return (
+            <g key={a.id} pointerEvents="none">
+              <line
+                x1={px}
+                y1={py}
+                x2={left + 8}
+                y2={top + 24}
+                stroke={a.color}
+                strokeWidth="1"
+              />
+              <rect
+                x={left}
+                y={top}
+                width={labelWidth}
+                height={24}
+                rx={4}
+                fill="#101a26"
+                stroke={a.color}
+              />
+              <text
+                x={left + 8}
+                y={top + 17}
+                fill={a.color}
+                style={{ font: "14px Consolas, monospace" }}
+                data-testid={a.id}
+              >
+                {a.text}
+              </text>
+            </g>
+          );
+        })}
     </svg>
   );
 }

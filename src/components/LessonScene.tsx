@@ -193,10 +193,11 @@ export default function LessonScene(props: LessonSceneProps) {
             const t = (base + n) / p.frequency;
             if (t < 0 || t > 1) continue;
             const x = VIEW.left + t * VIEW.width;
-            const truth = Math.abs(t - p.probe) < 0.5 / p.frequency;
             const a = new THREE.Vector3(x, LIT.top, z),
               b = new THREE.Vector3(x, LIT.bottom, z);
-            dynamic.add(line([a, b], "#ffc46d", truth ? 1 : 0.55));
+            // A relative unwrap does not identify the absolute fringe order.
+            // Keep candidates equal instead of highlighting a truth-selected plane.
+            dynamic.add(line([a, b], "#ffc46d", 0.65));
             const plane = new THREE.BufferGeometry().setFromPoints([
               PROJECTOR,
               a,
@@ -208,7 +209,7 @@ export default function LessonScene(props: LessonSceneProps) {
                 new THREE.MeshBasicMaterial({
                   color: "#ffc46d",
                   transparent: true,
-                  opacity: truth ? 0.22 : 0.07,
+                  opacity: 0.1,
                   side: THREE.DoubleSide,
                   depthWrite: false,
                 }),

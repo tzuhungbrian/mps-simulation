@@ -1,6 +1,19 @@
 # 驗證紀錄
 
-## 目前 3D 沙盒驗收
+## Phase Unwrapping 教學擴充
+
+- `npm test`：133 項單元測試、7 個測試檔通過；包含新教學 adapter 的 15 項測試。
+- `npm run test:production`：strict TypeScript 與 Vite build 通過，36 項 production Chromium 測試通過，其中 9 項覆蓋本教學與同頁對照版面。
+- 依學習者確認的方向改為保留內容、圖／數值／公式同一視野。預設疊合兩種相位曲線，選點同步更新同色圖上標籤與 live formula；取消先前三小頁。620×950px 量測確認圖與公式均在視窗內，另測重合標籤與無效點清除。
+- 前一版 adapter 曾經獨立唯讀審查通過；本次呈現調整由主流程重跑測試與實際畫面檢查，未另取得獨立審查。不可把前次審查當成本次新增 UI 的獨立核准。
+- 覆蓋實際相鄰量測差的加／減 2π、逐點遞推、不平滑原始資料、未知 k 的重新 Wrapped 一致性、invalid / 非有限值、缺口不跨接、π 方向歧義與 malformed input。
+- 390／620／1440px 的互動、18px 正文、方向鍵逐像素移動、四步前後導覽與頁面無水平溢出均有瀏覽器測試；不再把內容總高度較短當成教學品質指標。第 4 步不掛載 3D；前 3 步的候選仍使用相同材質，不以 Ground Truth 突出其中一張。
+- `node scripts/capture-learning.mjs` 更新實際 PNG 與 [learning-verification.json](evidence/learning-verification.json)，包含主視圖相位、k 候選、缺口起點與曲線分段。WebGL 健康檢查取自第 3 步。畫面：[桌面對照區](evidence/learning-unwrapping-desktop.png)、[620px 對照區](evidence/learning-unwrapping-preview.png)、[390px 對照區](evidence/learning-unwrapping-mobile.png)。先前 connected／summary PNG 是舊三小頁產物，不代表目前介面。
+- 此頁只計算 1D Spatial Unwrap；Temporal 部分為概念對照。教學遮罩不是物理遮擋，不改寫 captures、原始有效率或誤差評估。完整資料路徑見 [Phase Unwrapping 教學模型](phase-unwrapping-lesson.md)。
+- 本次修改的程式與文件通過 Prettier。全專案 `npm run format:check` 仍回報 4 個既有檔案：`src/sandbox/PointCloudPage.tsx`、`src/sandbox/Sandbox.tsx`、`src/sandbox/scanner.test.ts`、`e2e/sandbox.spec.ts`；已用 `git diff --exit-code HEAD -- ...` 確認它們未被本次修改，不做無關重排版。
+- Three.js lazy chunk 為 566.35 kB（gzip 142.33 kB），build 的 500 kB 非阻斷體積提示仍保留。
+
+## 先前 3D 沙盒驗收（歷史紀錄）
 
 - `npm test`：99 項單元測試、4 個測試檔通過。
 - `npm run test:production`：strict TypeScript 與 Vite build 通過，同一套 21 項 Chromium 驗收在 production dist 全數通過。

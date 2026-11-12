@@ -4,5 +4,35 @@
   "introFont": "18px",
   "chartTickFont": "14px",
   "mobileOverflow": false,
-  "pageErrors": []
+  "pageErrors": [],
+  "unwrapping": {
+    "liveWrapped": -3.1256460823393635,
+    "liveRelative": 3.1575392248402228,
+    "rawDelta": -6.258593583863815,
+    "correctedDelta": 0.024591723315770864,
+    "candidateAtZero": 3.1575392248402228,
+    "candidateAtOne": 9.440724532019809,
+    "wrappedAtZero": "-3.126",
+    "gapPathSegments": 2,
+    "anchor": 1.128722051289083,
+    "measuredAnchor": 1.128722051289083,
+    "viewports": [
+      {
+        "width": 1440,
+        "horizontalOverflow": false,
+        "pageHeight": 3038
+      },
+      {
+        "width": 620,
+        "horizontalOverflow": false,
+        "pageHeight": 3881
+      },
+      {
+        "width": 390,
+        "horizontalOverflow": false,
+        "pageHeight": 5110
+      }
+    ],
+    "webglContextHealthy": true
+  }
 }

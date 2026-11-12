@@ -8,6 +8,7 @@ import {
 } from "../core/simulation";
 import { rasterize } from "../lib/images";
 import LineChart from "./LineChart";
+import PhaseUnwrappingLesson from "./PhaseUnwrappingLesson";
 
 const LessonScene = lazy(() => import("./LessonScene"));
 
@@ -179,10 +180,11 @@ export default function LearningExperience({
     "第 1 步：同一個場景，拍三次。",
     "第 2 步：讀同一個點的三次亮度。",
     "第 3 步：三個亮度，換成一個 Phase。",
+    "第 4 步：Phase Unwrapping，補回整圈。",
   ];
   const next = () => {
     setRelative(false);
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(4, s + 1));
   };
   return (
     <div className="learning-shell">
@@ -211,18 +213,26 @@ export default function LearningExperience({
           </button>
         </div>
       </header>
-      <main className={`learning-main ${step > 0 ? "with-scene" : ""}`}>
-        <div className="lesson-kicker">一步一步學 · Phase Shifting 入門</div>
+      <main
+        className={`learning-main ${step === 4 ? "with-unwrapping" : step > 0 ? "with-scene" : ""}`}
+      >
+        <div className="lesson-kicker">
+          一步一步學 · Phase Shifting 與 Unwrapping
+        </div>
         {step === 0 ? (
           <section className="lesson-welcome">
             <h1>三張照片，算出條紋的位置。</h1>
             <p className="lesson-intro" data-testid="lesson-intro">
-              相機只會記錄「亮度」，不會直接告訴我們深度。這一課先學會：如何用三次不同的亮度，算出一個點位於條紋的哪個位置。
+              相機只會記錄「亮度」，不會直接告訴我們深度。這一課先學會：如何用三次不同的亮度，算出一個點位於條紋的哪個位置。接著親手試算
+              Phase Unwrapping，理解怎麼補回整圈，以及為什麼這還不是深度。
             </p>
             <p className="lesson-key-idea">
               Phase 是條紋內的位置，不是物體高度。
             </p>
-            <div className="lesson-overview" aria-label="學習流程">
+            <div
+              className="lesson-overview lesson-overview-four"
+              aria-label="學習流程"
+            >
               <div>
                 <b>1</b>
                 <span>
@@ -241,6 +251,13 @@ export default function LearningExperience({
                 <b>3</b>
                 <span>
                   算出 Phase<small>找到條紋內的位置</small>
+                </span>
+              </div>
+              <ArrowRight />
+              <div>
+                <b>4</b>
+                <span>
+                  解開週期<small>補回整圈 2π</small>
                 </span>
               </div>
             </div>
@@ -269,8 +286,11 @@ export default function LearningExperience({
           </section>
         ) : (
           <>
-            <nav className="lesson-progress" aria-label="教學進度">
-              {["看照片", "讀亮度", "算相位"].map((title, i) => (
+            <nav
+              className="lesson-progress lesson-progress-four"
+              aria-label="教學進度"
+            >
+              {["看照片", "讀亮度", "算相位", "解開週期"].map((title, i) => (
                 <button
                   key={title}
                   className={
@@ -290,9 +310,11 @@ export default function LearningExperience({
             <h1 className="lesson-step-title" ref={heading} tabIndex={-1}>
               {stepTitles[step]}
             </h1>
-            <p className="lesson-key-idea">
-              Phase 是條紋內的位置，不是物體高度。
-            </p>
+            {step !== 4 && (
+              <p className="lesson-key-idea">
+                Phase 是條紋內的位置，不是物體高度。
+              </p>
+            )}
             <div className="lesson-step-layout">
               <div className="lesson-step-content">
                 {step === 1 ? (
@@ -413,7 +435,7 @@ export default function LearningExperience({
                       </p>
                     </div>
                   </>
-                ) : (
+                ) : step === 3 ? (
                   <>
                     <div className="lesson-instruction">
                       <strong>演算法正在做什麼？</strong>
@@ -498,11 +520,12 @@ export default function LearningExperience({
                       </details>
                     </section>
                     <div className="lesson-takeaway">
-                      <strong>你剛完成了什麼？</strong>
+                      <strong>接下來，為什麼需要 Unwrapping？</strong>
                       <p>
-                        三張照片 → 三個亮度 → Phase → 相對連續的 Phase。要進入
-                        3D，還需要解除條紋週期歧義、Camera–Projector
-                        Calibration，以及幾何三角量測。
+                        你已從三張照片算出 Wrapped Phase。下一步會親手修正跨過
+                        ±π
+                        的相位差，並理解：把曲線接得連續，不代表已知道絕對條紋序號，更不等於完成
+                        3D。
                       </p>
                       <p className="lesson-quality">
                         目前全部像素有效率：
@@ -511,72 +534,89 @@ export default function LearningExperience({
                       </p>
                     </div>
                   </>
+                ) : (
+                  <PhaseUnwrappingLesson
+                    wrapped={result.phase.wrapped}
+                    valid={result.phase.valid}
+                    row={row}
+                    width={config.width}
+                    probeX={probeX}
+                    onSelectX={onSelectX}
+                  />
                 )}
               </div>
-              <aside className="lesson-scene-panel" aria-label="3D 示意">
-                <h2>在 3D 空間裡是哪一步？</h2>
-                <Suspense
-                  fallback={
-                    <div className="lesson-scene">正在載入 3D 示意…</div>
-                  }
-                >
-                  <LessonScene
-                    step={step}
-                    frequency={config.frequency}
-                    phaseOffset={config.phaseOffset}
-                    mean={config.mean}
-                    amplitude={config.amplitude}
-                    frame={sceneFrame}
-                    probe={selected}
-                    row={config.height > 1 ? probeY / (config.height - 1) : 0.5}
-                    phase={phase}
-                    aspect={config.height / config.width}
-                  />
-                </Suspense>
-                <div
-                  className="lesson-scene-frames"
-                  role="group"
-                  aria-label="3D 示意顯示的曝光"
-                >
-                  {[0, 1, 2].map((k) => (
-                    <button
-                      key={k}
-                      aria-pressed={sceneFrame === k}
-                      style={
-                        { "--reading-color": COLORS[k] } as React.CSSProperties
+              {step !== 4 && (
+                <aside className="lesson-scene-panel" aria-label="3D 示意">
+                  <h2>在 3D 空間裡是哪一步？</h2>
+                  <Suspense
+                    fallback={
+                      <div className="lesson-scene">正在載入 3D 示意…</div>
+                    }
+                  >
+                    <LessonScene
+                      step={step}
+                      frequency={config.frequency}
+                      phaseOffset={config.phaseOffset}
+                      mean={config.mean}
+                      amplitude={config.amplitude}
+                      frame={sceneFrame}
+                      probe={selected}
+                      row={
+                        config.height > 1 ? probeY / (config.height - 1) : 0.5
                       }
-                      onClick={() => {
-                        setAutoplay(false);
-                        setSceneFrame(k);
-                      }}
-                    >
-                      I{k + 1} · {k * 120}°
-                    </button>
-                  ))}
-                  {step === 1 && (
-                    <button
-                      aria-pressed={autoplay}
-                      onClick={() => setAutoplay((v) => !v)}
-                    >
-                      {autoplay ? "暫停輪播" : "自動輪播"}
-                    </button>
-                  )}
-                </div>
-                <p
-                  className="lesson-scene-caption"
-                  data-testid="lesson-scene-caption"
-                >
-                  {step === 1
-                    ? "Projector（黃）把條紋投到牆上，Camera（藍）從旁邊拍。三張照片之間只有條紋平移 120°，牆、Camera 都沒動。藍框就是 Camera 拍到的範圍，對應左邊的照片。"
-                    : step === 2
-                      ? "你選的像素 = Camera 發出的一條射線（藍線），打在牆上的紅點。三個亮度就是這個點在三次投影下的亮度。"
-                      : `φ̂ 只告訴我們紅點在「某一條條紋內」的位置：Projector 那邊有 ${Math.max(1, Math.round(config.frequency))} 條光平面（黃）都符合。單一頻率分不出是哪一條，所以需要 unwrap、多頻或 Micro PS；确定之後，Camera 射線與那張光平面的交點就是 3D 點。較亮的那張是正確答案（實際系統事先不知道）。`}
-                </p>
-                <button className="lesson-secondary" onClick={onSandbox}>
-                  到 3D 沙盒看真實掃描
-                  <ArrowRight size={18} />
-                </button>
-              </aside>
+                      phase={phase}
+                      aspect={config.height / config.width}
+                    />
+                  </Suspense>
+                  <div
+                    className="lesson-scene-frames"
+                    role="group"
+                    aria-label="3D 示意顯示的曝光"
+                  >
+                    {[0, 1, 2].map((k) => (
+                      <button
+                        key={k}
+                        aria-pressed={sceneFrame === k}
+                        style={
+                          {
+                            "--reading-color": COLORS[k],
+                          } as React.CSSProperties
+                        }
+                        onClick={() => {
+                          setAutoplay(false);
+                          setSceneFrame(k);
+                        }}
+                      >
+                        I{k + 1} · {k * 120}°
+                      </button>
+                    ))}
+                    {step === 1 && (
+                      <button
+                        aria-pressed={autoplay}
+                        onClick={() => setAutoplay((v) => !v)}
+                      >
+                        {autoplay ? "暫停輪播" : "自動輪播"}
+                      </button>
+                    )}
+                  </div>
+                  <p
+                    className="lesson-scene-caption"
+                    data-testid="lesson-scene-caption"
+                  >
+                    {step === 1
+                      ? "Projector（黃）把條紋投到牆上，Camera（藍）從旁邊拍。三張照片之間只有條紋平移 120°，牆、Camera 都沒動。藍框就是 Camera 拍到的範圍，對應左邊的照片。"
+                      : step === 2
+                        ? "你選的像素 = Camera 發出的一條射線（藍線），打在牆上的紅點。三個亮度就是這個點在三次投影下的亮度。"
+                        : step === 3
+                          ? `φ̂ 只告訴我們紅點在「某一條條紋內」的位置：這個示意裡，Projector 有多張候選光平面（黃）。單一 Wrapped Phase 分不出是哪一張；這裡不使用真值替你挑答案。下一步先看 Spatial Unwrap 能補回什麼。此圖是理想平面示意，不是重建結果。`
+                          : "Spatial Unwrap 把相鄰像素接成連續區段，但不知道起點的絕對條紋序號；候選光平面不會自動變成唯一。這裡不突出任何一張，不用真值替你選答案。還需要額外編碼或約束、Camera–Projector Calibration 與 Triangulation，才能得到 3D。此圖只作示意，不參與本頁計算。"}
+                  </p>
+                  <button className="lesson-secondary" onClick={onSandbox}>
+                    到 3D 沙盒看真實掃描
+                    <ArrowRight size={18} />
+                  </button>
+                </aside>
+              )}
             </div>
             <footer className="lesson-actions">
               <button
@@ -586,13 +626,17 @@ export default function LearningExperience({
                 <ArrowLeft size={18} />
                 {step === 1 ? "回到介紹" : "上一步"}
               </button>
-              {step < 3 ? (
+              {step < 4 ? (
                 <button className="lesson-primary" onClick={next}>
-                  {step === 1 ? "下一步：讀取一個像素" : "下一步：算出 Phase"}
+                  {step === 1
+                    ? "下一步：讀取一個像素"
+                    : step === 2
+                      ? "下一步：算出 Phase"
+                      : "下一步：理解 Phase Unwrapping"}
                   <ArrowRight size={19} />
                 </button>
               ) : (
-                <button className="lesson-primary" onClick={onExplore}>
+                <button className="lesson-secondary" onClick={onExplore}>
                   自由實驗
                   <ArrowRight size={19} />
                 </button>
