@@ -1,12 +1,12 @@
 # 3D 沙盒量測模型（MVP2：已知校正的理想掃描器）
 
-本里程碑提供可移動三維物體的**正向模擬 → 三張強度影像 → 既有三步相移解碼 → 校正幾何三角測量**。它不是完整相機／投影機校正估計器，也不是 MicroPS 實作。內外參由合成場景直接指定；反算時使用這些已知參數，不會估計或讀取物體表面。
+本里程碑提供可移動三維物體的**正向模擬 → N 張（或加上解包用的 N 張）強度影像 → N 步相移解碼 →（可選）兩頻時間解包 → 校正幾何三角測量**。它不是完整相機／投影機校正估計器，也不是 MicroPS 實作。內外參由合成場景直接指定；反算時使用這些已知參數，不會估計或讀取物體表面。
 
 ## 資料邊界
 
 - `createWorld(config)` 建立顯示與 CPU 正向模型共用的三角網格定義。
 - `captureWorld(config, width=96, height=72, onProgress?)` 將同一網格轉成世界座標 BVH（three-mesh-bvh），以相機像素中心射線取得最近表面，建立三張 `Float64Array` 強度影像，另輸出僅供評估的 `direct`、`indirect` 分量，以及互反射開啟時同雜訊、無間接光的 `directOnly` 對照影像。
-- `reconstructCaptures({width,height,frames,clipped}, camera, projector)` **只能使用影像、裁切旗標與已知校正**，呼叫 `src/core/simulation.ts` 的真正 `decodeThreeStep`。不輸入網格、真實投影座標、真實深度、遮蔽遮罩、光傳輸分量、參考相位或條紋級次。
+- `reconstructCaptures({width,height,frames,clipped}, camera, projector, coding)` **只能使用影像、裁切旗標、已知的投影編碼（f、N、是否解包）與已知校正**，呼叫 `src/core/simulation.ts` 的 `decodeNStep`（N=3 時即 `decodeThreeStep`）。不輸入網格、真實投影座標、真實深度、遮蔽遮罩、光傳輸分量、參考相位或條紋級次。
 - `runWorldScan` 將正反向串接後，才以 `truthDepth` 評估誤差。其反算呼叫顯式建立四欄位物件，避免評估資料越界。互反射開啟時，另對 `directOnly` 跑同一反算，得到 `directRmseDepth` 作為反事實對照。
 - 介面透過 `scan.worker.ts` 在 Web Worker 執行 `runWorldScan` 並回報進度；場景改動時終止舊 Worker，舊結果不會覆蓋新場景。
 - `parseWorldConfig(unknown)` 驗證匯入值並回傳只含已知欄位的副本；不將字串轉成數字。`validateWorldConfig(config)` 對無效範圍拋出 `RangeError`。
@@ -15,9 +15,9 @@
 
 世界座標為右手系，Y 向上，長度使用一致的場景單位。預設物體為中心 `(0,0.75,0)`、半徑 `0.65` 的球，三角網格為 24×16 分段。另提供 1.2×1.2×1.2 立方體、1.5×0.4×1.2、繞 Z 軸旋轉 −0.35 rad 的斜板，以及 1.6×0.8×1.2 的 V 型槽塊：槽沿 Z 軸、夾角 θ ∈ [30°,150°]，槽深 `min(0.6, 0.7/tan(θ/2))`、半開口 `槽深·tan(θ/2)`。地面為 Y=0 的 10×10 平面。所有幾何皆為雙面測試，射線測試與顯示使用相同幾何；光照使用世界座標的**三角形面法線**（由頂點繞序決定，封閉網格朝外）。
 
-相機預設位置 `(0,3.5,0)`（物體正上方、朝正下方拍），投影機預設位置 `(2.5,0.75,0)`（與物體中心同高、在通過物體中心的 X 軸上，從側面水平照射）。兩者位置皆可調整，朝向則永遠對準**物體目前的中心** `(x,y,z)`；移動物體會同時改變已知外參。相機預設垂直視角 45°、96×72；投影機固定垂直視角 55°、160×120。反算不依賴簡化的視差公式。預設配置下 V 型槽內部低於槽緣的投影機高度，槽壁不會被照到；要觀察槽壁請把 Projector 抬高。
+相機預設位置 `(0,3.5,0)`（物體正上方、朝正下方拍），投影機預設位置 `(2.5,0.75,0)`（與物體中心同高、在通過物體中心的 X 軸上，從側面水平照射）。兩者位置皆可調整，朝向則永遠對準**物體目前的中心** `(x,y,z)`；移動物體會同時改變已知外參。相機預設垂直視角 45°、96×72；投影機預設垂直視角 55°（projectorFov 可調）、固定 160×120。反算不依賴簡化的視差公式。預設配置下 V 型槽內部低於槽緣的投影機高度，槽壁不會被照到；要觀察槽壁請把 Projector 抬高。
 
-設定範圍：物體 X/Z ∈ [−2,2]、Y ∈ [0.65,2.5]；裝置 X ∈ [−5,5]、Y ∈ [0.3,6]、Z ∈ [−5,6]，且光心距物體中心至少 0.5；grooveAngle ∈ [30°,150°]，cameraFov ∈ [30°,75°]，seed 為 uint32 整數，noiseSigma ∈ [0,0.01]；物體／地面／晶片／引腳 albedo、specular ∈ [0,1]、roughness ∈ [0.05,1]；cameraWidth ∈ [64,384] 且為 4 的倍數（高度 = 3/4 寬度），pixelGrid ∈ {1,2,3}；interreflection 為布林，bounces ∈ {1,2,3}，giSamples ∈ [8,256] 整數；數值必須有限。形狀僅接受 `sphere`、`box`、`ramp`、`vgroove`、`pcb`。參數 JSON 為 schemaVersion 3；舊版檔案不再接受。
+設定範圍：物體 X/Z ∈ [−2,2]、Y ∈ [0.65,2.5]；裝置 X ∈ [−5,5]、Y ∈ [0.3,6]、Z ∈ [−5,6]，且光心距物體中心至少 0.5；grooveAngle ∈ [30°,150°]，cameraFov ∈ [30°,75°]，seed 為 uint32 整數，noiseSigma ∈ [0,0.01]；物體／地面／晶片／引腳 albedo、specular ∈ [0,1]、roughness ∈ [0.05,1]；cameraWidth ∈ [64,384] 且為 4 的倍數（高度 = 3/4 寬度），pixelGrid ∈ {1,2,3}；interreflection 與 temporalUnwrap 為布林，bounces ∈ {1,2,3}，giSamples ∈ [8,256] 整數；projectorFov ∈ [30°,80°]，fringeFrequency ∈ [1,32] 整數，phaseSteps ∈ [3,8] 整數，fringeOffset ∈ [0.05,0.95]，fringeAmplitude ∈ [0.01,0.5] 且 ≤ min(offset, 1−offset)；數值必須有限。形狀僅接受 `sphere`、`box`、`ramp`、`vgroove`、`pcb`。參數 JSON 為 schemaVersion 4（model `calibrated-fringe-sandbox`）；schemaVersion 3 的檔案與舊的 localStorage 會以預設投影參數升級後讀入，更舊的版本不再接受。
 
 PCB（放大模型）：1.6×0.08×1.2 板子（物體材質），U1 QFP（四邊各 6 支鷗翼引腳）、U2 SOIC（兩邊各 5 支）、J1 2×4 排針（垂直針腳）、R1/C1/C2 被動元件（兩端金屬端子），共 48 支引腳；引腳寬 2.2 cm、厚 1.2 cm。每個頂點帶 `surface`（0 板、2 晶片、3 引腳）與 `pinId` 屬性，光傳輸依此選材質，評估依此分類。選 PCB 時套用 `PCB_SETUP`：板子 y=0.65、Camera (0,2.6,0) 俯拍、Projector (1.2,2.3,0)、256×192、2×2 面積積分、綠漆板材。
 
@@ -60,14 +60,16 @@ Z≤0 或非有限值均無有效投影。`makePinhole` 會拒絕重合的目標
 
 ```text
 q = (projectorU + 0.5) / projectorWidth       // 0 ≤ q < 1
-phi = 2π q − π
-p_k = 0.4 + 0.36 cos(phi + delta_k)            // 投影圖案 ∈ [0.04, 0.76]
-delta = [0, 2π/3, 4π/3]
+phi_j = 2π f_j q − π                          // f_j = fringeFrequency，或解包用的 1
+p_j = offset + amplitude · cos(phi_j + delta_j)   // 預設 0.4 + 0.36 cos(…) ∈ [0.04, 0.76]
+delta_j = 2π k / N, k = 0…N−1                 // 預設 N = 3
 f(l,v) = (1−s)·ρ/π + s·D(h)·G(l)G(v) / (4 (n·l)(n·v))   // Lambert + GGX
 D(h) = α² / (π((n·h)²(α²−1)+1)²),  α = roughness²,  G = Smith GGX
-direct_k = π · f(l,v) · (n·l) · p_k
-I_k = clip(0.12 + direct_k + indirect_k + noise, 0, 1)
+direct_j = π · f(l,v) · (n·l) · p_j
+I_j = clip(0.12 + direct_j + indirect_j + noise, 0, 1)
 ```
+
+拍攝順序由 `fringePatterns(config)` 決定：先是 N 張 f = fringeFrequency 的相移圖；若 f > 1 且 temporalUnwrap，再接 N 張 f = 1 的相移圖。
 
 ρ 是漫射反射率、s 是鏡面權重（常數 Fresnel），物體與地面各自一組；預設物體 ρ=0.8、地面 ρ=0.5、s=0。介面提供無色近似的材質預設（`MATERIAL_PRESETS`：霧面白漆、石膏、灰色霧面地板、水泥、亮漆木頭、亮面塑膠、上釉陶瓷、黑色橡膠、拉絲金屬、拋光金屬、鏡面）；金屬類 ρ=0、s ≥ 0.85，只有鏡射方向附近的像素有條紋。純 Lambert 時 `I_k = 0.12 + ρ (n·l) p_k`。低粗糙度鏡面在鏡射方向會产生超過 1 的高光而被 clipping。
 
@@ -81,9 +83,9 @@ I_k = clip(0.12 + direct_k + indirect_k + noise, 0, 1)
 
 可選雜訊對每個像素、每張曝光獨立加入 seed 可重現的 Box–Muller Gaussian 值，之後將強度裁切至 [0,1]。任一曝光達到或越過端點即設定該像素 `clipped=1`；裁切像素不解碼。預設 sigma=0。雜訊也加在背景／陰影上；非零 sigma 下，偶爾會讓無照明像素的雜訊調變超過閾值，成為假陽性，**不會使用真實遮罩偷偷移除**。
 
-## 解碼與單週期的適用限制
+## 解碼與條紋序
 
-解碼器對三張強度計算：
+N = 3 時解碼器對三張強度計算：
 
 ```text
 N = √3 (I_2 − I_1)
@@ -93,13 +95,19 @@ B_hat = hypot(N,D)/3
 A_hat = (I_0 + I_1 + I_2)/3
 ```
 
-僅接受有限、未裁切且 `B_hat > 0.01` 的相位。本模型在**整個投影機寬度只放一個完整週期**，且已知交點來自 q∈[0,1) 的視錐，因此可唯一轉回投影機欄座標：
+一般 N 步（`decodeNStep`）：`S = Σ I_k sin(2πk/N)`、`C = Σ I_k cos(2πk/N)`，`wrapped = atan2(−S, C)`、`B_hat = (2/N) hypot(S,C)`、`A_hat = Σ I_k / N`。
+
+僅接受有限、未裁切且 `B_hat > 0.01` 的相位（解包時兩組都要有效）。絕對相位 Φ 轉回投影機欄座標：
 
 ```text
-projectorU = projectorWidth (wrapped + π)/(2π) − 0.5
+projectorU = projectorWidth (Φ + π)/(2π f) − 0.5
 ```
 
-這不是一般高頻條紋的絕對相位展開。若改為多個週期，單靠三步相移無法確定條紋整數級次，必須另加 Gray code、多頻或其他真正的消歧資訊；不能以場景真值補級次。目前沒有列方向 spatial unwrap，也沒有參考相位錨定。
+- f = 1：整個投影機寬度只有一個週期，Φ = wrapped，唯一。
+- f > 1 且 temporalUnwrap：用單週期相位 φ₁ 預測 `Φ_pred = f(φ₁ + π) − π`，條紋序 `k = round((Φ_pred − wrapped)/2π)`，`Φ = wrapped + 2πk`。φ₁ 的誤差會被放大 f 倍，超過 ±π 就會把 k 算錯（兩頻階層解包的已知限制）。
+- f > 1 且未解包：反算假設 k = 0，故意保留歧義，展示單頻多週期無法唯一對應 column；不會用場景真值補級次。
+
+目前沒有 Gray code、列方向 spatial unwrap，也沒有參考相位錨定。
 
 ## 由投影機欄平面三角測量
 

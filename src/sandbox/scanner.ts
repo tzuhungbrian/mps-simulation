@@ -9,8 +9,7 @@ import {
 } from "./geometry";
 import {
   createSeededRandom,
-  decodeThreeStep,
-  SHIFTS,
+  decodeNStep,
   TAU,
   type PhaseResult,
 } from "../core/simulation";
@@ -44,6 +43,17 @@ export interface WorldConfig {
   projectorY: number;
   projectorZ: number;
   cameraFov: number;
+  /** Projector vertical field of view in degrees. */
+  projectorFov: number;
+  /** Fringe periods across the projector width. */
+  fringeFrequency: number;
+  /** Phase-shift steps N; shifts are 2πk/N. */
+  phaseSteps: number;
+  /** Projected pattern = offset + amplitude·cos(…), both in projector gray level. */
+  fringeOffset: number;
+  fringeAmplitude: number;
+  /** Add N unit-frequency frames to resolve the fringe order when frequency > 1. */
+  temporalUnwrap: boolean;
   /** Camera image width in pixels; height is always 3/4 of it. */
   cameraWidth: number;
   /** n×n sub-rays averaged per pixel (1 = point sampling, no mixed pixels). */
@@ -80,6 +90,12 @@ export const DEFAULT_WORLD: WorldConfig = {
   projectorY: 0.75,
   projectorZ: 0,
   cameraFov: 45,
+  projectorFov: 55,
+  fringeFrequency: 1,
+  phaseSteps: 3,
+  fringeOffset: 0.4,
+  fringeAmplitude: 0.36,
+  temporalUnwrap: true,
   cameraWidth: 96,
   pixelGrid: 1,
   seed: 42,
@@ -140,6 +156,11 @@ export const WORLD_LIMITS = {
   projectorY: [0.3, 6],
   projectorZ: [-5, 6],
   cameraFov: [30, 75],
+  projectorFov: [30, 80],
+  fringeFrequency: [1, 32],
+  phaseSteps: [3, 8],
+  fringeOffset: [0.05, 0.95],
+  fringeAmplitude: [0.01, 0.5],
   cameraWidth: [64, 384],
   pixelGrid: [1, 3],
   seed: [0, 4294967295],
@@ -159,15 +180,19 @@ export const WORLD_LIMITS = {
   bounces: [1, 3],
   giSamples: [8, 256],
 } as const satisfies Record<
-  Exclude<keyof WorldConfig, "shape" | "interreflection">,
+  Exclude<keyof WorldConfig, BooleanKey | "shape">,
   readonly [number, number]
 >;
+export const BOOLEAN_KEYS = ["interreflection", "temporalUnwrap"] as const;
+type BooleanKey = (typeof BOOLEAN_KEYS)[number];
 const INTEGER_KEYS = new Set([
   "seed",
   "bounces",
   "giSamples",
   "cameraWidth",
   "pixelGrid",
+  "fringeFrequency",
+  "phaseSteps",
 ]);
 export const cameraHeight = (config: WorldConfig) =>
   (config.cameraWidth * 3) / 4;
@@ -175,8 +200,9 @@ export const cameraHeight = (config: WorldConfig) =>
 export function validateWorldConfig(config: WorldConfig): void {
   if (!(WORLD_SHAPES as readonly string[]).includes(config.shape))
     throw new RangeError("Unknown world shape");
-  if (typeof config.interreflection !== "boolean")
-    throw new RangeError("interreflection must be a boolean");
+  for (const key of BOOLEAN_KEYS)
+    if (typeof config[key] !== "boolean")
+      throw new RangeError(`${key} must be a boolean`);
   const limits = WORLD_LIMITS;
   for (const key of Object.keys(limits) as (keyof typeof limits)[]) {
     const value = config[key];
@@ -194,6 +220,13 @@ export function validateWorldConfig(config: WorldConfig): void {
   }
   if (config.cameraWidth % 4 !== 0)
     throw new RangeError("cameraWidth must be a multiple of 4 (4:3 images)");
+  if (
+    config.fringeAmplitude >
+    Math.min(config.fringeOffset, 1 - config.fringeOffset) + 1e-9
+  )
+    throw new RangeError(
+      "fringeAmplitude must keep the pattern inside [0, 1] (≤ offset and ≤ 1 − offset)",
+    );
   for (const device of ["camera", "projector"] as const) {
     const p = [
       config[`${device}X`],
@@ -218,12 +251,12 @@ export function parseWorldConfig(value: unknown): WorldConfig {
   if (!Object.hasOwn(record, "shape") || typeof record.shape !== "string")
     throw new RangeError("shape must be a string");
   const result = { shape: record.shape } as WorldConfig;
-  if (
-    !Object.hasOwn(record, "interreflection") ||
-    typeof record.interreflection !== "boolean"
-  )
-    throw new RangeError("interreflection must be a boolean");
-  result.interreflection = record.interreflection;
+  for (const key of BOOLEAN_KEYS) {
+    const flag = Object.hasOwn(record, key) ? record[key] : undefined;
+    if (typeof flag !== "boolean")
+      throw new RangeError(`${key} must be a boolean`);
+    result[key] = flag;
+  }
   for (const key of Object.keys(
     WORLD_LIMITS,
   ) as (keyof typeof WORLD_LIMITS)[]) {
@@ -314,7 +347,8 @@ export function createWorld(config: WorldConfig): {
 export interface WorldCaptures {
   width: number;
   height: number;
-  frames: [Float64Array, Float64Array, Float64Array];
+  /** One image per entry of fringePatterns(config). */
+  frames: Float64Array[];
   clipped: Uint8Array;
   /** Camera optical-axis depth, evaluation only. Never passed to reconstruction. */
   truthDepth: Float64Array;
@@ -326,25 +360,49 @@ export interface WorldCaptures {
   /** PCB pin seen by each pixel, −1 elsewhere; evaluation only. */
   pinId: Int16Array;
   /** Forward-model light components (no ambient, noise or clipping); evaluation only. */
-  direct: [Float64Array, Float64Array, Float64Array];
-  indirect: [Float64Array, Float64Array, Float64Array];
+  direct: Float64Array[];
+  indirect: Float64Array[];
   /** Counterfactual captures without interreflection, same noise; evaluation only. */
   directOnly: {
-    frames: [Float64Array, Float64Array, Float64Array];
+    frames: Float64Array[];
     clipped: Uint8Array;
   } | null;
 }
 
 /** Constant camera offset (ambient + black level) in normalized intensity. */
 export const AMBIENT = 0.12;
-/** One full cosine period across the projector width: p_k(u) ∈ [0.04, 0.76]. */
-const projectorPattern = (u: number, width: number, k: number) =>
-  0.4 + 0.36 * Math.cos((TAU * (u + 0.5)) / width - Math.PI + SHIFTS[k]);
-const triple = (count: number): [Float64Array, Float64Array, Float64Array] => [
-  new Float64Array(count),
-  new Float64Array(count),
-  new Float64Array(count),
-];
+
+export type FringeCoding = Pick<
+  WorldConfig,
+  "fringeFrequency" | "phaseSteps" | "temporalUnwrap"
+>;
+export interface FringePattern {
+  frequency: number;
+  shift: number;
+}
+/** Capture order: N shifted patterns at the chosen frequency, then N unit-frequency ones for unwrapping. */
+export function fringePatterns(coding: FringeCoding): FringePattern[] {
+  const n = coding.phaseSteps;
+  const set = (frequency: number) =>
+    Array.from({ length: n }, (_, k) => ({ frequency, shift: (TAU * k) / n }));
+  return coding.fringeFrequency > 1 && coding.temporalUnwrap
+    ? [...set(coding.fringeFrequency), ...set(1)]
+    : set(coding.fringeFrequency);
+}
+/** Projector gray level at column u; phase φ = 2πf(u + ½)/W − π spans f periods. */
+const projectorPattern = (
+  u: number,
+  width: number,
+  pattern: FringePattern,
+  config: WorldConfig,
+) =>
+  config.fringeOffset +
+  config.fringeAmplitude *
+    Math.cos(
+      (TAU * pattern.frequency * (u + 0.5)) / width - Math.PI + pattern.shift,
+    );
+const stack = (frames: number, count: number) =>
+  Array.from({ length: frames }, () => new Float64Array(count));
 
 const insideProjector = (
   projector: Pinhole,
@@ -383,20 +441,22 @@ export function captureWorld(
     material("pin"),
   ];
   const count = width * height;
+  const patterns = fringePatterns(config),
+    frameCount = patterns.length;
   const capture: WorldCaptures = {
     width,
     height,
-    frames: triple(count),
+    frames: stack(frameCount, count),
     clipped: new Uint8Array(count),
     truthDepth: new Float64Array(count).fill(NaN),
     cameraHit: new Uint8Array(count),
     shadowMask: new Uint8Array(count),
     surface: new Uint8Array(count).fill(255),
     pinId: new Int16Array(count).fill(-1),
-    direct: triple(count),
-    indirect: triple(count),
+    direct: stack(frameCount, count),
+    indirect: stack(frameCount, count),
     directOnly: config.interreflection
-      ? { frames: triple(count), clipped: new Uint8Array(count) }
+      ? { frames: stack(frameCount, count), clipped: new Uint8Array(count) }
       : null,
   };
   const cameraOrigin = new THREE.Vector3(...camera.position),
@@ -427,8 +487,8 @@ export function captureWorld(
     return { u: pp.u, cos };
   };
   const giRandom = createSeededRandom((config.seed ^ 0x9e3779b9) >>> 0);
-  const directSum = [0, 0, 0],
-    indirectSum = [0, 0, 0];
+  const directSum = new Array<number>(frameCount).fill(0),
+    indirectSum = new Array<number>(frameCount).fill(0);
   const grid = config.pixelGrid,
     subpixels = grid * grid,
     pathsPerSubpixel = config.interreflection
@@ -443,8 +503,10 @@ export function captureWorld(
       const radiance =
         evaluateBrdf(materials[hit.mesh], hit.normal, toProjector, wo) *
         lit.cos;
-      for (let k = 0; k < 3; k++)
-        directSum[k] += radiance * projectorPattern(lit.u, projector.width, k);
+      for (let k = 0; k < frameCount; k++)
+        directSum[k] +=
+          radiance *
+          projectorPattern(lit.u, projector.width, patterns[k], config);
     }
     for (let s = 0; s < pathsPerSubpixel; s++) {
       let throughput = 1,
@@ -472,9 +534,10 @@ export function captureWorld(
               pathWo,
             ) *
             light.cos;
-          for (let k = 0; k < 3; k++)
+          for (let k = 0; k < frameCount; k++)
             indirectSum[k] +=
-              contribution * projectorPattern(light.u, projector.width, k);
+              contribution *
+              projectorPattern(light.u, projector.width, patterns[k], config);
         }
         point = next.point;
         normal = next.normal;
@@ -524,7 +587,7 @@ export function captureWorld(
           shade(sub);
         }
       // π maps radiance to normalized intensity: a white Lambertian facing the projector reads p_k.
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < frameCount; k++) {
         capture.direct[k][i] = (Math.PI * directSum[k]) / subpixels;
         if (pathsPerSubpixel)
           capture.indirect[k][i] =
@@ -544,7 +607,7 @@ export function captureWorld(
       target.frames[k][i] = Math.max(0, Math.min(1, value));
     };
     for (let i = 0; i < count; i++) {
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < frameCount; k++) {
         const noise =
           config.noiseSigma === 0 ? 0 : config.noiseSigma * gaussian();
         const direct = AMBIENT + capture.direct[k][i] + noise;
@@ -561,18 +624,32 @@ export function captureWorld(
 }
 
 export interface WorldReconstruction {
+  /** Wrapped phase of the chosen-frequency patterns. */
   phase: PhaseResult;
+  /** Unit-frequency phase used for temporal unwrapping, when projected. */
+  lowPhase: PhaseResult | null;
+  /** Absolute phase after unwrapping (equals the wrapped phase when not unwrapped). */
+  absolute: Float64Array;
+  /** Decoded projector column. */
+  column: Float64Array;
   depth: Float64Array;
   points: Float64Array;
   valid: Uint8Array;
   validCount: number;
 }
 
-/** Inverse boundary: only intensities, clipping flags and known calibration enter. */
+const DEFAULT_CODING: FringeCoding = {
+  fringeFrequency: 1,
+  phaseSteps: 3,
+  temporalUnwrap: true,
+};
+
+/** Inverse boundary: only intensities, clipping flags, the known pattern coding and calibration enter. */
 export function reconstructCaptures(
   captures: Pick<WorldCaptures, "width" | "height" | "frames" | "clipped">,
   camera: Pinhole,
   projector: Pinhole,
+  coding: FringeCoding = DEFAULT_CODING,
 ): WorldReconstruction {
   const { width, height, frames, clipped } = captures;
   const count = width * height;
@@ -584,23 +661,37 @@ export function reconstructCaptures(
     !Number.isSafeInteger(count) ||
     camera.width !== width ||
     camera.height !== height ||
+    frames.length !== fringePatterns(coding).length ||
     frames.some((frame) => frame.length !== count) ||
     clipped.length !== count
   )
     throw new RangeError(
-      "Capture dimensions, frame lengths, clipping mask and camera calibration must match",
+      "Capture dimensions, frame count and lengths, clipping mask and camera calibration must match",
     );
-  const phase = decodeThreeStep(frames, 0.01, clipped);
+  const n = coding.phaseSteps,
+    f = coding.fringeFrequency;
+  const phase = decodeNStep(frames.slice(0, n), 0.01, clipped);
+  const lowPhase =
+    frames.length > n ? decodeNStep(frames.slice(n), 0.01, clipped) : null;
   const result: WorldReconstruction = {
     phase,
+    lowPhase,
+    absolute: new Float64Array(count).fill(NaN),
+    column: new Float64Array(count).fill(NaN),
     depth: new Float64Array(count).fill(NaN),
     points: new Float64Array(3 * count).fill(NaN),
     valid: new Uint8Array(count),
     validCount: 0,
   };
   for (let i = 0; i < count; i++) {
-    if (!phase.valid[i]) continue;
-    const u = (projector.width * (phase.wrapped[i] + Math.PI)) / TAU - 0.5;
+    if (!phase.valid[i] || (lowPhase && !lowPhase.valid[i])) continue;
+    let absolute = phase.wrapped[i];
+    if (lowPhase) {
+      // Scale the unambiguous unit-frequency phase to predict the fringe order.
+      const predicted = f * (lowPhase.wrapped[i] + Math.PI) - Math.PI;
+      absolute += TAU * Math.round((predicted - absolute) / TAU);
+    }
+    const u = (projector.width * (absolute + Math.PI)) / (TAU * f) - 0.5;
     if (!Number.isFinite(u) || u < -0.5 || u >= projector.width - 0.5) continue;
     const point = triangulateColumn(
       camera,
@@ -614,6 +705,8 @@ export function reconstructCaptures(
     if (!cp || !insideProjector(projector, projectPoint(projector, point)))
       continue;
     result.depth[i] = cp.depth;
+    result.absolute[i] = absolute;
+    result.column[i] = u;
     result.points.set(point, 3 * i);
     result.valid[i] = 1;
     result.validCount++;
@@ -667,6 +760,7 @@ export function runWorldScan(
     { width, height, frames: capture.frames, clipped: capture.clipped },
     camera,
     projector,
+    config,
   );
   const directReconstruction = capture.directOnly
     ? reconstructCaptures(
@@ -678,6 +772,7 @@ export function runWorldScan(
         },
         camera,
         projector,
+        config,
       )
     : null;
   let cameraHitCount = 0,
@@ -729,6 +824,13 @@ export function getRig(
       config.cameraFov,
       baseline,
     ),
-    projector: makePinhole(projector, target, 160, 120, 55, baseline),
+    projector: makePinhole(
+      projector,
+      target,
+      160,
+      120,
+      config.projectorFov,
+      baseline,
+    ),
   };
 }

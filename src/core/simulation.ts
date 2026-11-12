@@ -184,6 +184,57 @@ export function decodeThreeStep(
   return result;
 }
 
+/** N-step decoding with shifts 2πk/N; delegates to decodeThreeStep for N = 3. */
+export function decodeNStep(
+  frames: readonly Float64Array[],
+  minModulation: number,
+  clipped?: Uint8Array,
+): PhaseResult {
+  const n = frames.length;
+  if (n === 3)
+    return decodeThreeStep(
+      frames as [Float64Array, Float64Array, Float64Array],
+      minModulation,
+      clipped,
+    );
+  if (n < 3) throw new RangeError("N-step decoding needs at least 3 frames");
+  const count = frames[0].length;
+  if (
+    frames.some((frame) => frame.length !== count) ||
+    (clipped && clipped.length !== count)
+  )
+    throw new RangeError("Frame and clipping-mask lengths must match");
+  const sines = frames.map((_, k) => Math.sin((TAU * k) / n)),
+    cosines = frames.map((_, k) => Math.cos((TAU * k) / n));
+  const result: PhaseResult = {
+    wrapped: new Float64Array(count),
+    mean: new Float64Array(count),
+    modulation: new Float64Array(count),
+    valid: new Uint8Array(count),
+  };
+  for (let i = 0; i < count; i++) {
+    let s = 0,
+      c = 0,
+      sum = 0;
+    for (let k = 0; k < n; k++) {
+      const v = frames[k][i];
+      s += v * sines[k];
+      c += v * cosines[k];
+      sum += v;
+    }
+    result.mean[i] = sum / n;
+    result.modulation[i] = (2 / n) * Math.hypot(s, c);
+    const valid =
+      Number.isFinite(result.mean[i]) &&
+      Number.isFinite(result.modulation[i]) &&
+      result.modulation[i] > minModulation &&
+      !clipped?.[i];
+    result.wrapped[i] = valid ? wrapPhase(Math.atan2(-s, c)) : NaN;
+    result.valid[i] = valid ? 1 : 0;
+  }
+  return result;
+}
+
 /** Each valid segment has an independent, unknown integer fringe order. */
 export function unwrapRows(
   wrapped: Float64Array,

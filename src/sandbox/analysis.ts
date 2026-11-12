@@ -88,7 +88,10 @@ export function analyzeScan(
     }
     if (!capture.cameraHit[i]) causes.background++;
     else if (capture.clipped[i]) causes.clipped++;
-    else if (!reconstruction.phase.valid[i])
+    else if (
+      !reconstruction.phase.valid[i] ||
+      (reconstruction.lowPhase && !reconstruction.lowPhase.valid[i])
+    )
       causes[capture.shadowMask[i] ? "unlit" : "lowModulation"]++;
     else causes.geometry++;
   }

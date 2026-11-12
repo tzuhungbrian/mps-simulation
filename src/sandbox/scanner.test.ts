@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createWorld,
   DEFAULT_WORLD,
+  fringePatterns,
   getRig,
   captureWorld,
   reconstructCaptures,
@@ -12,7 +13,7 @@ import {
 } from "./scanner";
 import { cameraRay, makePinhole, projectPoint, type Vec3 } from "./geometry";
 import { MATERIAL_PRESETS } from "./lightTransport";
-import { decodeThreeStep, SHIFTS, TAU } from "../core/simulation";
+import { decodeNStep, SHIFTS, TAU } from "../core/simulation";
 
 describe("CPU calibrated scanner", () => {
   it("reports null RMSE when a one-pixel scan sees an unilluminated surface", () => {
@@ -401,7 +402,7 @@ describe("CPU calibrated scanner", () => {
         0.12 + rho * lambert * (0.4 + 0.36 * Math.cos(phi + SHIFTS[k])),
         11,
       );
-    const phase = decodeThreeStep(capture.frames, 0.01, capture.clipped);
+    const phase = decodeNStep(capture.frames, 0.01, capture.clipped);
     expect(phase.wrapped[i]).toBeCloseTo(phi, 11);
     expect(phase.modulation[i]).toBeCloseTo(0.36 * rho * lambert, 11);
   });
@@ -664,5 +665,95 @@ describe("CPU calibrated scanner", () => {
         DEFAULT_WORLD.groundRoughness,
       ),
     ).toBe(true);
+  });
+});
+
+describe("projector fringe coding", () => {
+  it("decodes N-step captures for N = 3…8 exactly like the analytic phase", () => {
+    for (let n = 3; n <= 8; n++) {
+      const phases = [-3, -1.2, 0, 0.7, 2.9];
+      const frames = Array.from({ length: n }, (_, k) =>
+        Float64Array.from(phases, (phi) =>
+          0.5 + 0.3 * Math.cos(phi + (TAU * k) / n),
+        ),
+      );
+      const result = decodeNStep(frames, 0.01);
+      phases.forEach((phi, i) => {
+        expect(result.wrapped[i]).toBeCloseTo(phi, 12);
+        expect(result.modulation[i]).toBeCloseTo(0.3, 12);
+        expect(result.mean[i]).toBeCloseTo(0.5, 12);
+      });
+    }
+  });
+  it("lists N shifted frames, plus N unit-frequency frames only when unwrapping a higher frequency", () => {
+    const base = { fringeFrequency: 1, phaseSteps: 4, temporalUnwrap: true };
+    expect(fringePatterns(base)).toHaveLength(4);
+    expect(fringePatterns({ ...base, fringeFrequency: 8 })).toHaveLength(8);
+    expect(
+      fringePatterns({ ...base, fringeFrequency: 8, temporalUnwrap: false }),
+    ).toHaveLength(4);
+    expect(
+      fringePatterns({ ...base, fringeFrequency: 8 }).map((p) => p.frequency),
+    ).toEqual([8, 8, 8, 8, 1, 1, 1, 1]);
+    expect(fringePatterns(DEFAULT_WORLD).map((p) => p.shift)).toEqual([
+      ...SHIFTS,
+    ]);
+  });
+  it("recovers exact depth at high frequency with temporal unwrapping and fails without it", () => {
+    const config = { ...DEFAULT_WORLD, fringeFrequency: 8, phaseSteps: 4 };
+    const unwrapped = runWorldScan(config, 48, 36);
+    expect(unwrapped.capture.frames).toHaveLength(8);
+    expect(unwrapped.reconstruction.lowPhase).not.toBeNull();
+    expect(unwrapped.metrics.validCount).toBeGreaterThan(500);
+    expect(unwrapped.metrics.rmseDepth!).toBeLessThan(1e-10);
+    const orders = new Set<number>();
+    unwrapped.reconstruction.valid.forEach((v, i) => {
+      if (v)
+        orders.add(
+          Math.round(
+            (unwrapped.reconstruction.absolute[i] -
+              unwrapped.reconstruction.phase.wrapped[i]) /
+              TAU,
+          ),
+        );
+    });
+    expect(orders.size).toBeGreaterThan(1);
+    const ambiguous = runWorldScan(
+      { ...config, temporalUnwrap: false },
+      48,
+      36,
+    );
+    expect(ambiguous.capture.frames).toHaveLength(4);
+    expect(ambiguous.reconstruction.lowPhase).toBeNull();
+    expect(ambiguous.metrics.rmseDepth!).toBeGreaterThan(0.05);
+  });
+  it("uses the configured offset, amplitude and projector FoV in the forward model", () => {
+    const dim = runWorldScan(
+      { ...DEFAULT_WORLD, fringeOffset: 0.3, fringeAmplitude: 0.1 },
+      32,
+      24,
+    );
+    const bright = runWorldScan(DEFAULT_WORLD, 32, 24);
+    const i = dim.reconstruction.valid.findIndex(
+      (v, index) => v === 1 && bright.reconstruction.valid[index] === 1,
+    );
+    expect(dim.reconstruction.phase.modulation[i]).toBeCloseTo(
+      (bright.reconstruction.phase.modulation[i] * 0.1) / 0.36,
+      10,
+    );
+    expect(dim.metrics.rmseDepth!).toBeLessThan(1e-10);
+    const narrow = getRig({ ...DEFAULT_WORLD, projectorFov: 30 }).projector;
+    expect(narrow.fy).toBeGreaterThan(getRig(DEFAULT_WORLD).projector.fy);
+    for (const bad of [
+      { fringeOffset: 0.3, fringeAmplitude: 0.31 },
+      { fringeOffset: 0.8, fringeAmplitude: 0.25 },
+      { fringeFrequency: 1.5 },
+      { phaseSteps: 2 },
+      { projectorFov: 90 },
+      { temporalUnwrap: "yes" as unknown as boolean },
+    ])
+      expect(() => validateWorldConfig({ ...DEFAULT_WORLD, ...bad })).toThrow(
+        RangeError,
+      );
   });
 });
