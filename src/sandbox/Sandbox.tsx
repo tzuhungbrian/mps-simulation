@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -7,14 +14,17 @@ import {
   Crosshair,
   Maximize2,
   Minimize2,
+  Redo2,
   RotateCcw,
   Save,
   ScanLine,
+  Undo2,
   Upload,
   X,
 } from "lucide-react";
 import {
   DEFAULT_WORLD,
+  fringePatterns,
   PCB_SETUP,
   parseWorldConfig,
   validateWorldConfig,
@@ -23,6 +33,7 @@ import {
   type WorldScan,
 } from "./scanner";
 import { MATERIAL_PRESETS } from "./lightTransport";
+import { InfoButton, InfoHeading } from "./Info";
 import PointCloudPage from "./PointCloudPage";
 import type { ScanRequest, ScanResponse } from "./scan.worker";
 import WorldView, { type WorldViewApi } from "./WorldView";
@@ -32,20 +43,53 @@ import "./sandbox.css";
 
 type Scan = WorldScan;
 type NumericKey = keyof typeof WORLD_LIMITS;
-const KEY = "structured-light.sandbox.parameters.v3";
-const MODEL = "calibrated-one-cycle-sandbox";
-const SCHEMA = 3;
-function loadWorld(): WorldConfig {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_WORLD };
-    const e = JSON.parse(raw);
-    if (e.schemaVersion !== SCHEMA || e.model !== MODEL)
-      return { ...DEFAULT_WORLD };
-    return parseWorldConfig(e.config);
-  } catch {
-    return { ...DEFAULT_WORLD };
+const KEY = "structured-light.sandbox.parameters.v4";
+const LEGACY_KEY = "structured-light.sandbox.parameters.v3";
+const MODEL = "calibrated-fringe-sandbox";
+const SCHEMA = 4;
+const HISTORY_LIMIT = 100;
+/** Accepts v4 envelopes and upgrades v3 ones, whose projector settings were fixed at today's defaults. */
+function readEnvelope(e: unknown): WorldConfig {
+  const envelope = e as { schemaVersion?: unknown; model?: unknown; config?: unknown } | null;
+  if (envelope?.schemaVersion === SCHEMA && envelope.model === MODEL)
+    return parseWorldConfig(envelope.config);
+  if (
+    envelope?.schemaVersion === 3 &&
+    envelope.model === "calibrated-one-cycle-sandbox" &&
+    typeof envelope.config === "object" &&
+    envelope.config !== null &&
+    !Array.isArray(envelope.config)
+  ) {
+    const {
+      projectorFov,
+      fringeFrequency,
+      phaseSteps,
+      fringeOffset,
+      fringeAmplitude,
+      temporalUnwrap,
+    } = DEFAULT_WORLD;
+    return parseWorldConfig({
+      projectorFov,
+      fringeFrequency,
+      phaseSteps,
+      fringeOffset,
+      fringeAmplitude,
+      temporalUnwrap,
+      ...envelope.config,
+    });
   }
+  throw new Error("不是此沙盒的參數格式");
+}
+function loadWorld(): WorldConfig {
+  for (const key of [KEY, LEGACY_KEY]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) return readEnvelope(JSON.parse(raw));
+    } catch {
+      // Fall through to the next key or the defaults.
+    }
+  }
+  return { ...DEFAULT_WORLD };
 }
 function pack(config: WorldConfig) {
   return JSON.stringify(
@@ -240,24 +284,29 @@ function Tabs<T extends string>({
   tabs,
   value,
   onChange,
+  children,
 }: {
   label: string;
   tabs: readonly (readonly [T, string])[];
   value: T;
   onChange: (tab: T) => void;
+  children?: ReactNode;
 }) {
   return (
-    <div className="sandbox-tabs" role="tablist" aria-label={label}>
-      {tabs.map(([id, title]) => (
-        <button
-          key={id}
-          role="tab"
-          aria-selected={value === id}
-          onClick={() => onChange(id)}
-        >
-          {title}
-        </button>
-      ))}
+    <div className="sandbox-tabs">
+      <div role="tablist" aria-label={label}>
+        {tabs.map(([id, title]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={value === id}
+            onClick={() => onChange(id)}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
+      {children}
     </div>
   );
 }
@@ -265,11 +314,12 @@ function Tabs<T extends string>({
 const TOOL_TABS = [
   ["object", "物體"],
   ["rig", "裝置"],
+  ["projector", "投影"],
   ["material", "材質"],
   ["more", "其他"],
 ] as const;
 const RESULT_TABS = [
-  ["captures", "三次曝光"],
+  ["captures", "曝光影像"],
   ["depth", "相位與深度"],
   ["transport", "光傳輸"],
 ] as const;
@@ -292,12 +342,15 @@ export default function Sandbox({
     [showCloud, setShowCloud] = useState(false),
     [showRays, setShowRays] = useState(true),
     [focusSpace, setFocusSpace] = useState(false),
+    [showHelp, setShowHelp] = useState(false),
+    [resultInfo, setResultInfo] = useState(false),
     [view, setView] = useState<"sandbox" | "analysis">("sandbox"),
     [scanConfig, setScanConfig] = useState<WorldConfig | null>(null),
     [progress, setProgress] = useState(0),
     [toolTab, setToolTab] = useState<(typeof TOOL_TABS)[number][0]>("object"),
     [resultTab, setResultTab] =
-      useState<(typeof RESULT_TABS)[number][0]>("captures");
+      useState<(typeof RESULT_TABS)[number][0]>("captures"),
+    [historySize, setHistorySize] = useState({ undo: 0, redo: 0 });
   const world = useRef<WorldViewApi>(null),
     file = useRef<HTMLInputElement>(null),
     latest = useRef(config),
@@ -306,23 +359,20 @@ export default function Sandbox({
     worker = useRef<Worker | null>(null),
     probeRef = useRef(probe),
     userPicked = useRef(false),
-    firstScan = useRef(true);
+    firstScan = useRef(true),
+    history = useRef({
+      past: [] as WorldConfig[],
+      future: [] as WorldConfig[],
+      lastKeys: "",
+      lastTime: 0,
+    });
   latest.current = config;
   probeRef.current = probe;
   const stopWorker = () => {
     worker.current?.terminate();
     worker.current = null;
   };
-  const update = useCallback((patch: Partial<WorldConfig>) => {
-    const next = { ...latest.current, ...patch };
-    try {
-      validateWorldConfig(next);
-    } catch (error) {
-      setMessage(
-        `此設定未套用：${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
-    }
+  const apply = useCallback((next: WorldConfig) => {
     latest.current = next;
     generation.current++;
     stopWorker();
@@ -331,7 +381,73 @@ export default function Sandbox({
     setStale(true);
     setStatus("場景已改，稍後自動重新掃描…");
     setMessage("");
+    const h = history.current;
+    setHistorySize({ undo: h.past.length, redo: h.future.length });
   }, []);
+  const update = useCallback(
+    (patch: Partial<WorldConfig>) => {
+      const previous = latest.current,
+        next = { ...previous, ...patch };
+      try {
+        validateWorldConfig(next);
+      } catch (error) {
+        setMessage(
+          `此設定未套用：${error instanceof Error ? error.message : String(error)}`,
+        );
+        return;
+      }
+      const h = history.current,
+        keys = Object.keys(patch).sort().join(),
+        now = performance.now();
+      // A slider or gizmo drag sends a burst of same-key patches: keep it as one undo step.
+      if (keys !== h.lastKeys || now - h.lastTime > 600) {
+        h.past.push(previous);
+        if (h.past.length > HISTORY_LIMIT) h.past.shift();
+      }
+      h.future = [];
+      h.lastKeys = keys;
+      h.lastTime = now;
+      apply(next);
+    },
+    [apply],
+  );
+  const travel = useCallback(
+    (direction: "undo" | "redo") => {
+      const h = history.current,
+        [from, to] =
+          direction === "undo" ? [h.past, h.future] : [h.future, h.past];
+      const target = from.pop();
+      if (!target) return;
+      to.push(latest.current);
+      h.lastKeys = "";
+      apply(target);
+    },
+    [apply],
+  );
+  useEffect(() => {
+    if (view !== "sandbox") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      // Leave native text undo to fields being typed in.
+      if (
+        target?.closest("textarea, [contenteditable='true']") ||
+        (target instanceof HTMLInputElement &&
+          !["range", "checkbox", "radio", "button"].includes(target.type))
+      )
+        return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        travel("undo");
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        travel("redo");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [view, travel]);
   const finishScan = useCallback((next: Scan, used: WorldConfig) => {
     setScanConfig(used);
     setScan(next);
@@ -425,17 +541,36 @@ export default function Sandbox({
       magnitudes[Math.floor(0.95 * (magnitudes.length - 1))] ?? 0,
     );
   }, [depthError]);
+  const scanFrame = scan
+    ? Math.min(frame, scan.capture.frames.length - 1)
+    : 0;
   const indirectPeak = scan
-    ? scan.capture.indirect[frame].reduce((m, v) => Math.max(m, v), 0)
+    ? scan.capture.indirect[scanFrame].reduce((m, v) => Math.max(m, v), 0)
     : 0;
   const indirectGain =
     indirectPeak > 0 ? Math.min(50, Math.max(1, 0.8 / indirectPeak)) : 1;
+  const coding = scan && scanConfig ? scanConfig : config,
+    steps = coding.phaseSteps,
+    patterns = fringePatterns(coding),
+    frameLabel = (k: number) =>
+      `${k >= steps ? "低頻 " : ""}I${(k % steps) + 1} · ${Math.round((patterns[k].shift * 180) / Math.PI)}°`;
   const depth = scan?.reconstruction.depth[probe] ?? NaN,
     valid = !!scan?.reconstruction.valid[probe],
     phase = scan?.reconstruction.phase.wrapped[probe] ?? NaN,
-    projectorU = scan
-      ? (scan.projector.width * (phase + Math.PI)) / TAU - 0.5
-      : NaN;
+    lowPhase = scan?.reconstruction.lowPhase?.wrapped[probe] ?? NaN,
+    order = scan
+      ? Math.round((scan.reconstruction.absolute[probe] - phase) / TAU)
+      : NaN,
+    projectorU = scan?.reconstruction.column[probe] ?? NaN;
+  const scaledAbsolute = useMemo(
+    () =>
+      scan && coding.fringeFrequency > 1
+        ? scan.reconstruction.absolute.map(
+            (a) => (a + Math.PI) / coding.fringeFrequency - Math.PI,
+          )
+        : null,
+    [scan, coding.fringeFrequency],
+  );
   const field = (
     key: NumericKey,
     label: string,
@@ -476,9 +611,13 @@ export default function Sandbox({
   const csv = () => {
     if (!scan) return;
     const lines = [
-      "# model=calibrated-one-cycle-sandbox; coordinates=world_xyz_m; depth=camera_optical_Z_m; reference=evaluation_only",
-      "# config=" + JSON.stringify(config),
-      "camera_x,camera_y,I1,I2,I3,wrapped_rad,projector_column_px,reconstructed_x_m,reconstructed_y_m,reconstructed_z_m,depth_m,valid,reference_depth_m,projector_unlit_mask",
+      `# model=${MODEL}; coordinates=world_xyz_m; depth=camera_optical_Z_m; reference=evaluation_only`,
+      "# config=" + JSON.stringify(scanConfig ?? config),
+      [
+        "camera_x,camera_y",
+        ...scan.capture.frames.map((_, k) => `frame_${k + 1}`),
+        "wrapped_rad,absolute_rad,projector_column_px,reconstructed_x_m,reconstructed_y_m,reconstructed_z_m,depth_m,valid,reference_depth_m,projector_unlit_mask",
+      ].join(","),
     ];
     const cell = (n: number) => (Number.isFinite(n) ? String(n) : "");
     for (let i = 0; i < scan.capture.width * scan.capture.height; i++) {
@@ -489,12 +628,8 @@ export default function Sandbox({
           Math.floor(i / scan.capture.width),
           ...scan.capture.frames.map((a) => cell(a[i])),
           cell(scan.reconstruction.phase.wrapped[i]),
-          cell(
-            (scan.projector.width *
-              (scan.reconstruction.phase.wrapped[i] + Math.PI)) /
-              TAU -
-              0.5,
-          ),
+          cell(scan.reconstruction.absolute[i]),
+          cell(scan.reconstruction.column[i]),
           cell(p[3 * i]),
           cell(p[3 * i + 1]),
           cell(p[3 * i + 2]),
@@ -522,7 +657,7 @@ export default function Sandbox({
           <ScanLine size={22} />
           <div>
             <h1>3D 掃描沙盒</h1>
-            <small>結構光實驗室 · 三步 Phase Shifting</small>
+            <small>結構光實驗室 · N 步 Phase Shifting</small>
           </div>
         </div>
         <div
@@ -558,6 +693,22 @@ export default function Sandbox({
           </span>
         </p>
         <div className="sandbox-header-actions">
+          <button
+            aria-label="復原"
+            title="復原（Ctrl+Z）"
+            onClick={() => travel("undo")}
+            disabled={!historySize.undo}
+          >
+            <Undo2 size={16} />
+          </button>
+          <button
+            aria-label="重做"
+            title="重做（Ctrl+Y 或 Ctrl+Shift+Z）"
+            onClick={() => travel("redo")}
+            disabled={!historySize.redo}
+          >
+            <Redo2 size={16} />
+          </button>
           <button
             className="sandbox-scan-button"
             onClick={performScan}
@@ -599,7 +750,15 @@ export default function Sandbox({
           <div className="sandbox-panel-body">
             {toolTab === "object" && (
               <>
-                <h3 className="sandbox-group">形狀</h3>
+                <InfoHeading title="形狀">
+                  {config.shape === "pcb" && (
+                    <p>
+                      放大模型：板子 1.6×1.2 m、引腳寬約 2.2 cm。U1 QFP、U2
+                      SOIC、J1 排針、R1/C1/C2 被動元件共 48
+                      支引腳。板子用物體材質，晶片與引腳材質在「材質」分頁；逐引腳結果在「點雲分析」。
+                    </p>
+                  )}
+                </InfoHeading>
                 <div className="sandbox-palette">
                   {(
                     [
@@ -625,29 +784,21 @@ export default function Sandbox({
                     </button>
                   ))}
                 </div>
-                {config.shape === "pcb" && (
-                  <p className="sandbox-note">
-                    放大模型：板子 1.6×1.2 m、引腳寬約 2.2 cm。U1 QFP、U2
-                    SOIC、J1 排針、R1/C1/C2 被動元件共 48
-                    支引腳。板子用物體材質，晶片與引腳材質在「材質」分頁；逐引腳結果在「點雲分析」。
-                  </p>
-                )}
                 {config.shape === "vgroove" &&
                   field("grooveAngle", "V 型槽夾角", {
                     step: 1,
                     unit: "°",
                     digits: 0,
                   })}
-                <h3 className="sandbox-group">位置</h3>
+                <InfoHeading title="位置">
+                  <p>也可以在 3D 視窗左鍵點物體，拖曳彩色箭頭移動。</p>
+                </InfoHeading>
                 {field("x", "物體 X 位置", {
                   unit: "m",
                   testId: "sandbox-object-x",
                 })}
                 {field("y", "物體高度 Y", { unit: "m" })}
                 {field("z", "物體 Z 位置", { unit: "m" })}
-                <p className="sandbox-note">
-                  也可以在 3D 視窗左鍵點物體，拖曳彩色箭頭移動。
-                </p>
               </>
             )}
             {toolTab === "rig" && (
@@ -659,13 +810,21 @@ export default function Sandbox({
                   ] as const
                 ).map(([device, ...keys]) => (
                   <section key={device}>
-                    <h3 className="sandbox-group">{device} 位置</h3>
+                    <InfoHeading title={`${device} 位置`}>
+                      <p>
+                        也可以在 3D 視窗左鍵點 {device} 機身，拖曳彩色箭頭移動。兩台裝置永遠對準物體中心。
+                      </p>
+                    </InfoHeading>
                     {keys.map((key, axis) =>
                       field(key, `${device} ${"XYZ"[axis]}`, { unit: "m" }),
                     )}
                   </section>
                 ))}
-                <h3 className="sandbox-group">Camera 鏡頭</h3>
+                <InfoHeading title="Camera 鏡頭">
+                  <p>
+                    開啟面積積分後，跨在邊緣上的像素會混合兩個表面的條紋（混合像素），小細節在低解析度時會重建錯誤或消失。解析度越高掃描越久。
+                  </p>
+                </InfoHeading>
                 {field("cameraFov", "Camera FOV", {
                   step: 1,
                   unit: "°",
@@ -701,20 +860,126 @@ export default function Sandbox({
                     <option value={3}>3×3 子像素</option>
                   </select>
                 </label>
-                <p className="sandbox-note">
-                  開啟面積積分後，跨在邊緣上的像素會混合兩個表面的條紋（混合像素），小細節在低解析度時會重建錯誤或消失。解析度越高掃描越久。
-                </p>
+                <InfoHeading title="Baseline">
+                  <p>
+                    兩光心的距離。影像水平方向沿著 baseline，條紋因此橫跨 baseline
+                    變化。
+                  </p>
+                </InfoHeading>
                 <p className="sandbox-note" data-testid="sandbox-baseline">
-                  Baseline（兩光心距離）
+                  兩光心距離{" "}
                   {Math.hypot(
                     config.cameraX - config.projectorX,
                     config.cameraY - config.projectorY,
                     config.cameraZ - config.projectorZ,
                   ).toFixed(2)}{" "}
-                  m。兩台裝置永遠對準物體中心，影像水平方向沿著
-                  baseline，條紋因此橫跨 baseline 變化；也可在 3D
-                  視窗點機身後拖曳。
+                  m
                 </p>
+              </>
+            )}
+            {toolTab === "projector" && (
+              <>
+                <InfoHeading title="條紋編碼">
+                  <p>
+                    投影圖樣 = offset + amplitude·cos(2πf·u/W − π + 2πk/N)。頻率
+                    f 是整個投影寬度內的週期數；f 越高，同樣的相位誤差對應的 column
+                    誤差越小（約 ∝ 1/f），但 φ̂ 只在一個週期內唯一。
+                  </p>
+                  <p>
+                    N 步相移：N 越多對雜訊越不敏感，但要拍更多張。
+                  </p>
+                </InfoHeading>
+                {field("fringeFrequency", "條紋頻率 f", {
+                  step: 1,
+                  unit: "週期",
+                  digits: 0,
+                })}
+                {field("phaseSteps", "相移步數 N", {
+                  step: 1,
+                  unit: "步",
+                  digits: 0,
+                })}
+                {config.fringeFrequency > 1 && (
+                  <>
+                    <InfoHeading title="相位解包">
+                      <p>
+                        開啟時額外投 N 張 f = 1 的條紋，用它的相位 φ₁ 推算條紋序 k =
+                        round((f(φ₁+π) − π − φ̂)/2π)，絕對相位 Φ = φ̂ + 2πk。f
+                        很高時 φ₁ 的雜訊會被放大 f 倍，可能讓 k 算錯。
+                      </p>
+                      <p>
+                        關閉時直接把 φ̂ 當成第 0
+                        個週期：除了第一個週期外，其他點都會被三角量測到錯誤的光平面。
+                      </p>
+                    </InfoHeading>
+                    <label className="sandbox-toggle">
+                      <input
+                        type="checkbox"
+                        checked={config.temporalUnwrap}
+                        onChange={(e) =>
+                          update({ temporalUnwrap: e.target.checked })
+                        }
+                      />
+                      時間相位解包（加投單週期條紋）
+                    </label>
+                  </>
+                )}
+                <p className="sandbox-note" data-testid="sandbox-frame-count">
+                  每次掃描投影 {fringePatterns(config).length} 張
+                </p>
+                <InfoHeading title="亮度與對比">
+                  <p>
+                    圖樣要留在 [0, 1] 內，所以 amplitude ≤ min(offset, 1 −
+                    offset)。amplitude 越小調變越弱、越容易被雜訊或調變門檻吃掉；offset
+                    太高則亮面容易 clipping。
+                  </p>
+                </InfoHeading>
+                {field("fringeOffset", "條紋 offset", {
+                  step: 0.01,
+                  onChange: (fringeOffset) =>
+                    update({
+                      fringeOffset,
+                      fringeAmplitude: Math.min(
+                        config.fringeAmplitude,
+                        fringeOffset,
+                        1 - fringeOffset,
+                      ),
+                    }),
+                })}
+                {field("fringeAmplitude", "條紋 amplitude", {
+                  step: 0.01,
+                  max: Math.min(
+                    WORLD_LIMITS.fringeAmplitude[1],
+                    config.fringeOffset,
+                    1 - config.fringeOffset,
+                  ),
+                })}
+                <InfoHeading title="Projector 鏡頭">
+                  <p>
+                    FOV 越小，同樣 160 個 column 集中照在較小的範圍，空間解析度越高，但可能照不到整個物體。
+                  </p>
+                </InfoHeading>
+                {field("projectorFov", "Projector FOV", {
+                  step: 1,
+                  unit: "°",
+                  digits: 0,
+                })}
+                <button
+                  className="sandbox-reset"
+                  onClick={() =>
+                    update({
+                      fringeFrequency: DEFAULT_WORLD.fringeFrequency,
+                      phaseSteps: DEFAULT_WORLD.phaseSteps,
+                      temporalUnwrap: DEFAULT_WORLD.temporalUnwrap,
+                      fringeOffset: DEFAULT_WORLD.fringeOffset,
+                      fringeAmplitude: DEFAULT_WORLD.fringeAmplitude,
+                      projectorFov: DEFAULT_WORLD.projectorFov,
+                    })
+                  }
+                >
+                  <RotateCcw size={16} />
+                  重設投影參數
+                </button>
               </>
             )}
             {toolTab === "material" && (
@@ -813,7 +1078,14 @@ export default function Sandbox({
                   <RotateCcw size={16} />
                   重設材質參數
                 </button>
-                <h3 className="sandbox-group">間接光</h3>
+                <InfoHeading title="間接光">
+                  <p>
+                    亮度 = 0.12 環境 + 直接光 + 間接光。鏡面為
+                    GGX，低粗糙度會產生飽和高光而被 clipping；互反射以 Monte
+                    Carlo
+                    路徑追蹤，取樣越多雜訊越少。金屬沒有漫射，只有鏡射方向附近的像素看得到條紋，其餘無法解碼——這正是實機掃描金屬的困難。
+                  </p>
+                </InfoHeading>
                 <label className="sandbox-toggle">
                   <input
                     type="checkbox"
@@ -838,16 +1110,13 @@ export default function Sandbox({
                     })}
                   </>
                 )}
-                <p className="sandbox-note">
-                  亮度 = 0.12 環境 + 直接光 + 間接光。鏡面為
-                  GGX，低粗糙度會產生飽和高光而被 clipping；互反射以 Monte Carlo
-                  路徑追蹤，取樣越多雜訊越少。金屬沒有漫射，只有鏡射方向附近的像素看得到條紋，其餘無法解碼——這正是實機掃描金屬的困難。
-                </p>
               </>
             )}
             {toolTab === "more" && (
               <>
-                <h3 className="sandbox-group">雜訊與可重現</h3>
+                <InfoHeading title="雜訊與可重現">
+                  <p>僅加性 Gaussian；不含完整 sensor noise。</p>
+                </InfoHeading>
                 {field("noiseSigma", "Gaussian Noise σ", {
                   step: 0.001,
                   digits: 3,
@@ -871,9 +1140,6 @@ export default function Sandbox({
                     }}
                   />
                 </label>
-                <p className="sandbox-note">
-                  僅加性 Gaussian；不含完整 sensor noise。
-                </p>
                 <button
                   className="sandbox-reset"
                   onClick={() => update({ ...DEFAULT_WORLD })}
@@ -881,8 +1147,7 @@ export default function Sandbox({
                   <RotateCcw size={16} />
                   重設場景參數
                 </button>
-                <details className="sandbox-model-notes">
-                  <summary>這個沙盒做了什麼？有哪些簡化？</summary>
+                <InfoHeading title="模型與簡化">
                   <p>
                     <strong>已實作：</strong>已知 Pinhole Camera–Projector
                     內外參、Camera ray–mesh 交點（BVH 加速）、Projector
@@ -906,7 +1171,7 @@ export default function Sandbox({
                     光線追蹤與 Float64 intensity，並非螢幕截圖。深度定義為
                     Camera optical-axis Z。
                   </p>
-                </details>
+                </InfoHeading>
               </>
             )}
           </div>
@@ -958,14 +1223,23 @@ export default function Sandbox({
                 {focusSpace ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
                 {focusSpace ? "返回完整工作區" : "專注 3D 空間"}
               </button>
+              <InfoButton
+                label="操作說明"
+                open={showHelp}
+                onToggle={() => setShowHelp((v) => !v)}
+              />
             </div>
           </div>
-          <div className="sandbox-overlay sandbox-overlay-bottom sandbox-play-help">
-            <span>左鍵：選取並拖曳物體／Camera／Projector</span>
-            <span>中鍵：旋轉</span>
-            <span>滾輪：縮放</span>
-            <span>WASD／Q E：移動、轉向</span>
-          </div>
+          {showHelp && (
+            <div className="sandbox-overlay sandbox-overlay-bottom sandbox-play-help">
+              <span>左鍵：選取並拖曳物體／Camera／Projector</span>
+              <span>中鍵：旋轉</span>
+              <span>右鍵：平移</span>
+              <span>滾輪：縮放</span>
+              <span>WASD／Q E：移動、轉向</span>
+              <span>R：重設視角</span>
+            </div>
+          )}
           {message && (
             <div className="sandbox-message" role="status">
               <span>{message}</span>
@@ -1027,8 +1301,25 @@ export default function Sandbox({
             tabs={RESULT_TABS}
             value={resultTab}
             onChange={setResultTab}
-          />
+          >
+            <InfoButton
+              label="結果分頁說明"
+              open={resultInfo}
+              onToggle={() => setResultInfo((v) => !v)}
+            />
+          </Tabs>
           <div className={`sandbox-panel-body ${stale ? "stale" : ""}`}>
+            {resultInfo && (
+              <div className="sandbox-info-panel">
+                <p>
+                  {resultTab === "captures"
+                    ? `前 ${steps} 張只差投影相移 2πk/${steps}，φ̂ 由它們解出，不讀取表面座標${patterns.length > steps ? "；「低頻」影像是用來解包的單週期條紋" : ""}。點影像可選像素。`
+                    : resultTab === "depth"
+                      ? "3D 視窗中藍線＝Camera 射線；黃平面＝Projector 光平面；紅點＝三角量測結果。點影像可選像素。"
+                      : "直接光與間接光是正向模型內部的評估資料，重建時不會讀取。互反射在「材質」分頁開關。"}
+                </p>
+              </div>
+            )}
             {!scan || !imageProps ? (
               <div className="sandbox-no-result">
                 正在產生第一組 Camera Captures…
@@ -1040,27 +1331,30 @@ export default function Sandbox({
                   role="group"
                   aria-label="3D 場景顯示的曝光"
                 >
-                  {[0, 1, 2].map((k) => (
+                  {scan.capture.frames.map((_, k) => (
                     <button
                       key={k}
-                      aria-pressed={frame === k}
+                      aria-pressed={scanFrame === k}
                       onClick={() => setFrame(k)}
                     >
-                      I{k + 1} · {k * 120}°
+                      {frameLabel(k)}
                     </button>
                   ))}
                 </div>
                 <div className="sandbox-image-grid">
                   {scan.capture.frames.map((values, k) => (
-                    <figure key={k} className={frame === k ? "selected" : ""}>
+                    <figure
+                      key={k}
+                      className={scanFrame === k ? "selected" : ""}
+                    >
                       <Image
                         {...imageProps}
                         values={values}
                         testId={`sandbox-capture-${k}`}
                       />
                       <figcaption>
-                        I{k + 1} · 相移 {k * 120}°
-                        {frame === k ? " · 場景顯示中" : ""}
+                        {frameLabel(k)}
+                        {scanFrame === k ? " · 場景顯示中" : ""}
                       </figcaption>
                     </figure>
                   ))}
@@ -1073,11 +1367,35 @@ export default function Sandbox({
                     />
                     <figcaption>Wrapped Phase φ̂</figcaption>
                   </figure>
+                  {scan.reconstruction.lowPhase && (
+                    <figure>
+                      <Image
+                        {...imageProps}
+                        values={scan.reconstruction.lowPhase.wrapped}
+                        kind="phase"
+                        testId="sandbox-low-phase"
+                        label="單週期相位"
+                      />
+                      <figcaption>單週期相位 φ₁</figcaption>
+                    </figure>
+                  )}
+                  {scaledAbsolute && (
+                    <figure>
+                      <Image
+                        {...imageProps}
+                        values={scaledAbsolute}
+                        kind="phase"
+                        testId="sandbox-absolute-phase"
+                        label="解包後相位"
+                      />
+                      <figcaption>
+                        {scan.reconstruction.lowPhase
+                          ? "解包後 Φ/f"
+                          : "未解包：φ̂/f"}
+                      </figcaption>
+                    </figure>
+                  )}
                 </div>
-                <p className="sandbox-note">
-                  三張只差投影相移；φ̂ 由 I₁–I₃
-                  解出，不讀取表面座標。點影像可選像素。
-                </p>
               </>
             ) : resultTab === "depth" ? (
               <>
@@ -1107,10 +1425,25 @@ export default function Sandbox({
                 </div>
                 <ol className="sandbox-explanation">
                   <li>
-                    三次亮度解出 φ̂ = <b>{f(phase)} rad</b>
+                    {steps} 次亮度解出 φ̂ = <b>{f(phase)} rad</b>
                   </li>
+                  {coding.fringeFrequency > 1 && (
+                    <li>
+                      {scan.reconstruction.lowPhase ? (
+                        <>
+                          單週期 φ₁ = <b>{f(lowPhase)} rad</b> → 條紋序 k ={" "}
+                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                        </>
+                      ) : (
+                        <>
+                          未解包：假設 k = <b>0</b>（共 {coding.fringeFrequency}{" "}
+                          個週期）
+                        </>
+                      )}
+                    </li>
+                  )}
                   <li>
-                    單一週期對應 Projector column <b>{f(projectorU, 2)} px</b>
+                    對應 Projector column <b>{f(projectorU, 2)} px</b>
                   </li>
                   <li>
                     Camera 射線 ∩ 該 column 光平面 →{" "}
@@ -1123,10 +1456,6 @@ export default function Sandbox({
                     </b>
                   </li>
                 </ol>
-                <p className="sandbox-note">
-                  3D 視窗中藍線＝Camera 射線；黃平面＝Projector
-                  光平面；紅點＝三角量測結果。
-                </p>
               </>
             ) : (
               <>
@@ -1134,16 +1463,16 @@ export default function Sandbox({
                   <figure>
                     <Image
                       {...imageProps}
-                      values={scan.capture.direct[frame]}
+                      values={scan.capture.direct[scanFrame]}
                       testId="sandbox-direct"
                       label="直接光分量"
                     />
-                    <figcaption>直接光 · I{frame + 1}</figcaption>
+                    <figcaption>直接光 · {frameLabel(scanFrame)}</figcaption>
                   </figure>
                   <figure>
                     <Image
                       {...imageProps}
-                      values={scan.capture.indirect[frame]}
+                      values={scan.capture.indirect[scanFrame]}
                       gain={indirectGain}
                       testId="sandbox-indirect"
                       label="間接光分量"
@@ -1155,9 +1484,8 @@ export default function Sandbox({
                 </div>
                 <p className="sandbox-note">
                   {scan.capture.directOnly
-                    ? `此像素間接光 ${f(scan.capture.indirect[frame][probe])}。`
-                    : "互反射關閉：間接光為 0（在「材質」分頁開啟）。"}
-                  這是正向模型內部的評估資料，重建時不會讀取。
+                    ? `此像素間接光 ${f(scan.capture.indirect[scanFrame][probe])}。`
+                    : "互反射關閉：間接光為 0。"}
                 </p>
               </>
             )}
@@ -1218,9 +1546,7 @@ export default function Sandbox({
             if (chosen.size > 1_048_576) throw new Error("參數檔超過 1 MB");
             const envelope = JSON.parse(await chosen.text());
             if (token !== importGeneration.current) return;
-            if (envelope.schemaVersion !== SCHEMA || envelope.model !== MODEL)
-              throw new Error("不是此沙盒的參數格式");
-            update(parseWorldConfig(envelope.config));
+            update(readEnvelope(envelope));
             setMessage("已匯入沙盒設定並自動重新掃描；保存記錄尚未覆寫。");
           } catch (error) {
             if (token !== importGeneration.current) return;

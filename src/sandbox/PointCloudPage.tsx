@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
+import { RotateCcw } from "lucide-react";
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { createWorld, type WorldConfig, type WorldScan } from "./scanner";
 import { analyzeScan, FAILURE_CAUSES, type ScanAnalysis } from "./analysis";
 import { PCB_PINS, SURFACE } from "./pcb";
+import { createViewControls } from "./viewControls";
+import { InfoButton, InfoHeading } from "./Info";
 
 type ColorMode = "error" | "height" | "surface";
 const SURFACE_COLORS = ["#5bbdcd", "#7d8a99", "#b7a0fa", "#ffcf6e"];
@@ -22,6 +30,7 @@ function PointCloudView({
   colorMode,
   showGround,
   showTruth,
+  resetRef,
 }: {
   scan: WorldScan;
   config: WorldConfig;
@@ -29,6 +38,7 @@ function PointCloudView({
   colorMode: ColorMode;
   showGround: boolean;
   showTruth: boolean;
+  resetRef: MutableRefObject<(() => void) | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
@@ -49,7 +59,10 @@ function PointCloudView({
     renderer.setSize(parent.clientWidth, parent.clientHeight);
     const canvas = renderer.domElement;
     canvas.dataset.testid = "analysis-canvas";
-    canvas.setAttribute("aria-label", "重建點雲；拖曳旋轉、滾輪縮放、右鍵平移");
+    canvas.setAttribute(
+      "aria-label",
+      "重建點雲；按住滑鼠中鍵旋轉視角，右鍵平移，滾輪縮放；WASD 移動視角，Q/E 轉向，R 重設",
+    );
     parent.append(canvas);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#0c1726");
@@ -59,7 +72,6 @@ function PointCloudView({
       0.01,
       100,
     );
-    const controls = new OrbitControls(viewer, canvas);
     const grid = new THREE.GridHelper(12, 48, "#3e5870", "#1d2e3f");
     scene.add(grid);
 
@@ -127,14 +139,23 @@ function PointCloudView({
         : new THREE.Vector3(config.x, config.y, config.z);
     const radius =
       sphere && sphere.radius > 0 ? Math.min(sphere.radius, 4) : 1.5;
-    controls.target.copy(center);
-    viewer.position
-      .copy(center)
-      .add(new THREE.Vector3(1.1, 1.3, 1.6).multiplyScalar(radius * 1.6));
-    controls.update();
+    const view = createViewControls(viewer, canvas, {
+      home: (orbit) => {
+        orbit.target.copy(center);
+        viewer.position
+          .copy(center)
+          .add(new THREE.Vector3(1.1, 1.3, 1.6).multiplyScalar(radius * 1.6));
+      },
+      minDistance: radius * 0.2,
+    });
+    view.reset();
 
     const render = () => renderer.render(scene, viewer);
-    controls.addEventListener("change", render);
+    view.orbit.addEventListener("change", render);
+    resetRef.current = () => {
+      view.reset();
+      render();
+    };
     const observer = new ResizeObserver(() => {
       if (!parent.clientWidth || !parent.clientHeight) return;
       renderer.setSize(parent.clientWidth, parent.clientHeight);
@@ -146,7 +167,8 @@ function PointCloudView({
     render();
     return () => {
       observer.disconnect();
-      controls.dispose();
+      resetRef.current = null;
+      view.dispose();
       geometry.dispose();
       (points.material as THREE.Material).dispose();
       truthMaterial.dispose();
@@ -156,7 +178,7 @@ function PointCloudView({
       renderer.forceContextLoss();
       canvas.remove();
     };
-  }, [scan, config, analysis, colorMode, showGround, showTruth]);
+  }, [scan, config, analysis, colorMode, showGround, showTruth, resetRef]);
   return (
     <div className="analysis-view" ref={host}>
       {error && (
@@ -231,6 +253,8 @@ export default function PointCloudPage({
     [colorMode, setColorMode] = useState<ColorMode>("error"),
     [showGround, setShowGround] = useState(false),
     [showTruth, setShowTruth] = useState(true);
+  const resetView = useRef<(() => void) | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
   const isPcb = config.shape === "pcb";
   const analysis = useMemo(
     () =>
@@ -263,6 +287,7 @@ export default function PointCloudPage({
           colorMode={colorMode}
           showGround={showGround}
           showTruth={showTruth}
+          resetRef={resetView}
         />
         <div className="sandbox-overlay sandbox-overlay-top">
           <div className="analysis-legend">
@@ -318,8 +343,26 @@ export default function PointCloudPage({
               />
               地面點
             </label>
+            <button onClick={() => resetView.current?.()}>
+              <RotateCcw size={15} />
+              重設視角
+            </button>
+            <InfoButton
+              label="操作說明"
+              open={showHelp}
+              onToggle={() => setShowHelp((v) => !v)}
+            />
           </div>
         </div>
+        {showHelp && (
+          <div className="sandbox-overlay sandbox-overlay-bottom sandbox-play-help">
+            <span>中鍵：旋轉</span>
+            <span>右鍵：平移</span>
+            <span>滾輪：縮放</span>
+            <span>WASD／Q E：移動、轉向</span>
+            <span>R：重設視角</span>
+          </div>
+        )}
         {stale && (
           <p className="analysis-stale" role="status">
             場景已改，以下是上一組掃描；重掃完成後自動更新。
@@ -328,10 +371,12 @@ export default function PointCloudPage({
       </section>
       <aside className="analysis-panel" aria-label="誤差統計">
         <section>
-          <h2>誤差摘要</h2>
-          <p className="sandbox-note">
-            誤差 = 重建 Camera Z − 真值 Camera Z。真值只用於評估，不參與重建。
-          </p>
+          <InfoHeading title="誤差摘要" level={2}>
+            <p>
+              誤差 = 重建 Camera Z − 真值 Camera
+              Z。真值只用於評估，不參與重建。
+            </p>
+          </InfoHeading>
           <dl className="analysis-stats" data-testid="analysis-stats">
             <div>
               <dt>有效點</dt>
@@ -383,9 +428,10 @@ export default function PointCloudPage({
           </label>
         </section>
         <section>
-          <h2>誤差分布</h2>
+          <InfoHeading title="誤差分布" level={2}>
+            <p>綠底＝容差範圍；超出範圍的點併入兩端。</p>
+          </InfoHeading>
           <Histogram analysis={analysis} />
-          <p className="sandbox-note">綠底＝容差範圍；超出範圍的點併入兩端。</p>
         </section>
         <section>
           <h2>依表面</h2>
@@ -431,11 +477,12 @@ export default function PointCloudPage({
         </section>
         {analysis.pins && pinTally && (
           <section data-testid="analysis-pins">
-            <h2>PCB 引腳重建</h2>
-            <p className="sandbox-note">
-              成功＝可見像素中至少一半在容差內；部分＝有但不到一半；失敗＝看得到但沒有準確點；看不到＝Camera
-              視線被擋或在畫面外。
-            </p>
+            <InfoHeading title="PCB 引腳重建" level={2}>
+              <p>
+                成功＝可見像素中至少一半在容差內；部分＝有但不到一半；失敗＝看得到但沒有準確點；看不到＝Camera
+                視線被擋或在畫面外。
+              </p>
+            </InfoHeading>
             <div className="analysis-pin-tally">
               {pinTally.map(([s, n]) => (
                 <span key={s} className={`status ${STATUS[s][1]}`}>

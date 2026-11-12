@@ -135,7 +135,7 @@ test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度"
     Number(await page.getByTestId("sandbox-valid-count").textContent()),
   ).toBeGreaterThan(100);
   await openTab(page, "相位與深度");
-  await expect(page.getByText("單一週期對應")).toBeVisible();
+  await expect(page.getByText("對應 Projector column")).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -169,6 +169,59 @@ test("左鍵點選 Camera 機身後可在 3D 中拖曳，側欄位置同步", as
   expect(moved).toBe(true);
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
   await expect(page.locator(".sandbox-world-label.camera")).toBeVisible();
+  const draggedX = await cameraX.inputValue();
+  await page.keyboard.press("Control+z");
+  await expect(cameraX).toHaveValue("0.00");
+  await page.keyboard.press("Control+y");
+  await expect(cameraX).toHaveValue(draggedX);
+  await page.getByRole("button", { name: "復原", exact: true }).click();
+  await expect(cameraX).toHaveValue("0.00");
+});
+
+test("投影條紋可調頻率與步數，高頻靠時間解包重建，且可復原／重做", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?workspace=sandbox");
+  const status = page.getByTestId("sandbox-status");
+  await expect(status).toContainText("掃描完成", { timeout: 15000 });
+  await openTab(page, "投影");
+  const count = page.getByTestId("sandbox-frame-count");
+  await expect(count).toContainText("3 張");
+  await page
+    .getByRole("slider", { name: "條紋頻率 f", exact: true })
+    .fill("8");
+  await expect(count).toContainText("6 張");
+  await expect(status).toContainText("掃描完成");
+  await expect(page.getByTestId("sandbox-capture-5")).toBeVisible();
+  await expect(page.getByTestId("sandbox-low-phase")).toBeVisible();
+  const unwrap = page.getByRole("checkbox", { name: /時間相位解包/ });
+  await unwrap.uncheck();
+  await expect(count).toContainText("3 張");
+  await expect(status).toContainText("掃描完成");
+  await expect(page.getByTestId("sandbox-low-phase")).toHaveCount(0);
+  await page
+    .getByRole("slider", { name: "相移步數 N", exact: true })
+    .fill("5");
+  await expect(count).toContainText("5 張");
+  await expect(status).toContainText("掃描完成");
+  await expect(page.getByTestId("sandbox-capture-4")).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(count).toContainText("3 張");
+  await page.keyboard.press("Control+z");
+  await expect(unwrap).toBeChecked();
+  await expect(count).toContainText("6 張");
+  await page.keyboard.press("Control+z");
+  await expect(count).toContainText("3 張");
+  await expect(unwrap).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "復原", exact: true }),
+  ).toBeDisabled();
+  await page.keyboard.press("Control+Shift+z");
+  await expect(count).toContainText("6 張");
+  await page.getByRole("button", { name: "重做", exact: true }).click();
+  await expect(unwrap).not.toBeChecked();
+  await expect(status).toContainText("掃描完成");
 });
 
 test("開啟互反射後在背景 Worker 掃描，並對照無互反射的 RMSE", async ({
@@ -248,13 +301,44 @@ test("點雲分析頁顯示誤差統計，PCB 顯示逐引腳結果", async ({ p
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成", {
     timeout: 15000,
   });
+  const shapeInfo = page.getByRole("button", { name: "形狀說明" });
+  await expect(shapeInfo).toHaveCount(0);
   await page.getByRole("button", { name: "PCB 板", exact: true }).click();
+  await expect(page.getByText("放大模型")).toBeHidden();
+  await shapeInfo.click();
+  await expect(shapeInfo).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByText("放大模型")).toBeVisible();
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成", {
     timeout: 30000,
   });
   await openTab(page, "點雲分析");
-  await expect(page.getByTestId("analysis-canvas")).toBeVisible();
+  const cloud = page.getByTestId("analysis-canvas");
+  await expect(cloud).toBeVisible();
   await expect(page.getByTestId("sandbox-canvas")).toBeHidden();
+  const cloudUrl = () =>
+    cloud.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+  const home = await cloudUrl();
+  const cloudBox = (await cloud.boundingBox())!;
+  await page.mouse.move(
+    cloudBox.x + cloudBox.width * 0.5,
+    cloudBox.y + cloudBox.height * 0.5,
+  );
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(
+    cloudBox.x + cloudBox.width * 0.65,
+    cloudBox.y + cloudBox.height * 0.6,
+    { steps: 8 },
+  );
+  await page.mouse.up({ button: "middle" });
+  await expect.poll(cloudUrl).not.toBe(home);
+  await page.getByRole("button", { name: "重設視角", exact: true }).click();
+  await expect.poll(cloudUrl).toBe(home);
+  await cloud.focus();
+  await page.keyboard.down("KeyD");
+  await expect.poll(cloudUrl).not.toBe(home);
+  await page.keyboard.up("KeyD");
+  await page.keyboard.press("KeyR");
+  await expect.poll(cloudUrl).toBe(home);
   await expect(page.getByTestId("analysis-stats")).toContainText("RMSE");
   const pins = page.getByTestId("analysis-pins");
   await expect(pins).toContainText("U1-1");

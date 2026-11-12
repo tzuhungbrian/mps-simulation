@@ -6,10 +6,11 @@ import {
   useState,
 } from "react";
 import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { createViewControls } from "./viewControls";
 import {
   createWorld,
+  fringePatterns,
   getRig,
   validateWorldConfig,
   WORLD_LIMITS,
@@ -32,6 +33,7 @@ const RIG_KEYS = [
   "projectorY",
   "projectorZ",
   "cameraFov",
+  "projectorFov",
 ] as const;
 export interface WorldViewApi {
   resetView: () => void;
@@ -64,11 +66,11 @@ function opticalCamera(p: Pinhole) {
 const vertexShader = `attribute float surface;varying float vSurface;varying vec3 worldPoint;varying vec3 worldNormal;varying vec4 lightPoint;uniform mat4 projectorMatrix;
 void main(){vSurface=surface;vec4 world=modelMatrix*vec4(position,1.0);worldPoint=world.xyz;worldNormal=normalize(mat3(modelMatrix)*normal);lightPoint=projectorMatrix*world;gl_Position=projectionMatrix*viewMatrix*world;}`;
 const fragmentShader = `#include <packing>
-varying float vSurface;varying vec3 worldPoint;varying vec3 worldNormal;varying vec4 lightPoint;uniform vec3 projectorPosition;uniform sampler2D projectorDepth;uniform float phaseShift;uniform vec3 albedos;
+varying float vSurface;varying vec3 worldPoint;varying vec3 worldNormal;varying vec4 lightPoint;uniform vec3 projectorPosition;uniform sampler2D projectorDepth;uniform float phaseShift;uniform float fringeFrequency;uniform float fringeOffset;uniform float fringeAmplitude;uniform vec3 albedos;
 void main(){vec3 p=lightPoint.xyz/lightPoint.w;vec2 uv=p.xy*.5+.5;float depth=p.z*.5+.5;float visible=0.0;
 if(lightPoint.w>0.0&&uv.x>=0.0&&uv.x<1.0&&uv.y>=0.0&&uv.y<1.0&&depth>=0.0&&depth<=1.0){float nearest=unpackRGBAToDepth(texture2D(projectorDepth,uv));visible=depth<=nearest+0.0015?1.0:0.0;}
 float albedo=vSurface>2.5?albedos.z:vSurface>1.5?albedos.y:albedos.x;vec3 tint=vSurface>2.5?vec3(1.0,.86,.62):vec3(.85,.94,1.0);
-float incidence=max(dot(normalize(worldNormal),normalize(projectorPosition-worldPoint)),0.0);float intensity=.12+visible*incidence*albedo*(.4+.36*cos(6.28318530718*uv.x-3.14159265359+phaseShift));
+float incidence=max(dot(normalize(worldNormal),normalize(projectorPosition-worldPoint)),0.0);float intensity=.12+visible*incidence*albedo*(fringeOffset+fringeAmplitude*cos(6.28318530718*fringeFrequency*uv.x-3.14159265359+phaseShift));
 vec3 base=vec3(.045,.064,.087);gl_FragColor=vec4(base+tint*intensity,1.0);
 #include <colorspace_fragment>
 }`;
@@ -113,7 +115,6 @@ const WorldView = forwardRef<WorldViewApi, Props>(
       renderer.setSize(parent.clientWidth, parent.clientHeight);
       const canvas = renderer.domElement;
       canvas.dataset.testid = "sandbox-canvas";
-      canvas.tabIndex = 0;
       canvas.setAttribute(
         "aria-label",
         "3D 沙盒；左鍵點選物體、Camera 或 Projector 後拖曳彩色軸；按住滑鼠中鍵旋轉視角，滾輪縮放；WASD 移動視角，Q/E 轉向",
@@ -127,31 +128,18 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         0.05,
         100,
       );
-      const orbit = new OrbitControls(viewer, canvas);
-      orbit.enableDamping = false;
-      orbit.minDistance = 2;
-      orbit.maxDistance = 18;
-      orbit.minPolarAngle = 0.15;
-      orbit.maxPolarAngle = Math.PI * 0.49;
-      // Left button is reserved for the object gizmo.
-      orbit.mouseButtons = {
-        LEFT: null,
-        MIDDLE: THREE.MOUSE.ROTATE,
-        RIGHT: THREE.MOUSE.PAN,
-      };
-      let userMoved = false;
-      orbit.addEventListener("start", () => {
-        userMoved = true;
+      const view = createViewControls(viewer, canvas, {
+        home: (orbit) => {
+          orbit.target.set(0, 1, 1.8);
+          const distanceScale = Math.max(0.8, 1.25 / viewer.aspect);
+          viewer.position
+            .copy(orbit.target)
+            .add(
+              new THREE.Vector3(5.2, 2.8, 5.4).multiplyScalar(distanceScale),
+            );
+        },
       });
-      const reset = () => {
-        userMoved = false;
-        orbit.target.set(0, 1, 1.8);
-        const distanceScale = Math.max(0.8, 1.25 / viewer.aspect);
-        viewer.position
-          .copy(orbit.target)
-          .add(new THREE.Vector3(5.2, 2.8, 5.4).multiplyScalar(distanceScale));
-        orbit.update();
-      };
+      const { orbit, reset } = view;
       reset();
       const scanRoot = new THREE.Group(),
         helpers = new THREE.Group();
@@ -175,6 +163,9 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         projectorPosition: { value: new THREE.Vector3() },
         projectorDepth: { value: shadowTarget.texture },
         phaseShift: { value: 0 },
+        fringeFrequency: { value: 1 },
+        fringeOffset: { value: 0.4 },
+        fringeAmplitude: { value: 0.36 },
       };
       const surface = () =>
         new THREE.ShaderMaterial({
@@ -425,8 +416,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         marker.position.copy(point);
         marker.renderOrder = 9;
         rays.add(marker);
-        const phi = scan.reconstruction.phase.wrapped[p.probe],
-          u = (scan.projector.width * (phi + Math.PI)) / (2 * Math.PI) - 0.5,
+        const u = scan.reconstruction.column[p.probe],
           origin = v(scan.projector.position);
         const top = origin
             .clone()
@@ -498,7 +488,12 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           world.object.position.set(current.x, current.y, current.z);
           world.scene.updateMatrixWorld(true);
           if (rigChanged) updateRig();
-          shared.phaseShift.value = (p.frame * 2 * Math.PI) / 3;
+          const patterns = fringePatterns(current),
+            pattern = patterns[Math.min(p.frame, patterns.length - 1)];
+          shared.phaseShift.value = pattern.shift;
+          shared.fringeFrequency.value = pattern.frequency;
+          shared.fringeOffset.value = current.fringeOffset;
+          shared.fringeAmplitude.value = current.fringeAmplitude;
           // GPU preview has no specular term, so metals use their specular weight to stay visible.
           const shown = (albedo: number, specular: number) =>
             Math.max(albedo, 0.6 * specular);
@@ -526,88 +521,6 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         },
       };
       runtime.current.update(latest.current);
-      const cameraKeys = new Set([
-        "KeyW",
-        "KeyA",
-        "KeyS",
-        "KeyD",
-        "KeyQ",
-        "KeyE",
-      ]);
-      const held = new Set<string>();
-      const yAxis = new THREE.Vector3(0, 1, 0),
-        ahead = new THREE.Vector3(),
-        side = new THREE.Vector3(),
-        step = new THREE.Vector3(),
-        offset = new THREE.Vector3();
-      let moveFrame = 0,
-        lastTick = 0;
-      const tick = () => {
-        const now = performance.now(),
-          dt = Math.min(0.05, (now - lastTick) / 1000);
-        lastTick = now;
-        ahead.subVectors(orbit.target, viewer.position).setY(0).normalize();
-        side.crossVectors(ahead, yAxis);
-        step.set(0, 0, 0);
-        if (held.has("KeyW")) step.add(ahead);
-        if (held.has("KeyS")) step.sub(ahead);
-        if (held.has("KeyD")) step.add(side);
-        if (held.has("KeyA")) step.sub(side);
-        if (step.lengthSq() > 0) {
-          // Pan speed follows zoom distance, like a city-builder camera.
-          step
-            .normalize()
-            .multiplyScalar(
-              0.8 * viewer.position.distanceTo(orbit.target) * dt,
-            );
-          step.set(
-            THREE.MathUtils.clamp(orbit.target.x + step.x, -6, 6) -
-              orbit.target.x,
-            0,
-            THREE.MathUtils.clamp(orbit.target.z + step.z, -6, 6) -
-              orbit.target.z,
-          );
-          orbit.target.add(step);
-          viewer.position.add(step);
-        }
-        const turn = (held.has("KeyQ") ? 1 : 0) - (held.has("KeyE") ? 1 : 0);
-        if (turn) {
-          offset
-            .subVectors(viewer.position, orbit.target)
-            .applyAxisAngle(yAxis, turn * 1.4 * dt);
-          viewer.position.copy(orbit.target).add(offset);
-        }
-        orbit.update();
-        moveFrame = held.size ? requestAnimationFrame(tick) : 0;
-      };
-      const onKey = (e: KeyboardEvent) => {
-        if (e.ctrlKey || e.metaKey || e.altKey) return;
-        if (cameraKeys.has(e.code)) {
-          e.preventDefault();
-          userMoved = true;
-          held.add(e.code);
-          if (!moveFrame) {
-            lastTick = performance.now();
-            moveFrame = requestAnimationFrame(tick);
-          }
-        } else if (e.code === "KeyR") {
-          e.preventDefault();
-          reset();
-          render();
-        }
-      };
-      const onKeyUp = (e: KeyboardEvent) => held.delete(e.code);
-      const releaseKeys = () => held.clear();
-      canvas.addEventListener("keydown", onKey);
-      canvas.addEventListener("keyup", onKeyUp);
-      canvas.addEventListener("blur", releaseKeys);
-      // Stop the browser's middle-click autoscroll from hijacking rotation.
-      const blockAutoScroll = (e: MouseEvent) => {
-        if (e.button === 1) e.preventDefault();
-      };
-      canvas.addEventListener("mousedown", blockAutoScroll);
-      const focus = () => canvas.focus({ preventScroll: true });
-      canvas.addEventListener("pointerdown", focus);
       const picker = new THREE.Raycaster(),
         pointer = new THREE.Vector2();
       const pick = (e: PointerEvent) => {
@@ -649,7 +562,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         renderer.setSize(parent.clientWidth, parent.clientHeight);
         viewer.aspect = parent.clientWidth / parent.clientHeight;
         viewer.updateProjectionMatrix();
-        if (!userMoved) reset();
+        if (!view.userMoved) reset();
         render();
       });
       observer.observe(parent);
@@ -657,14 +570,8 @@ const WorldView = forwardRef<WorldViewApi, Props>(
       return () => {
         runtime.current = null;
         observer.disconnect();
-        cancelAnimationFrame(moveFrame);
-        canvas.removeEventListener("keydown", onKey);
-        canvas.removeEventListener("keyup", onKeyUp);
-        canvas.removeEventListener("blur", releaseKeys);
-        canvas.removeEventListener("mousedown", blockAutoScroll);
-        canvas.removeEventListener("pointerdown", focus);
         canvas.removeEventListener("pointerdown", pick);
-        orbit.dispose();
+        view.dispose();
         transform.detach();
         transform.dispose();
         scanRoot.remove(world.scene);
