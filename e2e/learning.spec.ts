@@ -124,3 +124,32 @@ for (const width of [390, 620, 1440]) {
     ).toBe(true);
   });
 }
+
+test("教學每一步旁有同步的 3D 示意，連到相位的候選光平面", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "開始：先看三張照片", exact: true })
+    .click();
+  const canvas = page.getByTestId("lesson-scene-canvas");
+  await expect(canvas).toBeVisible();
+  const caption = page.getByTestId("lesson-scene-caption");
+  await expect(caption).toContainText("Camera 拍到的範圍");
+  await page.getByRole("button", { name: "I1 · 0°", exact: true }).click();
+  const first = await canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL());
+  await page.getByRole("button", { name: "I2 · 120°", exact: true }).click();
+  await expect
+    .poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL()))
+    .not.toBe(first);
+  await page
+    .getByRole("button", { name: "下一步：讀取一個像素", exact: true })
+    .click();
+  await expect(caption).toContainText("射線");
+  await page
+    .getByRole("button", { name: "下一步：算出 Phase", exact: true })
+    .click();
+  await expect(caption).toContainText("光平面");
+  expect(errors).toEqual([]);
+});

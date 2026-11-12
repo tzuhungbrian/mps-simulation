@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Check, ScanLine } from "lucide-react";
 import {
   DEFAULT_CONFIG,
@@ -8,6 +8,8 @@ import {
 } from "../core/simulation";
 import { rasterize } from "../lib/images";
 import LineChart from "./LineChart";
+
+const LessonScene = lazy(() => import("./LessonScene"));
 
 const COLORS = ["#5ee4bd", "#b7a0fa", "#edbd79"];
 interface Props {
@@ -113,8 +115,15 @@ export default function LearningExperience({
   onReadLimits,
 }: Props) {
   const [step, setStep] = useState(0),
-    [relative, setRelative] = useState(false);
+    [relative, setRelative] = useState(false),
+    [sceneFrame, setSceneFrame] = useState(0),
+    [autoplay, setAutoplay] = useState(true);
   const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (step !== 1 || !autoplay) return;
+    const timer = setInterval(() => setSceneFrame((k) => (k + 1) % 3), 1400);
+    return () => clearInterval(timer);
+  }, [step, autoplay]);
   useEffect(() => {
     if (step > 0) heading.current?.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -202,7 +211,7 @@ export default function LearningExperience({
           </button>
         </div>
       </header>
-      <main className="learning-main">
+      <main className={`learning-main ${step > 0 ? "with-scene" : ""}`}>
         <div className="lesson-kicker">一步一步學 · Phase Shifting 入門</div>
         {step === 0 ? (
           <section className="lesson-welcome">
@@ -284,218 +293,291 @@ export default function LearningExperience({
             <p className="lesson-key-idea">
               Phase 是條紋內的位置，不是物體高度。
             </p>
-            {step === 1 ? (
-              <>
-                <div className="lesson-instruction">
-                  <strong>先看這裡</strong>
-                  <p>
-                    下面不是三個物體，而是<strong>同一個場景的三次曝光</strong>
-                    。每次只把 Projector 的條紋平移 120°。
-                  </p>
-                </div>
-                <section className="lesson-panel" aria-label="三次曝光">
-                  <div className="lesson-captures">
-                    {result.captures.frames.map((frame, k) => (
-                      <Capture
-                        key={k}
-                        {...{
-                          frame,
-                          width: config.width,
-                          height: config.height,
-                          k,
-                          probeX,
-                          probeY,
-                          onChoosePixel,
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <p className="lesson-caption">
-                    十字標記指向同一個像素。比較三張圖：這一點有時亮、有時暗。
-                  </p>
-                  <button
-                    className="lesson-secondary"
-                    onClick={() =>
-                      onApplyConfig({
-                        ...config,
-                        phaseOffset: wrapPhase(config.phaseOffset - 0.5),
-                      })
-                    }
-                  >
-                    把條紋往右移一點
-                    <ArrowRight size={18} />
-                  </button>
-                </section>
-                <div className="lesson-takeaway">
-                  <strong>這一步要記住</strong>
-                  <p>
-                    我們主動改變投影條紋的位置，讓同一個像素產生不同亮度。下一步就讀出這三個數字。
-                  </p>
-                </div>
-              </>
-            ) : step === 2 ? (
-              <>
-                <div className="lesson-instruction">
-                  <strong>現在換你操作</strong>
-                  <p>
-                    在曲線上點一下，或拖曳白色直線。你正在選擇
-                    <strong>影像裡的一個像素</strong>，不是改變物體的高度。
-                  </p>
-                </div>
-                <section className="lesson-panel">
-                  <div className="lesson-plot-heading">
-                    <h2>這個像素，三次各有多亮？</h2>
-                    <span>
-                      x = {probeX}，y = {probeY}
-                    </span>
-                  </div>
-                  <div
-                    className="lesson-readings"
-                    data-testid="guide-probe-values"
-                  >
-                    {values.map((value, k) => (
-                      <div
-                        key={k}
-                        style={
-                          {
-                            "--reading-color": COLORS[k],
-                          } as React.CSSProperties
+            <div className="lesson-step-layout">
+              <div className="lesson-step-content">
+                {step === 1 ? (
+                  <>
+                    <div className="lesson-instruction">
+                      <strong>先看這裡</strong>
+                      <p>
+                        下面不是三個物體，而是
+                        <strong>同一個場景的三次曝光</strong>
+                        。每次只把 Projector 的條紋平移 120°。
+                      </p>
+                    </div>
+                    <section className="lesson-panel" aria-label="三次曝光">
+                      <div className="lesson-captures">
+                        {result.captures.frames.map((frame, k) => (
+                          <Capture
+                            key={k}
+                            {...{
+                              frame,
+                              width: config.width,
+                              height: config.height,
+                              k,
+                              probeX,
+                              probeY,
+                              onChoosePixel,
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <p className="lesson-caption">
+                        十字標記指向同一個像素。比較三張圖：這一點有時亮、有時暗。
+                      </p>
+                      <button
+                        className="lesson-secondary"
+                        onClick={() =>
+                          onApplyConfig({
+                            ...config,
+                            phaseOffset: wrapPhase(config.phaseOffset - 0.5),
+                          })
                         }
                       >
-                        <span>
-                          第 {k + 1} 張 · I{k + 1}
-                        </span>
-                        <b>{value.toFixed(3)}</b>
-                      </div>
-                    ))}
-                  </div>
-                  <p className="lesson-axis-description">
-                    縱軸＝亮度（0 黑、1 白） · 橫軸＝影像從左到右的位置
-                  </p>
-                  <LineChart
-                    series={intensity}
-                    min={0}
-                    max={1}
-                    selected={selected}
-                    onSelect={onSelectX}
-                    testId="guide-intensity-chart"
-                  />
-                  <div className="lesson-plot-footer">
-                    <button
-                      className="lesson-secondary"
-                      onClick={() => onSelectX(selected > 0.5 ? 0.25 : 0.65)}
-                    >
-                      換一個像素看看
-                      <ArrowRight size={18} />
-                    </button>
-                    <span>三條線分別代表第 1、2、3 張照片。</span>
-                  </div>
-                </section>
-                <div className="lesson-takeaway">
-                  <strong>這一步要記住</strong>
-                  <p>
-                    不要只看一張照片的明暗。把同一個像素的三次亮度一起看，才有足夠資訊算出
-                    Phase。
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="lesson-instruction">
-                  <strong>演算法正在做什麼？</strong>
-                  <p>
-                    把剛才同一像素的{" "}
-                    <strong>
-                      {values.map((v) => v.toFixed(3)).join("、")}
-                    </strong>{" "}
-                    輸入三步 Phase Shifting 解算，得到下面的角度。這不是從
-                    Ground Truth 讀出的答案。
-                  </p>
-                </div>
-                <section className="lesson-panel">
-                  <div className="lesson-phase-result">
-                    <div>
-                      <span>目前像素的 Wrapped Phase</span>
-                      <strong data-testid="guide-phase-value">
-                        {Number.isFinite(phase) ? phase.toFixed(3) : "N/A"}
-                        <small>{Number.isFinite(phase) ? " rad" : ""}</small>
-                      </strong>
+                        把條紋往右移一點
+                        <ArrowRight size={18} />
+                      </button>
+                    </section>
+                    <div className="lesson-takeaway">
+                      <strong>這一步要記住</strong>
+                      <p>
+                        我們主動改變投影條紋的位置，讓同一個像素產生不同亮度。下一步就讀出這三個數字。
+                      </p>
                     </div>
-                    <p>
-                      一個條紋週期是 360°，也就是 2π rad。這個角度表示
-                      <strong>條紋週期內的位置</strong>
-                      ；單頻率還不知道它是第幾條條紋。
-                    </p>
-                  </div>
-                  <div className="lesson-plot-heading">
-                    <h2>對每個像素重複解算</h2>
-                    <span>橫軸仍是影像位置</span>
-                  </div>
-                  <div className="lesson-chart-legend">
-                    <span style={{ color: COLORS[1] }}>
-                      紫色：Wrapped Phase
-                    </span>
-                    {relative && (
-                      <span style={{ color: COLORS[0] }}>
-                        綠色：Relative Unwrapped Phase
-                      </span>
-                    )}
-                  </div>
-                  <LineChart
-                    series={phases}
-                    min={min - 0.15}
-                    max={max + 0.15}
-                    selected={selected}
-                    onSelect={onSelectX}
-                    testId="guide-phase-chart"
+                  </>
+                ) : step === 2 ? (
+                  <>
+                    <div className="lesson-instruction">
+                      <strong>現在換你操作</strong>
+                      <p>
+                        在曲線上點一下，或拖曳白色直線。你正在選擇
+                        <strong>影像裡的一個像素</strong>，不是改變物體的高度。
+                      </p>
+                    </div>
+                    <section className="lesson-panel">
+                      <div className="lesson-plot-heading">
+                        <h2>這個像素，三次各有多亮？</h2>
+                        <span>
+                          x = {probeX}，y = {probeY}
+                        </span>
+                      </div>
+                      <div
+                        className="lesson-readings"
+                        data-testid="guide-probe-values"
+                      >
+                        {values.map((value, k) => (
+                          <div
+                            key={k}
+                            style={
+                              {
+                                "--reading-color": COLORS[k],
+                              } as React.CSSProperties
+                            }
+                          >
+                            <span>
+                              第 {k + 1} 張 · I{k + 1}
+                            </span>
+                            <b>{value.toFixed(3)}</b>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="lesson-axis-description">
+                        縱軸＝亮度（0 黑、1 白） · 橫軸＝影像從左到右的位置
+                      </p>
+                      <LineChart
+                        series={intensity}
+                        min={0}
+                        max={1}
+                        selected={selected}
+                        onSelect={onSelectX}
+                        testId="guide-intensity-chart"
+                      />
+                      <div className="lesson-plot-footer">
+                        <button
+                          className="lesson-secondary"
+                          onClick={() =>
+                            onSelectX(selected > 0.5 ? 0.25 : 0.65)
+                          }
+                        >
+                          換一個像素看看
+                          <ArrowRight size={18} />
+                        </button>
+                        <span>三條線分別代表第 1、2、3 張照片。</span>
+                      </div>
+                    </section>
+                    <div className="lesson-takeaway">
+                      <strong>這一步要記住</strong>
+                      <p>
+                        不要只看一張照片的明暗。把同一個像素的三次亮度一起看，才有足夠資訊算出
+                        Phase。
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="lesson-instruction">
+                      <strong>演算法正在做什麼？</strong>
+                      <p>
+                        把剛才同一像素的{" "}
+                        <strong>
+                          {values.map((v) => v.toFixed(3)).join("、")}
+                        </strong>{" "}
+                        輸入三步 Phase Shifting 解算，得到下面的角度。這不是從
+                        Ground Truth 讀出的答案。
+                      </p>
+                    </div>
+                    <section className="lesson-panel">
+                      <div className="lesson-phase-result">
+                        <div>
+                          <span>目前像素的 Wrapped Phase</span>
+                          <strong data-testid="guide-phase-value">
+                            {Number.isFinite(phase) ? phase.toFixed(3) : "N/A"}
+                            <small>
+                              {Number.isFinite(phase) ? " rad" : ""}
+                            </small>
+                          </strong>
+                        </div>
+                        <p>
+                          一個條紋週期是 360°，也就是 2π rad。這個角度表示
+                          <strong>條紋週期內的位置</strong>
+                          ；單頻率還不知道它是第幾條條紋。
+                        </p>
+                      </div>
+                      <div className="lesson-plot-heading">
+                        <h2>對每個像素重複解算</h2>
+                        <span>橫軸仍是影像位置</span>
+                      </div>
+                      <div className="lesson-chart-legend">
+                        <span style={{ color: COLORS[1] }}>
+                          紫色：Wrapped Phase
+                        </span>
+                        {relative && (
+                          <span style={{ color: COLORS[0] }}>
+                            綠色：Relative Unwrapped Phase
+                          </span>
+                        )}
+                      </div>
+                      <LineChart
+                        series={phases}
+                        min={min - 0.15}
+                        max={max + 0.15}
+                        selected={selected}
+                        onSelect={onSelectX}
+                        testId="guide-phase-chart"
+                      />
+                      <p className="lesson-caption">
+                        紫線跳下去不是表面突然變高或變低，而是角度超出 +π
+                        後，改用 −π 開始表示。
+                      </p>
+                      <button
+                        className="lesson-secondary"
+                        onClick={() => setRelative((v) => !v)}
+                      >
+                        {relative
+                          ? "只看 Wrapped Phase"
+                          : "把跳變接起來（1D Unwrap）"}
+                        <ArrowRight size={18} />
+                      </button>
+                      {relative && (
+                        <p className="lesson-unwrap-explanation">
+                          接起來的是相對 Phase，還不能當作深度。
+                        </p>
+                      )}
+                      <details className="lesson-formula">
+                        <summary>想知道怎麼算？再展開公式</summary>
+                        <p>
+                          曝光順序為 0°、120°、240°，模型使用 cos(φ + δ)。atan2
+                          以兩個輸入保留象限：
+                        </p>
+                        <code>φ̂ = atan2(√3(I₃ − I₂), 2I₁ − I₂ − I₃)</code>
+                        <p>
+                          解算只讀取三個量測亮度。1D Unwrap
+                          只依相鄰相位差恢復連續區段，不補未知整數週期；它假設相鄰真實相位差的絕對值小於
+                          π。
+                        </p>
+                      </details>
+                    </section>
+                    <div className="lesson-takeaway">
+                      <strong>你剛完成了什麼？</strong>
+                      <p>
+                        三張照片 → 三個亮度 → Phase → 相對連續的 Phase。要進入
+                        3D，還需要解除條紋週期歧義、Camera–Projector
+                        Calibration，以及幾何三角量測。
+                      </p>
+                      <p className="lesson-quality">
+                        目前全部像素有效率：
+                        {(result.metrics.validRatio * 100).toFixed(1)}
+                        %。此數值不是 3D 準確度。
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <aside className="lesson-scene-panel" aria-label="3D 示意">
+                <h2>在 3D 空間裡是哪一步？</h2>
+                <Suspense
+                  fallback={
+                    <div className="lesson-scene">正在載入 3D 示意…</div>
+                  }
+                >
+                  <LessonScene
+                    step={step}
+                    frequency={config.frequency}
+                    phaseOffset={config.phaseOffset}
+                    mean={config.mean}
+                    amplitude={config.amplitude}
+                    frame={sceneFrame}
+                    probe={selected}
+                    row={config.height > 1 ? probeY / (config.height - 1) : 0.5}
+                    phase={phase}
+                    aspect={config.height / config.width}
                   />
-                  <p className="lesson-caption">
-                    紫線跳下去不是表面突然變高或變低，而是角度超出 +π 後，改用
-                    −π 開始表示。
-                  </p>
-                  <button
-                    className="lesson-secondary"
-                    onClick={() => setRelative((v) => !v)}
-                  >
-                    {relative
-                      ? "只看 Wrapped Phase"
-                      : "把跳變接起來（1D Unwrap）"}
-                    <ArrowRight size={18} />
-                  </button>
-                  {relative && (
-                    <p className="lesson-unwrap-explanation">
-                      接起來的是相對 Phase，還不能當作深度。
-                    </p>
+                </Suspense>
+                <div
+                  className="lesson-scene-frames"
+                  role="group"
+                  aria-label="3D 示意顯示的曝光"
+                >
+                  {[0, 1, 2].map((k) => (
+                    <button
+                      key={k}
+                      aria-pressed={sceneFrame === k}
+                      style={
+                        { "--reading-color": COLORS[k] } as React.CSSProperties
+                      }
+                      onClick={() => {
+                        setAutoplay(false);
+                        setSceneFrame(k);
+                      }}
+                    >
+                      I{k + 1} · {k * 120}°
+                    </button>
+                  ))}
+                  {step === 1 && (
+                    <button
+                      aria-pressed={autoplay}
+                      onClick={() => setAutoplay((v) => !v)}
+                    >
+                      {autoplay ? "暫停輪播" : "自動輪播"}
+                    </button>
                   )}
-                  <details className="lesson-formula">
-                    <summary>想知道怎麼算？再展開公式</summary>
-                    <p>
-                      曝光順序為 0°、120°、240°，模型使用 cos(φ + δ)。atan2
-                      以兩個輸入保留象限：
-                    </p>
-                    <code>φ̂ = atan2(√3(I₃ − I₂), 2I₁ − I₂ − I₃)</code>
-                    <p>
-                      解算只讀取三個量測亮度。1D Unwrap
-                      只依相鄰相位差恢復連續區段，不補未知整數週期；它假設相鄰真實相位差的絕對值小於
-                      π。
-                    </p>
-                  </details>
-                </section>
-                <div className="lesson-takeaway">
-                  <strong>你剛完成了什麼？</strong>
-                  <p>
-                    三張照片 → 三個亮度 → Phase → 相對連續的 Phase。要進入
-                    3D，還需要解除條紋週期歧義、Camera–Projector
-                    Calibration，以及幾何三角量測。
-                  </p>
-                  <p className="lesson-quality">
-                    目前全部像素有效率：
-                    {(result.metrics.validRatio * 100).toFixed(1)}%。此數值不是
-                    3D 準確度。
-                  </p>
                 </div>
-              </>
-            )}
+                <p
+                  className="lesson-scene-caption"
+                  data-testid="lesson-scene-caption"
+                >
+                  {step === 1
+                    ? "Projector（黃）把條紋投到牆上，Camera（藍）從旁邊拍。三張照片之間只有條紋平移 120°，牆、Camera 都沒動。藍框就是 Camera 拍到的範圍，對應左邊的照片。"
+                    : step === 2
+                      ? "你選的像素 = Camera 發出的一條射線（藍線），打在牆上的紅點。三個亮度就是這個點在三次投影下的亮度。"
+                      : `φ̂ 只告訴我們紅點在「某一條條紋內」的位置：Projector 那邊有 ${Math.max(1, Math.round(config.frequency))} 條光平面（黃）都符合。單一頻率分不出是哪一條，所以需要 unwrap、多頻或 Micro PS；确定之後，Camera 射線與那張光平面的交點就是 3D 點。較亮的那張是正確答案（實際系統事先不知道）。`}
+                </p>
+                <button className="lesson-secondary" onClick={onSandbox}>
+                  到 3D 沙盒看真實掃描
+                  <ArrowRight size={18} />
+                </button>
+              </aside>
+            </div>
             <footer className="lesson-actions">
               <button
                 className="lesson-secondary"

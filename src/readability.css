@@ -990,6 +990,83 @@
 .large-equation {
   font-size: 28px;
 }
+/* Lesson steps with a synchronised 3D illustration beside the content. */
+.learning-main.with-scene {
+  max-width: 1500px;
+}
+.lesson-step-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 440px;
+  gap: 28px;
+  align-items: start;
+}
+.lesson-step-content {
+  min-width: 0;
+}
+.lesson-scene-panel {
+  position: sticky;
+  top: 16px;
+  padding: 16px;
+  border: 1px solid #304050;
+  border-radius: 10px;
+  background: #101a26;
+}
+.lesson-scene-panel h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.lesson-scene {
+  position: relative;
+  height: 300px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #0c1520;
+  font-size: 15px;
+  color: #a6b6ca;
+}
+.lesson-scene > canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+  cursor: grab;
+}
+.lesson-scene-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.lesson-scene-frames button {
+  min-height: 36px;
+  padding: 4px 10px;
+  border: 1px solid #3c536a;
+  border-left: 4px solid var(--reading-color, #3c536a);
+  border-radius: 6px;
+  background: #162536;
+  color: #c0d1e0;
+  font-size: 14px;
+}
+.lesson-scene-frames button[aria-pressed="true"] {
+  background: #234439;
+  color: #c5f4dc;
+}
+.lesson-scene-caption {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #c3cfdd;
+  margin-bottom: 12px;
+}
+@media (max-width: 1180px) {
+  .lesson-step-layout {
+    grid-template-columns: 1fr;
+  }
+  .lesson-scene-panel {
+    position: static;
+    order: -1;
+  }
+}
 @media (max-width: 1400px) {
   .phase-upper {
     grid-template-columns: 1fr;
