@@ -18,7 +18,8 @@
     "lucide-react": "^0.468.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "three-mesh-bvh": "^0.9.18"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
