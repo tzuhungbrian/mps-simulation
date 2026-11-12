@@ -41,12 +41,20 @@ describe("calibrated pinholes", () => {
     ).toBeNull();
     expect(projectPoint(a, [Infinity, 0, -1])).toBeNull();
     expect(projectPoint(a, [0, 0, 0])).toBeNull();
-    expect(() => makePinhole([0, 0, 0], [0, 1, 0], 100, 100, 45)).toThrow(
-      RangeError,
-    );
     expect(() => makePinhole([0, 0, 0], [0, 0, 0], 100, 100, 45)).toThrow(
       RangeError,
     );
+    for (const target of [
+      [0, -2, 0],
+      [0, 3, 0],
+    ] as [number, number, number][]) {
+      const vertical = makePinhole([0, 0, 0], target, 100, 100, 45);
+      expect(Math.hypot(...vertical.right)).toBeCloseTo(1, 14);
+      expect(Math.hypot(...vertical.up)).toBeCloseTo(1, 14);
+      const centre = projectPoint(vertical, target)!;
+      expect(centre.u).toBeCloseTo(vertical.cx, 12);
+      expect(centre.v).toBeCloseTo(vertical.cy, 12);
+    }
   });
 
   it("uses integer pixel centers and a normalized world ray", () => {

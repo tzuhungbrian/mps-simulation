@@ -31,13 +31,17 @@ npm run format:check
 
 ## 預設進入 3D 沙盒
 
-首次開啟會進入 3D Sandbox。可旋轉視角、滾輪縮放、拖動物體的彩色軸、以 WASD / Q / E 移動物體，並切換球體、方塊與斜板。「專注 3D 空間」會收起工具與圖表，只保留大視窗與操作；不是具有重力、碰撞或第一人稱行走的完整遊戲引擎。
+首次開啟會進入 3D Sandbox。觀察視角採 city-builder 式操作：點場景後以 WASD 平移視角、Q / E 水平轉向、按住滑鼠中鍵旋轉、滾輪縮放、右鍵拖曳平移、R 重設。左鍵點選物體、Camera 或 Projector 後拖曳彩色軸移動它，也可用側欄滑桿；兩台裝置永遠對準物體目前的中心；預設 Camera 在物體正上方往下拍、Projector 與物體中心同高並沿 X 軸從側面照射，影像水平軸自動沿 baseline。物體可切換球體、方塊、斜板、夾角可調的 V 型槽，以及放大比例的 PCB 板（QFP、SOIC、排針、被動元件共 48 支引腳，板子／晶片／引腳各自材質；選用時自動套用俯拍檢測擺位）；物體與地面各有反射率、GGX 鏡面強度與粗糙度（可選金屬、塑膠、陶瓷等材質預設，或一鍵重設），並可開啟 1–3 次 Monte Carlo 互反射。「專注 3D 空間」會收起工具與圖表，只保留大視窗與操作；不是具有重力、碰撞或第一人稱行走的完整遊戲引擎。
 
-按「拍三張並重建」後，正向模型以相同三角網格做 CPU raycasting，計算 Camera 可見面、Projector 視野及遮擋，再從三張 intensity 解出 phase / column，利用已知校正做 ray–plane triangulation。點雲來自實際反算，不讀取表面真值。當物體或參數改變，舊重建會清除，必須重新掃描。
+版面為單一畫面的編輯器式工作區：左側分頁參數（物體／裝置／材質／其他，每個數值可拖滑桿或直接輸入）、中間 3D 視窗、右側指標與分頁結果（三次曝光／相位與深度／光傳輸）。改任何參數後約 0.3 秒自動在背景 Web Worker 重新掃描（也可按「重新掃描」）：正向模型以相同三角網格（BVH 加速）做 CPU 光線追蹤，計算 Camera 可見面、Projector 視野及遮擋、材質 BRDF 與可選的互反射，再從三張 intensity 解出 phase / column，利用已知校正做 ray–plane triangulation。點雲來自實際反算，不讀取表面真值。結果區另顯示直接光／間接光分量、深度誤差圖，以及同場景無互反射時的 RMSE 對照。重掃完成前，舊結果會變暗並從 3D 視窗移除點雲與射線，不冒充目前場景的量測。
 
 目前只在整個 Projector 視野投 **一個完整正弦週期**，藉此避免多週期條紋序號歧義；不是 Micro PS。已知的理想 calibration 也不是從校正板估計的結果。詳見 [3D 沙盒模型與限制](docs/sandbox-model.md)。
 
 網址可明確指定：`?workspace=sandbox`、`?workspace=guided`、`?workspace=explore`。模式選擇在此分頁保存；已保存的科學參數不會因切換模式被覆寫。
+
+Camera 解析度可選 96×72 到 384×288，並可開啟 2×2 / 3×3 像素面積積分：跨在邊緣上的像素會混合兩個表面的條紋，小細節（如引腳）在低解析度時會重建錯誤或消失。
+
+頂端「點雲分析」是獨立頁面：可旋轉的重建點雲（依深度誤差、高度或表面類別著色，可疊合真實表面線框）、RMSE / MAE / 平均偏差 / 中位數 / P95 / 最大誤差、可調容差與誤差直方圖、依表面統計、失效像素原因（背景、未照明、clipping、調變過低、三角量測無效）；PCB 另列每支引腳的可見、有效、容差內像素與「成功／部分／失敗／看不到」判定。這些全是讀取真值的評估資料，不參與重建。
 
 ## 「一步一步學」仍保留
 
@@ -46,6 +50,8 @@ npm run format:check
 1. **看三張照片**：知道是同一個場景的三次曝光，只有投影條紋相移不同。
 2. **讀一個像素**：拖曳探針，讀三個亮度；圖旁直接解釋縱軸與橫軸。
 3. **算出 Phase**：顯示實際 decoder 的結果，再按需開啟 Relative Unwrap 與公式。
+
+每一步旁邊都有同步的 3D 示意：Projector 把同一組條紋投到牆上、Camera 拍下（藍框＝左邊的照片）；第 2 步顯示所選像素的 Camera 射線，第 3 步顯示同一個 φ̂ 對應的所有候選 Projector 光平面，說明為什麼單頻需要 unwrap／多頻／Micro PS。此示意不計算教學數值。
 
 Phase 是條紋內的位置，不是物體高度。教學開始會套用乾淨、兩個條紋週期的參數，但不覆寫保存記錄。切換「自由實驗」可取得完整參數、Noise、統計、PNG / CSV / JSON 與 WebGL 示意。模式選擇只在此分頁的 sessionStorage 保存，不混入科學參數 JSON。
 
@@ -185,12 +191,12 @@ src/styles.css              響應式暗色研究工作區、reduced motion / co
 
 ## 四階段開發與驗收
 
-| 階段                     | 狀態                          | 主要驗收                                                                                                                                            |
-| ------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 · Phase Shifting       | 本次 MVP                      | 真實三步反解、相對 1D Unwrap、可互動曲線、數學測試與可重現匯出                                                                                      |
-| 2 · Virtual 3D Scanner   | 已知校正單週期沙盒已實作      | Pinhole camera / projector、內外參、distortion、ray / mesh 交點、projector 可見性與遮擋、independent GT buffers、從 correspondence 做 triangulation |
-| 3 · Micro Phase Shifting | 尚未實作                      | 根據原文的窄高頻帶、共享 offset / amplitude 假設、F+2 影像、消除 cosine ambiguity 的多頻 column 搜尋；與同曝光預算 Conventional PS 比較             |
-| 4 · Non-ideal Effects    | 只有基礎 Gaussian 與 clipping | Defocus PSF、interreflection / light transport、Gamma / quantization、空間變動反射率、noise / calibration 誤差傳播、depth RMSE 與失效率分析         |
+| 階段                     | 狀態                               | 主要驗收                                                                                                                                            |
+| ------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 · Phase Shifting       | 本次 MVP                           | 真實三步反解、相對 1D Unwrap、可互動曲線、數學測試與可重現匯出                                                                                      |
+| 2 · Virtual 3D Scanner   | 已知校正單週期沙盒已實作           | Pinhole camera / projector、內外參、distortion、ray / mesh 交點、projector 可見性與遮擋、independent GT buffers、從 correspondence 做 triangulation |
+| 3 · Micro Phase Shifting | 尚未實作                           | 根據原文的窄高頻帶、共享 offset / amplitude 假設、F+2 影像、消除 cosine ambiguity 的多頻 column 搜尋；與同曝光預算 Conventional PS 比較             |
+| 4 · Non-ideal Effects    | 互反射 / GGX 材質已實作（3D 沙盒） | Defocus PSF、Gamma / quantization、空間變動反射率、noise / calibration 誤差傳播、depth RMSE 與失效率分析                                            |
 
 ### MVP 2 必須遵守的資料路徑
 
@@ -212,8 +218,8 @@ F+2 方法不是任意多頻 pattern 都成立：窄高頻帶與近似共享光�
 ## 刻意未支援與限制
 
 - 一維模式不做幾何成像；3D 沙盒已提供理想合成 Camera Captures、三維物體、遮擋、三角量測與點雲，但沒有真實相機接入或 calibration 求解。
-- 無 Defocus、Interreflection、subsurface scattering、specular BRDF、motion、Gamma、Poisson / read noise、量化。
-- 數值流程是 CPU 同步運算；大量像素匯出可能需要幾秒，不是 GPU accelerated reconstruction。WebGL 單獨 lazy-load；沙盒用於觀察幾何與光路，量測則是獨立的 CPU raycasting，不從螢幕截圖讀回。
+- 無 Defocus、subsurface scattering、motion、Gamma、Poisson / read noise、量化。互反射與 GGX 鏡面只在 3D 沙盒的 CPU 正向模型中，一維模式沒有。
+- 數值流程是 CPU 運算（3D 掃描在 Web Worker）；大量像素匯出可能需要幾秒，不是 GPU accelerated reconstruction。WebGL 單獨 lazy-load；沙盒用於觀察幾何與光路，量測則是獨立的 CPU 光線追蹤，不從螢幕截圖讀回。
 - 同一 Seed + config 在相同 JS 數學實作中可重現；浮點 transcendentals 不承諾跨所有引擎 bitwise identical。
 - Validity 是明確門檻規則，不是統計置信度；純雜訊也可能跨過門檻。
 - Circular RMSE 無法診斷 unwrap 的 2π 整數錯誤，也不代表 depth 準確度。

@@ -49,10 +49,13 @@ export function makePinhole(
   width: number,
   height: number,
   fovYDegrees: number,
+  /** Preferred image-right direction; its component ⊥ forward is used when non-degenerate. */
+  rightHint?: Vec3,
 ): Pinhole {
   if (
     !finite(position) ||
     !finite(target) ||
+    (rightHint && !finite(rightHint)) ||
     !Number.isInteger(width) ||
     width < 1 ||
     !Number.isInteger(height) ||
@@ -63,7 +66,18 @@ export function makePinhole(
   )
     throw new RangeError("Invalid pinhole parameters");
   const forward = normalize(sub(target, position));
-  const right = normalize(cross(forward, [0, 1, 0]));
+  let right: Vec3 | null = null;
+  if (rightHint) {
+    const along = sub(rightHint, scale(forward, dot(rightHint, forward)));
+    if (Math.hypot(...along) > 1e-6 * Math.hypot(...rightHint))
+      right = normalize(along);
+  }
+  if (!right) {
+    let reference: Vec3 = [0, 1, 0];
+    // Looking straight up/down: world Y cannot define image right, so use -Z.
+    if (Math.hypot(...cross(forward, reference)) < 1e-6) reference = [0, 0, -1];
+    right = normalize(cross(forward, reference));
+  }
   const up = cross(right, forward);
   const fy = height / (2 * Math.tan((fovYDegrees * Math.PI) / 360));
   return {

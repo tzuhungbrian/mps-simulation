@@ -11,12 +11,13 @@ import {
   validateWorldConfig,
 } from "./scanner";
 import { cameraRay, makePinhole, projectPoint, type Vec3 } from "./geometry";
+import { MATERIAL_PRESETS } from "./lightTransport";
 import { decodeThreeStep, SHIFTS, TAU } from "../core/simulation";
 
 describe("CPU calibrated scanner", () => {
   it("reports null RMSE when a one-pixel scan sees an unilluminated surface", () => {
     const result = runWorldScan(
-      { ...DEFAULT_WORLD, baseline: 3, x: 0.5, z: -1 },
+      { ...DEFAULT_WORLD, cameraX: -1.5, projectorX: 1.5, x: 0.5, z: -1 },
       1,
       1,
     );
@@ -28,9 +29,18 @@ describe("CPU calibrated scanner", () => {
     expect(result.metrics.validRatio).toBe(0);
   });
   it("leaves background, silhouettes and projector-shadowed surfaces unmodulated and invalid", () => {
-    const { capture, reconstruction, camera, projector } =
-      runWorldScan(DEFAULT_WORLD);
-    const world = createWorld(DEFAULT_WORLD);
+    // A side-and-above rig so the view includes sky background beyond the ground.
+    const config = {
+      ...DEFAULT_WORLD,
+      cameraX: -1,
+      cameraY: 1.8,
+      cameraZ: 4,
+      projectorX: 1,
+      projectorY: 2.3,
+      projectorZ: 3.5,
+    };
+    const { capture, reconstruction, camera, projector } = runWorldScan(config);
+    const world = createWorld(config);
     const origin = new Vector3(...projector.position);
     let background = 0,
       shadow = 0,
@@ -165,7 +175,7 @@ describe("CPU calibrated scanner", () => {
 
   it("moving the object and changing shape alters real captures while ideal inversion remains accurate", () => {
     const original = runWorldScan(DEFAULT_WORLD, 48, 36);
-    for (const shape of ["sphere", "box", "ramp"] as const) {
+    for (const shape of ["sphere", "box", "ramp", "vgroove"] as const) {
       const config = { ...DEFAULT_WORLD, shape, x: 0.6, y: 1.1, z: -0.4 };
       const moved = runWorldScan(config, 48, 36);
       expect(moved.capture.frames).not.toEqual(original.capture.frames);
@@ -385,21 +395,27 @@ describe("CPU calibrated scanner", () => {
       11,
     );
     expect(capture.truthDepth[i]).not.toBeCloseTo(distance, 3);
+    const rho = config.groundAlbedo;
     for (let k = 0; k < 3; k++)
       expect(capture.frames[k][i]).toBeCloseTo(
-        0.12 + 0.4 * lambert + 0.36 * lambert * Math.cos(phi + SHIFTS[k]),
+        0.12 + rho * lambert * (0.4 + 0.36 * Math.cos(phi + SHIFTS[k])),
         11,
       );
     const phase = decodeThreeStep(capture.frames, 0.01, capture.clipped);
     expect(phase.wrapped[i]).toBeCloseTo(phi, 11);
-    expect(phase.modulation[i]).toBeCloseTo(0.36 * lambert, 11);
+    expect(phase.modulation[i]).toBeCloseTo(0.36 * rho * lambert, 11);
   });
   it("rejects invalid world parameters before allocating meshes or rigs", () => {
     for (const config of [
       { ...DEFAULT_WORLD, x: NaN },
       { ...DEFAULT_WORLD, z: 2.01 },
       { ...DEFAULT_WORLD, y: 0.64 },
-      { ...DEFAULT_WORLD, baseline: 0.39 },
+      { ...DEFAULT_WORLD, cameraZ: -5.01 },
+      { ...DEFAULT_WORLD, cameraX: 0, cameraY: 0.6, cameraZ: 0.3 },
+      { ...DEFAULT_WORLD, projectorY: 6.01 },
+      { ...DEFAULT_WORLD, projectorX: -5.01 },
+      { ...DEFAULT_WORLD, grooveAngle: 29 },
+      { ...DEFAULT_WORLD, grooveAngle: 151 },
       { ...DEFAULT_WORLD, cameraFov: 76 },
       { ...DEFAULT_WORLD, seed: -1 },
       { ...DEFAULT_WORLD, seed: 1.5 },
@@ -431,9 +447,222 @@ describe("CPU calibrated scanner", () => {
       "material",
     ]);
     const { camera, projector } = getRig(DEFAULT_WORLD);
-    expect(camera.position).toEqual([-1, 1.8, 4]);
+    expect(camera.position).toEqual([0, 3.5, 0]);
     expect([camera.width, camera.height]).toEqual([96, 72]);
-    expect(projector.position).toEqual([1, 2.3, 3.5]);
+    expect(projector.position).toEqual([2.5, 0.75, 0]);
     expect([projector.width, projector.height]).toEqual([160, 120]);
+  });
+  it("builds a closed V-groove whose opening angle is adjustable and reconstructs both walls", () => {
+    const floors = [30, 90, 150].map((grooveAngle) => {
+      const world = createWorld({
+        ...DEFAULT_WORLD,
+        shape: "vgroove",
+        grooveAngle,
+      });
+      try {
+        world.object.geometry.computeBoundingBox();
+        const box = world.object.geometry.boundingBox!;
+        [-0.8, -0.4, -0.6].forEach((v, axis) =>
+          expect(box.min.getComponent(axis)).toBeCloseTo(v, 6),
+        );
+        [0.8, 0.4, 0.6].forEach((v, axis) =>
+          expect(box.max.getComponent(axis)).toBeCloseTo(v, 6),
+        );
+        // Probe straight down through the groove centre to find its floor.
+        const hit = new Raycaster(
+          new Vector3(0, 5, 0),
+          new Vector3(0, -1, 0),
+        ).intersectObject(world.object)[0];
+        return hit.point.y;
+      } finally {
+        world.dispose();
+      }
+    });
+    expect(floors[0]).toBeCloseTo(0.75 + 0.4 - 0.6, 6);
+    expect(floors[1]).toBeCloseTo(0.75 + 0.4 - 0.6, 6);
+    expect(floors[2]).toBeCloseTo(
+      0.75 + 0.4 - 0.7 / Math.tan((75 * Math.PI) / 180),
+      6,
+    );
+    // A side-and-above rig: the default side projector sits below the groove rim.
+    const scan = runWorldScan(
+      {
+        ...DEFAULT_WORLD,
+        shape: "vgroove",
+        cameraX: -1,
+        cameraY: 1.8,
+        cameraZ: 4,
+        projectorX: 1,
+        projectorY: 2.3,
+        projectorZ: 3.5,
+      },
+      96,
+      72,
+    );
+    expect(scan.metrics.rmseDepth!).toBeLessThan(1e-10);
+    let left = 0,
+      right = 0;
+    for (let i = 0; i < scan.reconstruction.valid.length; i++) {
+      if (!scan.reconstruction.valid[i]) continue;
+      const [px, py, pz] = scan.reconstruction.points.subarray(
+        3 * i,
+        3 * i + 3,
+      );
+      if (Math.abs(pz) > 0.55 || py < 0.6 || py > 1.14) continue;
+      if (px < -0.02 && px > -0.6) left++;
+      if (px > 0.02 && px < 0.6) right++;
+    }
+    // The left-side camera sees the left wall at a grazing angle.
+    expect(left).toBeGreaterThan(5);
+    expect(right).toBeGreaterThan(left);
+  });
+  it("places camera and projector at configured positions, aimed at the object centre", () => {
+    const config = {
+      ...DEFAULT_WORLD,
+      x: 0.4,
+      z: -0.3,
+      cameraX: 2.5,
+      cameraY: 3,
+      cameraZ: 2,
+      projectorX: -3,
+      projectorY: 1.2,
+      projectorZ: 5,
+    };
+    const { camera, projector } = getRig(config);
+    expect(camera.position).toEqual([2.5, 3, 2]);
+    expect(projector.position).toEqual([-3, 1.2, 5]);
+    for (const device of [camera, projector]) {
+      const target = projectPoint(device, [0.4, 0.75, -0.3])!;
+      expect(target.u).toBeCloseTo(device.cx, 10);
+      expect(target.v).toBeCloseTo(device.cy, 10);
+    }
+    // Image right lies along the baseline component perpendicular to each axis.
+    const baseline = [-5.5, -1.8, 3];
+    for (const device of [camera, projector]) {
+      const along = baseline.reduce((s, v, a) => s + v * device.right[a], 0);
+      const up = baseline.reduce((s, v, a) => s + v * device.up[a], 0);
+      expect(along).toBeGreaterThan(0);
+      expect(Math.abs(up)).toBeLessThan(1e-12);
+    }
+    const moved = runWorldScan(config, 48, 36);
+    expect(moved.capture.frames).not.toEqual(
+      runWorldScan(DEFAULT_WORLD, 48, 36).capture.frames,
+    );
+    expect(moved.metrics.validCount).toBeGreaterThan(100);
+    expect(moved.metrics.rmseDepth!).toBeLessThan(1e-10);
+  });
+  it("allows devices directly overhead and on the far side of the object", () => {
+    for (const placement of [
+      { cameraX: 0, cameraY: 5, cameraZ: 0 },
+      { cameraX: 0.5, cameraY: 2, cameraZ: -4 },
+      { projectorX: 0, projectorY: 4.5, projectorZ: 0 },
+    ]) {
+      const scan = runWorldScan({ ...DEFAULT_WORLD, ...placement }, 48, 36);
+      expect(scan.metrics.validCount).toBeGreaterThan(100);
+      expect(scan.metrics.rmseDepth!).toBeLessThan(1e-10);
+    }
+  });
+  it("keeps the ideal direct-only pipeline when interreflection is off", () => {
+    const scan = runWorldScan(DEFAULT_WORLD, 32, 24);
+    expect(scan.capture.directOnly).toBeNull();
+    expect(scan.directReconstruction).toBeNull();
+    expect(scan.metrics.directRmseDepth).toBeNull();
+    expect(scan.capture.indirect.every((a) => a.every((v) => v === 0))).toBe(
+      true,
+    );
+    scan.capture.frames.forEach((frame, k) =>
+      frame.forEach((v, i) => expect(v).toBe(0.12 + scan.capture.direct[k][i])),
+    );
+  });
+  it("adds deterministic interreflection that biases depth inside a V-groove", () => {
+    const config = {
+      ...DEFAULT_WORLD,
+      shape: "vgroove" as const,
+      interreflection: true,
+      giSamples: 32,
+    };
+    const a = runWorldScan(config, 32, 24);
+    const b = runWorldScan(config, 32, 24);
+    expect(a.capture.frames).toEqual(b.capture.frames);
+    const indirect = a.capture.indirect[0];
+    expect(Math.max(...indirect)).toBeGreaterThan(0.01);
+    expect(a.metrics.directRmseDepth!).toBeLessThan(1e-10);
+    expect(a.metrics.rmseDepth!).toBeGreaterThan(1e-4);
+    a.capture.directOnly!.frames.forEach((frame, k) =>
+      frame.forEach((v, i) =>
+        expect(v).toBeCloseTo(0.12 + a.capture.direct[k][i], 14),
+      ),
+    );
+    const total = (scan: typeof a) =>
+      scan.capture.indirect[0].reduce((s, v) => s + v, 0);
+    const twoBounce = runWorldScan({ ...config, bounces: 2 }, 32, 24);
+    expect(total(twoBounce)).toBeGreaterThan(total(a) * 1.05);
+    const black = runWorldScan(
+      { ...config, objectAlbedo: 0, groundAlbedo: 0 },
+      32,
+      24,
+    );
+    expect(black.capture.indirect.every((f) => f.every((v) => v === 0))).toBe(
+      true,
+    );
+    expect(black.capture.frames[0].every((v) => v === 0.12)).toBe(true);
+  });
+  it("renders a glossy highlight only when the specular lobe is enabled", () => {
+    // Camera mirrors the projector about the ground so the highlight sits at (0,0,1.2).
+    const mirrored = {
+      ...DEFAULT_WORLD,
+      cameraX: -1.5,
+      cameraY: 4,
+      cameraZ: 1.2,
+      projectorX: 1.5,
+      projectorY: 4,
+      projectorZ: 1.2,
+    };
+    const matte = captureWorld(mirrored, 48, 36);
+    const glossy = captureWorld(
+      { ...mirrored, groundSpecular: 0.6, groundRoughness: 0.2 },
+      48,
+      36,
+    );
+    const peak = (c: typeof matte) => Math.max(...c.direct[0]);
+    expect(peak(glossy)).toBeGreaterThan(peak(matte) * 5);
+    expect(glossy.clipped.some((v) => v === 1)).toBe(true);
+  });
+  it("offers material presets that are valid for both object and ground", () => {
+    const ids = new Set(MATERIAL_PRESETS.map((p) => p.id));
+    expect(ids.size).toBe(MATERIAL_PRESETS.length);
+    for (const p of MATERIAL_PRESETS)
+      expect(() =>
+        validateWorldConfig({
+          ...DEFAULT_WORLD,
+          objectAlbedo: p.albedo,
+          objectSpecular: p.specular,
+          objectRoughness: p.roughness,
+          groundAlbedo: p.albedo,
+          groundSpecular: p.specular,
+          groundRoughness: p.roughness,
+        }),
+      ).not.toThrow();
+    const matches = (albedo: number, specular: number, roughness: number) =>
+      MATERIAL_PRESETS.some(
+        (p) =>
+          p.albedo === albedo &&
+          p.specular === specular &&
+          p.roughness === roughness,
+      );
+    expect(
+      matches(
+        DEFAULT_WORLD.objectAlbedo,
+        DEFAULT_WORLD.objectSpecular,
+        DEFAULT_WORLD.objectRoughness,
+      ),
+    ).toBe(true);
+    expect(
+      matches(
+        DEFAULT_WORLD.groundAlbedo,
+        DEFAULT_WORLD.groundSpecular,
+        DEFAULT_WORLD.groundRoughness,
+      ),
+    ).toBe(true);
   });
 });
