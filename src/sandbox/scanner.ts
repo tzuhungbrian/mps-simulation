@@ -389,22 +389,38 @@ export function fringePatterns(coding: FringeCoding): FringePattern[] {
     ? [...set(coding.fringeFrequency), ...set(1)]
     : set(coding.fringeFrequency);
 }
-/** Projector gray level at column u; phase φ = 2πf(u + ½)/W − π spans f periods. */
+/** Projector gray level at column u; phase φ = 2πf(u + ½)/W − π spans f periods. `contrast` scales the AC term (e.g. defocus MTF). */
+export const fringeIntensity = (
+  u: number,
+  width: number,
+  pattern: FringePattern,
+  offset: number,
+  amplitude: number,
+  contrast = 1,
+) =>
+  offset +
+  amplitude *
+    contrast *
+    Math.cos(
+      (TAU * pattern.frequency * (u + 0.5)) / width - Math.PI + pattern.shift,
+    );
 const projectorPattern = (
   u: number,
   width: number,
   pattern: FringePattern,
   config: WorldConfig,
 ) =>
-  config.fringeOffset +
-  config.fringeAmplitude *
-    Math.cos(
-      (TAU * pattern.frequency * (u + 0.5)) / width - Math.PI + pattern.shift,
-    );
+  fringeIntensity(
+    u,
+    width,
+    pattern,
+    config.fringeOffset,
+    config.fringeAmplitude,
+  );
 const stack = (frames: number, count: number) =>
   Array.from({ length: frames }, () => new Float64Array(count));
 
-const insideProjector = (
+export const insideProjector = (
   projector: Pinhole,
   p: { u: number; v: number } | null,
 ): boolean =>

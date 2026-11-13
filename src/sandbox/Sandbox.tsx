@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -34,6 +27,7 @@ import {
 } from "./scanner";
 import { MATERIAL_PRESETS } from "./lightTransport";
 import { InfoButton, InfoHeading } from "./Info";
+import { Field, Tabs } from "./controls";
 import PointCloudPage from "./PointCloudPage";
 import type { ScanRequest, ScanResponse } from "./scan.worker";
 import WorldView, { type WorldViewApi } from "./WorldView";
@@ -50,7 +44,11 @@ const SCHEMA = 4;
 const HISTORY_LIMIT = 100;
 /** Accepts v4 envelopes and upgrades v3 ones, whose projector settings were fixed at today's defaults. */
 function readEnvelope(e: unknown): WorldConfig {
-  const envelope = e as { schemaVersion?: unknown; model?: unknown; config?: unknown } | null;
+  const envelope = e as {
+    schemaVersion?: unknown;
+    model?: unknown;
+    config?: unknown;
+  } | null;
   if (envelope?.schemaVersion === SCHEMA && envelope.model === MODEL)
     return parseWorldConfig(envelope.config);
   if (
@@ -209,108 +207,6 @@ function Image({
   );
 }
 
-/** Label + typed value + range on one compact row. */
-function Field({
-  label,
-  value,
-  min,
-  max,
-  step = 0.05,
-  unit = "",
-  digits = 2,
-  onChange,
-  testId,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  unit?: string;
-  digits?: number;
-  onChange: (value: number) => void;
-  testId?: string;
-}) {
-  const [draft, setDraft] = useState<string | null>(null);
-  const commit = (text: string) => {
-    const v = Number(text);
-    if (text.trim() !== "" && Number.isFinite(v))
-      onChange(Math.min(max, Math.max(min, v)));
-  };
-  return (
-    <div className="sandbox-field">
-      <span className="sandbox-field-label">{label}</span>
-      <span className="sandbox-field-value">
-        <input
-          type="number"
-          aria-label={`${label} 數值`}
-          data-testid={testId}
-          min={min}
-          max={max}
-          step={step}
-          value={draft ?? value.toFixed(digits)}
-          onChange={(e) => {
-            const text = e.target.value,
-              v = Number(text);
-            setDraft(text);
-            if (text.trim() !== "" && v >= min && v <= max) onChange(v);
-          }}
-          onBlur={(e) => {
-            commit(e.target.value);
-            setDraft(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
-            if (e.key === "Escape") setDraft(null);
-          }}
-        />
-        {unit && <small>{unit}</small>}
-      </span>
-      <input
-        type="range"
-        aria-label={label}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-      />
-    </div>
-  );
-}
-
-function Tabs<T extends string>({
-  label,
-  tabs,
-  value,
-  onChange,
-  children,
-}: {
-  label: string;
-  tabs: readonly (readonly [T, string])[];
-  value: T;
-  onChange: (tab: T) => void;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="sandbox-tabs">
-      <div role="tablist" aria-label={label}>
-        {tabs.map(([id, title]) => (
-          <button
-            key={id}
-            role="tab"
-            aria-selected={value === id}
-            onClick={() => onChange(id)}
-          >
-            {title}
-          </button>
-        ))}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 const TOOL_TABS = [
   ["object", "物體"],
   ["rig", "裝置"],
@@ -327,9 +223,11 @@ const RESULT_TABS = [
 export default function Sandbox({
   onGuide,
   onExplore,
+  onAoi,
 }: {
   onGuide: () => void;
   onExplore: () => void;
+  onAoi: () => void;
 }) {
   const [config, setConfig] = useState(loadWorld),
     [scan, setScan] = useState<Scan | null>(null),
@@ -541,9 +439,7 @@ export default function Sandbox({
       magnitudes[Math.floor(0.95 * (magnitudes.length - 1))] ?? 0,
     );
   }, [depthError]);
-  const scanFrame = scan
-    ? Math.min(frame, scan.capture.frames.length - 1)
-    : 0;
+  const scanFrame = scan ? Math.min(frame, scan.capture.frames.length - 1) : 0;
   const indirectPeak = scan
     ? scan.capture.indirect[scanFrame].reduce((m, v) => Math.max(m, v), 0)
     : 0;
@@ -725,6 +621,10 @@ export default function Sandbox({
             一維自由實驗
             <ArrowRight size={16} />
           </button>
+          <button onClick={onAoi} data-testid="open-aoi">
+            AOI 多視角
+            <ArrowRight size={16} />
+          </button>
         </div>
         <span
           className="sandbox-progress"
@@ -812,7 +712,8 @@ export default function Sandbox({
                   <section key={device}>
                     <InfoHeading title={`${device} 位置`}>
                       <p>
-                        也可以在 3D 視窗左鍵點 {device} 機身，拖曳彩色箭頭移動。兩台裝置永遠對準物體中心。
+                        也可以在 3D 視窗左鍵點 {device}{" "}
+                        機身，拖曳彩色箭頭移動。兩台裝置永遠對準物體中心。
                       </p>
                     </InfoHeading>
                     {keys.map((key, axis) =>
@@ -862,8 +763,8 @@ export default function Sandbox({
                 </label>
                 <InfoHeading title="Baseline">
                   <p>
-                    兩光心的距離。影像水平方向沿著 baseline，條紋因此橫跨 baseline
-                    變化。
+                    兩光心的距離。影像水平方向沿著 baseline，條紋因此橫跨
+                    baseline 變化。
                   </p>
                 </InfoHeading>
                 <p className="sandbox-note" data-testid="sandbox-baseline">
@@ -882,12 +783,10 @@ export default function Sandbox({
                 <InfoHeading title="條紋編碼">
                   <p>
                     投影圖樣 = offset + amplitude·cos(2πf·u/W − π + 2πk/N)。頻率
-                    f 是整個投影寬度內的週期數；f 越高，同樣的相位誤差對應的 column
-                    誤差越小（約 ∝ 1/f），但 φ̂ 只在一個週期內唯一。
+                    f 是整個投影寬度內的週期數；f 越高，同樣的相位誤差對應的
+                    column 誤差越小（約 ∝ 1/f），但 φ̂ 只在一個週期內唯一。
                   </p>
-                  <p>
-                    N 步相移：N 越多對雜訊越不敏感，但要拍更多張。
-                  </p>
+                  <p>N 步相移：N 越多對雜訊越不敏感，但要拍更多張。</p>
                 </InfoHeading>
                 {field("fringeFrequency", "條紋頻率 f", {
                   step: 1,
@@ -903,8 +802,8 @@ export default function Sandbox({
                   <>
                     <InfoHeading title="相位解包">
                       <p>
-                        開啟時額外投 N 張 f = 1 的條紋，用它的相位 φ₁ 推算條紋序 k =
-                        round((f(φ₁+π) − π − φ̂)/2π)，絕對相位 Φ = φ̂ + 2πk。f
+                        開啟時額外投 N 張 f = 1 的條紋，用它的相位 φ₁ 推算條紋序
+                        k = round((f(φ₁+π) − π − φ̂)/2π)，絕對相位 Φ = φ̂ + 2πk。f
                         很高時 φ₁ 的雜訊會被放大 f 倍，可能讓 k 算錯。
                       </p>
                       <p>
@@ -930,7 +829,8 @@ export default function Sandbox({
                 <InfoHeading title="亮度與對比">
                   <p>
                     圖樣要留在 [0, 1] 內，所以 amplitude ≤ min(offset, 1 −
-                    offset)。amplitude 越小調變越弱、越容易被雜訊或調變門檻吃掉；offset
+                    offset)。amplitude
+                    越小調變越弱、越容易被雜訊或調變門檻吃掉；offset
                     太高則亮面容易 clipping。
                   </p>
                 </InfoHeading>
@@ -956,7 +856,8 @@ export default function Sandbox({
                 })}
                 <InfoHeading title="Projector 鏡頭">
                   <p>
-                    FOV 越小，同樣 160 個 column 集中照在較小的範圍，空間解析度越高，但可能照不到整個物體。
+                    FOV 越小，同樣 160 個 column
+                    集中照在較小的範圍，空間解析度越高，但可能照不到整個物體。
                   </p>
                 </InfoHeading>
                 {field("projectorFov", "Projector FOV", {

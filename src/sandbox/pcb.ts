@@ -13,6 +13,7 @@ export interface PcbPin {
 
 const BOARD = { x: 1.6, y: 0.08, z: 1.2 };
 const TOP = BOARD.y / 2;
+export const PCB_BOARD_TOP = TOP;
 const PIN_T = 0.012,
   PIN_W = 0.022;
 

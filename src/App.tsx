@@ -43,6 +43,14 @@ import {
 import { downloadBlob, exportPng, rasterize } from "./lib/images";
 const PatternScene = lazy(() => import("./components/PatternScene"));
 const Sandbox = lazy(() => import("./sandbox/Sandbox"));
+const AoiPage = lazy(() => import("./aoi/AoiPage"));
+type LearningMode = "guided" | "explore" | "sandbox" | "aoi";
+const LEARNING_MODES: readonly string[] = [
+  "guided",
+  "explore",
+  "sandbox",
+  "aoi",
+];
 const COLORS = ["#5ee4bd", "#b7a0fa", "#edbd79"];
 type Tab = "lab" | "notes" | "limits";
 function format(v: number, digits = 3) {
@@ -226,29 +234,24 @@ function initialState(): { config: SimulationConfig; message: string } {
 }
 
 export default function App() {
-  const [learningMode, setLearningMode] = useState<
-    "guided" | "explore" | "sandbox"
-  >(() => {
+  const [learningMode, setLearningMode] = useState<LearningMode>(() => {
     const requested = new URLSearchParams(location.search).get("workspace");
-    if (
-      requested === "sandbox" ||
-      requested === "guided" ||
-      requested === "explore"
-    )
-      return requested;
+    if (requested && LEARNING_MODES.includes(requested))
+      return requested as LearningMode;
     try {
       const saved = sessionStorage.getItem("structured-light.view-mode");
-      return saved === "guided" || saved === "explore" || saved === "sandbox"
-        ? saved
+      return saved && LEARNING_MODES.includes(saved)
+        ? (saved as LearningMode)
         : "sandbox";
     } catch {
       return "sandbox";
     }
   });
-  const changeMode = (mode: "guided" | "explore" | "sandbox") => {
+  const changeMode = (mode: LearningMode) => {
     setLearningMode(mode);
     const url = new URL(location.href);
-    if (mode === "sandbox") url.searchParams.set("workspace", "sandbox");
+    if (mode === "sandbox" || mode === "aoi")
+      url.searchParams.set("workspace", mode);
     else url.searchParams.delete("workspace");
     history.replaceState(null, "", url);
     try {
@@ -379,7 +382,16 @@ export default function App() {
         <Sandbox
           onGuide={() => changeMode("guided")}
           onExplore={() => changeMode("explore")}
+          onAoi={() => changeMode("aoi")}
         />
+      </Suspense>
+    );
+  if (tab === "lab" && learningMode === "aoi")
+    return (
+      <Suspense
+        fallback={<div className="scene-loading">正在建立 AOI 多視角模擬…</div>}
+      >
+        <AoiPage onBack={() => changeMode("sandbox")} />
       </Suspense>
     );
   if (tab === "lab" && learningMode === "guided")

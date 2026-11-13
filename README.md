@@ -41,11 +41,27 @@ npm run format:check
 
 預設只在整個 Projector 視野投 **一個完整正弦週期**、三步相移；多頻解包是一般的兩頻時間解包，不是 Micro PS。已知的理想 calibration 也不是從校正板估計的結果。詳見 [3D 沙盒模型與限制](docs/sandbox-model.md)。
 
-網址可明確指定：`?workspace=sandbox`、`?workspace=guided`、`?workspace=explore`。模式選擇在此分頁保存；已保存的科學參數不會因切換模式被覆寫。
+網址可明確指定：`?workspace=sandbox`、`?workspace=aoi`、`?workspace=guided`、`?workspace=explore`。模式選擇在此分頁保存；已保存的科學參數不會因切換模式被覆寫。
 
 Camera 解析度可選 96×72 到 384×288，並可開啟 2×2 / 3×3 像素面積積分：跨在邊緣上的像素會混合兩個表面的條紋，小細節（如引腳）在低解析度時會重建錯誤或消失。
 
 頂端「點雲分析」是獨立頁面：可旋轉的重建點雲（操控與 3D 沙盒相同：中鍵旋轉、右鍵平移、滾輪縮放、WASD／Q E 移動轉向、R 或「重設視角」回到預設；依深度誤差、高度或表面類別著色，可疊合真實表面線框）、RMSE / MAE / 平均偏差 / 中位數 / P95 / 最大誤差、可調容差與誤差直方圖、依表面統計、失效像素原因（背景、未照明、clipping、調變過低、三角量測無效）；PCB 另列每支引腳的可見、有效、容差內像素與「成功／部分／失敗／看不到」判定。這些全是讀取真值的評估資料，不參與重建。
+
+## AOI Multi-view Simulation Mode
+
+沙盒頂端「AOI 多視角」或 `?workspace=aoi`。用來回答兩個問題：不同斜視 Pair 的 Measurement Range 應如何設定；各 Pair 的 3D 資料應如何使用與 Fusion。**使用一般 N 步 Phase Shifting，不是 Micro Phase Shifting；理想模擬精度不代表實際 AOI 性能。**
+
+- **單位與座標**：mm；板面為高度 0 的基準面，板面 x = world X、y = world Z、高度 = world Y。所有 Pair、真值與 Fusion 共用同一個 ROI 格網。
+- **設備**：任意 1–8 台 Camera 與 Projector，各自設傾角、方位、距離、FOV、光圈。Pair 類別由幾何即時判定（Camera 傾角 ≤ 門檻為直視；|Δ方位| ≤ 45° 同じ側、≥ 135° 反対側、其餘直交），預設 4 斜視 × 4 Projector 得到反対側 4、直交 8、同じ側 4，但不假設台數。
+- **理論**（只用校正資訊）：平行近似 `|dφ/dh| = (2π/p)·|tanθp − tanθc·cosΔα|`；pinhole 幾何精確微分；每 2π 高度 `2π/|dφ/dh|`；單週期量測範圍 = 每 2π 高度，雙週期（外差）× r/(r−1)；`σφ = σI·√(2/N)/B`、`σh = σφ/|dφ/dh|`；級次錯誤機率、景深、依需求範圍反推的最高條紋頻率。
+- **模擬**：重用沙盒 BVH 光線追蹤、Lambert + GGX、N 步解碼與 ray–plane 三角量測；另加薄透鏡失焦（`c = f·A·|1/s − 1/s_f|`，σ = c/4；Projector 端以高斯 MTF 降低條紋對比、Camera 端逐像素散佈模糊）。單週期以校正基準面（視窗底部）決定級次，超出範圍會混疊。只模擬直接光，沒有互反射。
+- **場景**：階梯量規、Chip + 凹形焊錫 Fillet + 3 mm 高元件、沙盒 PCB（縮放為 40×30 mm）、可調高度的平面。
+- **有效量測圖**：每格原因為準確、超差、邊緣混合、級次錯、範圍混疊、Camera FOV 外、視線遮擋、Projector FOV 外、陰影、飽和、失焦、調變不足、無取樣。幾何原因使用真值，只供評估。
+- **Fusion**（不使用真值）：① 直視 + 斜視補洞、② 單一斜視、③ 斜視 + 斜視共識融合（與最多 Pair 一致的值勝出，剔除離群後 1/σ² 加權；σ 來自各 Pair 自己的調變 B、感測器雜訊規格與 |dφ/dh|）。Cross-pair Consistency Check 列出兩兩 Pair 的高度差，並以真值驗證「一致 / 矛盾」格的實際 RMSE。
+- **Benchmark**：RMSE / MAE / Bias、平坦區 RMSE、覆蓋率、失效比例、粗大誤差、各材質（板面 / 元件 / 電極 / Fillet）、Worker 內計算時間；可單獨或批次執行 Pair，固定 seed 的參數掃描（f₁、p₂/p₁、雜訊、平面高度、視窗底部）；匯出每格 CSV、摘要 JSON、批次 CSV。
+- **AOI 參考值**：可輸入廠商或實機的直視 / 反対側 / 直交 / 同じ側數值並列比較；不進入任何計算，也不會使模擬結果過期。
+
+資料路徑：`renderPair → { frames, clipped } → reconstructPair（條紋編碼 + 校正）→ binToGrid → Fusion`；真值只進入 `buildTruthMap / evaluatePair / scoreStrategy`。
 
 ## 「一步一步學」：從 Phase Shifting 到 Phase Unwrapping
 
@@ -225,7 +241,7 @@ F+2 方法不是任意多頻 pattern 都成立：窄高頻帶與近似共享光�
 ## 刻意未支援與限制
 
 - 一維模式不做幾何成像；3D 沙盒已提供理想合成 Camera Captures、三維物體、遮擋、三角量測與點雲，但沒有真實相機接入或 calibration 求解。
-- 無 Defocus、subsurface scattering、motion、Gamma、Poisson / read noise、量化。互反射與 GGX 鏡面只在 3D 沙盒的 CPU 正向模型中，一維模式沒有。
+- 無 subsurface scattering、motion、Gamma、Poisson / read noise、量化。互反射與 GGX 鏡面只在 3D 沙盒的 CPU 正向模型中；Defocus 只在 AOI 模式（薄透鏡 + 高斯近似），AOI 模式不含互反射；一維模式都沒有。
 - 數值流程是 CPU 運算（3D 掃描在 Web Worker）；大量像素匯出可能需要幾秒，不是 GPU accelerated reconstruction。WebGL 單獨 lazy-load；沙盒用於觀察幾何與光路，量測則是獨立的 CPU 光線追蹤，不從螢幕截圖讀回。
 - 同一 Seed + config 在相同 JS 數學實作中可重現；浮點 transcendentals 不承諾跨所有引擎 bitwise identical。
 - Validity 是明確門檻規則，不是統計置信度；純雜訊也可能跨過門檻。
