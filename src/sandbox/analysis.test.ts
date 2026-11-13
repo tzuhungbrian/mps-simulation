@@ -28,7 +28,7 @@ describe("scan analysis (evaluation only)", () => {
 
   it("accounts for every pixel as valid or exactly one failure cause", () => {
     const scan = runWorldScan(DEFAULT_WORLD, 48, 36);
-    const a = analyzeScan(scan, 0.005);
+    const a = analyzeScan(scan, 0.125);
     const failures = FAILURE_CAUSES.reduce((s, [k]) => s + a.causes[k], 0);
     expect(failures + scan.metrics.validCount).toBe(scan.metrics.totalCount);
     expect(a.overall!.count).toBe(scan.metrics.evaluatedCount);
@@ -61,7 +61,7 @@ describe("scan analysis (evaluation only)", () => {
     const report = (cameraWidth: number) => {
       const a = analyzeScan(
         runWorldScan(pcb({ cameraWidth })),
-        0.005,
+        0.125,
         PCB_PINS,
       );
       return a.pins!.filter((p) => p.status === "success").length;
@@ -75,9 +75,9 @@ describe("scan analysis (evaluation only)", () => {
   it("point sampling reconstructs every valid pin pixel exactly; area sampling mixes edges", () => {
     const point = runWorldScan(pcb({ pixelGrid: 1 }), 128, 96);
     const area = runWorldScan(pcb({ pixelGrid: 2 }), 128, 96);
-    expect(point.metrics.rmseDepth!).toBeLessThan(1e-10);
-    expect(area.metrics.rmseDepth!).toBeGreaterThan(1e-3);
-    const pins = analyzeScan(point, 1e-6, PCB_PINS).pins!;
+    expect(point.metrics.rmseDepth!).toBeLessThan(1e-8);
+    expect(area.metrics.rmseDepth!).toBeGreaterThan(0.025);
+    const pins = analyzeScan(point, 2.5e-5, PCB_PINS).pins!;
     for (const p of pins) expect(p.accurate).toBe(p.valid);
     expect(
       Array.from(point.capture.surface).filter((s) => s === SURFACE.pin).length,

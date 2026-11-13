@@ -2,8 +2,21 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 /** Material slot carried per vertex; object and ground keep their mesh index. */
-export const SURFACE = { object: 0, ground: 1, chip: 2, pin: 3 } as const;
-export const SURFACE_NAMES = ["物體", "地面", "晶片本體", "引腳"] as const;
+export const SURFACE = {
+  object: 0,
+  ground: 1,
+  chip: 2,
+  pin: 3,
+  solder: 4,
+} as const;
+export const SURFACE_NAMES = [
+  "物體 / 板面",
+  "地面",
+  "元件本體",
+  "引腳 / 電極",
+  "焊錫",
+] as const;
+export const NO_SURFACE = 255;
 
 export interface PcbPin {
   id: number;

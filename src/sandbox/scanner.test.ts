@@ -6,19 +6,78 @@ import {
   fringePatterns,
   getRig,
   captureWorld,
+  migrateLegacyConfig,
   reconstructCaptures,
   runWorldScan,
   parseWorldConfig,
   validateWorldConfig,
+  type WorldConfig,
 } from "./scanner";
 import { cameraRay, makePinhole, projectPoint, type Vec3 } from "./geometry";
 import { MATERIAL_PRESETS } from "./lightTransport";
 import { decodeNStep, SHIFTS, TAU } from "../core/simulation";
 
+/** The schema-4 default (25 mm units); legacy(patch) migrates old-style rigs into today's config. */
+const OLD = {
+  shape: "sphere",
+  x: 0,
+  y: 0.75,
+  z: 0,
+  grooveAngle: 90,
+  cameraX: 0,
+  cameraY: 3.5,
+  cameraZ: 0,
+  projectorX: 2.5,
+  projectorY: 0.75,
+  projectorZ: 0,
+  cameraFov: 45,
+  projectorFov: 55,
+  fringeFrequency: 1,
+  phaseSteps: 3,
+  fringeOffset: 0.4,
+  fringeAmplitude: 0.36,
+  temporalUnwrap: true,
+  cameraWidth: 96,
+  pixelGrid: 1,
+  seed: 42,
+  noiseSigma: 0,
+  objectAlbedo: 0.8,
+  objectSpecular: 0,
+  objectRoughness: 0.3,
+  groundAlbedo: 0.5,
+  groundSpecular: 0,
+  groundRoughness: 0.6,
+  chipAlbedo: 0.06,
+  chipSpecular: 0.04,
+  chipRoughness: 0.5,
+  pinAlbedo: 0,
+  pinSpecular: 0.8,
+  pinRoughness: 0.35,
+  interreflection: false,
+  bounces: 1,
+  giSamples: 32,
+};
+const legacy = (patch: Record<string, unknown> = {}): WorldConfig =>
+  migrateLegacyConfig({ ...OLD, ...patch });
+const withCamera = (patch: Partial<WorldConfig["cameras"][0]>) => ({
+  ...DEFAULT_WORLD,
+  cameras: [{ ...DEFAULT_WORLD.cameras[0], ...patch }],
+});
+const withProjector = (patch: Partial<WorldConfig["projectors"][0]>) => ({
+  ...DEFAULT_WORLD,
+  projectors: [{ ...DEFAULT_WORLD.projectors[0], ...patch }],
+});
+
 describe("CPU calibrated scanner", () => {
+  it("migrates the schema-4 sandbox (25 mm units, one rig) exactly onto today's default", () => {
+    expect(legacy()).toEqual(DEFAULT_WORLD);
+    const pcb = legacy({ shape: "pcb", y: 0.65, temporalUnwrap: false });
+    expect(pcb.coding).toBe("single");
+    expect(pcb.referenceHeight).toBeCloseTo(17.25, 12);
+  });
   it("reports null RMSE when a one-pixel scan sees an unilluminated surface", () => {
     const result = runWorldScan(
-      { ...DEFAULT_WORLD, cameraX: -1.5, projectorX: 1.5, x: 0.5, z: -1 },
+      legacy({ cameraX: -1.5, projectorX: 1.5, x: 0.5, z: -1 }),
       1,
       1,
     );
@@ -31,15 +90,14 @@ describe("CPU calibrated scanner", () => {
   });
   it("leaves background, silhouettes and projector-shadowed surfaces unmodulated and invalid", () => {
     // A side-and-above rig so the view includes sky background beyond the ground.
-    const config = {
-      ...DEFAULT_WORLD,
+    const config = legacy({
       cameraX: -1,
       cameraY: 1.8,
       cameraZ: 4,
       projectorX: 1,
       projectorY: 2.3,
       projectorZ: 3.5,
-    };
+    });
     const { capture, reconstruction, camera, projector } = runWorldScan(config);
     const world = createWorld(config);
     const origin = new Vector3(...projector.position);
@@ -66,7 +124,7 @@ describe("CPU calibrated scanner", () => {
           ) as Vec3;
           const pp = projectPoint(projector, point)!;
           if (
-            Math.abs(point[1]) < 1e-8 &&
+            Math.abs(point[1]) < 1e-6 &&
             pp.u >= -0.5 &&
             pp.u < projector.width - 0.5 &&
             pp.v >= -0.5 &&
@@ -78,7 +136,7 @@ describe("CPU calibrated scanner", () => {
             )[0];
             expect(nearest.object).toBe(world.object);
             expect(nearest.distance).toBeLessThan(
-              origin.distanceTo(new Vector3(...point)) - 1e-5,
+              origin.distanceTo(new Vector3(...point)) - 1e-4,
             );
             occludedGround++;
           }
@@ -177,18 +235,18 @@ describe("CPU calibrated scanner", () => {
   it("moving the object and changing shape alters real captures while ideal inversion remains accurate", () => {
     const original = runWorldScan(DEFAULT_WORLD, 48, 36);
     for (const shape of ["sphere", "box", "ramp", "vgroove"] as const) {
-      const config = { ...DEFAULT_WORLD, shape, x: 0.6, y: 1.1, z: -0.4 };
+      const config = { ...DEFAULT_WORLD, shape, x: 15, y: 27.5, z: -10 };
       const moved = runWorldScan(config, 48, 36);
       expect(moved.capture.frames).not.toEqual(original.capture.frames);
       expect(moved.metrics.rmseDepth).not.toBeNull();
-      expect(moved.metrics.rmseDepth!).toBeLessThan(1e-10);
+      expect(moved.metrics.rmseDepth!).toBeLessThan(1e-8);
       const world = createWorld(config);
-      expect(world.object.position.toArray()).toEqual([0.6, 1.1, -0.4]);
+      expect(world.object.position.toArray()).toEqual([15, 27.5, -10]);
       expect(world.object.rotation.z).toBe(shape === "ramp" ? -0.35 : 0);
       world.dispose();
     }
     const noisy = runWorldScan({ ...DEFAULT_WORLD, noiseSigma: 0.003 }, 48, 36);
-    expect(noisy.metrics.rmseDepth!).toBeGreaterThan(1e-5);
+    expect(noisy.metrics.rmseDepth!).toBeGreaterThan(1e-4);
     expect(noisy.metrics.evaluatedCount).toBeLessThanOrEqual(
       noisy.metrics.validCount,
     );
@@ -272,8 +330,10 @@ describe("CPU calibrated scanner", () => {
       { ...DEFAULT_WORLD, seed: "42" },
       { ...DEFAULT_WORLD, x: undefined },
       { ...DEFAULT_WORLD, shape: 1 },
-      { ...DEFAULT_WORLD, cameraFov: Infinity },
-      { ...DEFAULT_WORLD, y: 2.51 },
+      withCamera({ fov: Infinity }),
+      { ...DEFAULT_WORLD, y: 62.6 },
+      { ...DEFAULT_WORLD, activeCamera: "C9" },
+      { ...DEFAULT_WORLD, coding: "auto" },
     ])
       expect(() => parseWorldConfig(bad)).toThrow(RangeError);
     const inheritedShape = Object.assign(
@@ -303,7 +363,7 @@ describe("CPU calibrated scanner", () => {
     expect(metrics.evaluatedCount).toBe(metrics.validCount);
     expect(metrics.validRatio).toBe(metrics.validCount / metrics.totalCount);
     expect(metrics.rmseDepth).not.toBeNull();
-    expect(metrics.rmseDepth!).toBeLessThan(1e-10);
+    expect(metrics.rmseDepth!).toBeLessThan(1e-8);
     expect(reconstruction.depth).not.toBe(capture.truthDepth);
     console.info(
       "Default 96x72 CPU scan benchmark",
@@ -372,7 +432,7 @@ describe("CPU calibrated scanner", () => {
     expect(a.truthDepth).toEqual(ideal.truthDepth);
   });
   it("captures the analytic ground illumination through three shifted full-FoV patterns", () => {
-    const config = { ...DEFAULT_WORLD, x: -2 };
+    const config = { ...DEFAULT_WORLD, x: -50 };
     const capture = captureWorld(config);
     const { camera, projector } = getRig(config);
     const x = 60,
@@ -409,19 +469,19 @@ describe("CPU calibrated scanner", () => {
   it("rejects invalid world parameters before allocating meshes or rigs", () => {
     for (const config of [
       { ...DEFAULT_WORLD, x: NaN },
-      { ...DEFAULT_WORLD, z: 2.01 },
-      { ...DEFAULT_WORLD, y: 0.64 },
-      { ...DEFAULT_WORLD, cameraZ: -5.01 },
-      { ...DEFAULT_WORLD, cameraX: 0, cameraY: 0.6, cameraZ: 0.3 },
-      { ...DEFAULT_WORLD, projectorY: 6.01 },
-      { ...DEFAULT_WORLD, projectorX: -5.01 },
+      { ...DEFAULT_WORLD, z: 50.1 },
+      { ...DEFAULT_WORLD, y: -0.1 },
+      withCamera({ z: -300.1 }),
+      withCamera({ x: 0, y: 15, z: 7.5 }),
+      withProjector({ y: 400.1 }),
+      withProjector({ x: -300.1 }),
       { ...DEFAULT_WORLD, grooveAngle: 29 },
       { ...DEFAULT_WORLD, grooveAngle: 151 },
-      { ...DEFAULT_WORLD, cameraFov: 76 },
+      withCamera({ fov: 81 }),
       { ...DEFAULT_WORLD, seed: -1 },
       { ...DEFAULT_WORLD, seed: 1.5 },
       { ...DEFAULT_WORLD, seed: 4294967296 },
-      { ...DEFAULT_WORLD, noiseSigma: 0.011 },
+      { ...DEFAULT_WORLD, noiseSigma: 0.051 },
       { ...DEFAULT_WORLD, shape: "other" as typeof DEFAULT_WORLD.shape },
     ]) {
       expect(() => createWorld(config)).toThrow(RangeError);
@@ -431,10 +491,10 @@ describe("CPU calibrated scanner", () => {
   it("shares exact positioned meshes with the visual world and disposes resources", () => {
     const world = createWorld(DEFAULT_WORLD);
     expect(world.object.geometry.type).toBe("SphereGeometry");
-    expect(world.object.position.toArray()).toEqual([0, 0.75, 0]);
+    expect(world.object.position.toArray()).toEqual([0, 18.75, 0]);
     expect(world.ground.rotation.x).toBe(-Math.PI / 2);
     expect(world.meshes).toEqual([world.object, world.ground]);
-    expect(world.object.matrixWorld.elements[13]).toBe(0.75);
+    expect(world.object.matrixWorld.elements[13]).toBe(18.75);
     const events: string[] = [];
     for (const mesh of world.meshes) {
       mesh.geometry.addEventListener("dispose", () => events.push("geometry"));
@@ -448,10 +508,10 @@ describe("CPU calibrated scanner", () => {
       "material",
     ]);
     const { camera, projector } = getRig(DEFAULT_WORLD);
-    expect(camera.position).toEqual([0, 3.5, 0]);
+    expect(camera.position).toEqual([0, 87.5, 0]);
     expect([camera.width, camera.height]).toEqual([96, 72]);
-    expect(projector.position).toEqual([2.5, 0.75, 0]);
-    expect([projector.width, projector.height]).toEqual([160, 120]);
+    expect(projector.position).toEqual([62.5, 18.75, 0]);
+    expect([projector.width, projector.height]).toEqual([640, 480]);
   });
   it("builds a closed V-groove whose opening angle is adjustable and reconstructs both walls", () => {
     const floors = [30, 90, 150].map((grooveAngle) => {
@@ -463,15 +523,15 @@ describe("CPU calibrated scanner", () => {
       try {
         world.object.geometry.computeBoundingBox();
         const box = world.object.geometry.boundingBox!;
-        [-0.8, -0.4, -0.6].forEach((v, axis) =>
-          expect(box.min.getComponent(axis)).toBeCloseTo(v, 6),
+        [-20, -10, -15].forEach((v, axis) =>
+          expect(box.min.getComponent(axis)).toBeCloseTo(v, 5),
         );
-        [0.8, 0.4, 0.6].forEach((v, axis) =>
-          expect(box.max.getComponent(axis)).toBeCloseTo(v, 6),
+        [20, 10, 15].forEach((v, axis) =>
+          expect(box.max.getComponent(axis)).toBeCloseTo(v, 5),
         );
         // Probe straight down through the groove centre to find its floor.
         const hit = new Raycaster(
-          new Vector3(0, 5, 0),
+          new Vector3(0, 125, 0),
           new Vector3(0, -1, 0),
         ).intersectObject(world.object)[0];
         return hit.point.y;
@@ -479,16 +539,15 @@ describe("CPU calibrated scanner", () => {
         world.dispose();
       }
     });
-    expect(floors[0]).toBeCloseTo(0.75 + 0.4 - 0.6, 6);
-    expect(floors[1]).toBeCloseTo(0.75 + 0.4 - 0.6, 6);
+    expect(floors[0]).toBeCloseTo(25 * (0.75 + 0.4 - 0.6), 5);
+    expect(floors[1]).toBeCloseTo(25 * (0.75 + 0.4 - 0.6), 5);
     expect(floors[2]).toBeCloseTo(
-      0.75 + 0.4 - 0.7 / Math.tan((75 * Math.PI) / 180),
-      6,
+      25 * (0.75 + 0.4 - 0.7 / Math.tan((75 * Math.PI) / 180)),
+      5,
     );
     // A side-and-above rig: the default side projector sits below the groove rim.
     const scan = runWorldScan(
-      {
-        ...DEFAULT_WORLD,
+      legacy({
         shape: "vgroove",
         cameraX: -1,
         cameraY: 1.8,
@@ -496,11 +555,11 @@ describe("CPU calibrated scanner", () => {
         projectorX: 1,
         projectorY: 2.3,
         projectorZ: 3.5,
-      },
+      }),
       96,
       72,
     );
-    expect(scan.metrics.rmseDepth!).toBeLessThan(1e-10);
+    expect(scan.metrics.rmseDepth!).toBeLessThan(1e-8);
     let left = 0,
       right = 0;
     for (let i = 0; i < scan.reconstruction.valid.length; i++) {
@@ -509,17 +568,16 @@ describe("CPU calibrated scanner", () => {
         3 * i,
         3 * i + 3,
       );
-      if (Math.abs(pz) > 0.55 || py < 0.6 || py > 1.14) continue;
-      if (px < -0.02 && px > -0.6) left++;
-      if (px > 0.02 && px < 0.6) right++;
+      if (Math.abs(pz) > 13.75 || py < 15 || py > 28.5) continue;
+      if (px < -0.5 && px > -15) left++;
+      if (px > 0.5 && px < 15) right++;
     }
     // The left-side camera sees the left wall at a grazing angle.
     expect(left).toBeGreaterThan(5);
     expect(right).toBeGreaterThan(left);
   });
   it("places camera and projector at configured positions, aimed at the object centre", () => {
-    const config = {
-      ...DEFAULT_WORLD,
+    const config = legacy({
       x: 0.4,
       z: -0.3,
       cameraX: 2.5,
@@ -528,29 +586,28 @@ describe("CPU calibrated scanner", () => {
       projectorX: -3,
       projectorY: 1.2,
       projectorZ: 5,
-    };
+    });
     const { camera, projector } = getRig(config);
-    expect(camera.position).toEqual([2.5, 3, 2]);
-    expect(projector.position).toEqual([-3, 1.2, 5]);
+    expect(camera.position).toEqual([62.5, 75, 50]);
+    expect(projector.position).toEqual([-75, 30, 125]);
     for (const device of [camera, projector]) {
-      const target = projectPoint(device, [0.4, 0.75, -0.3])!;
+      const target = projectPoint(device, [10, 18.75, -7.5])!;
       expect(target.u).toBeCloseTo(device.cx, 10);
       expect(target.v).toBeCloseTo(device.cy, 10);
     }
-    // Image right lies along the baseline component perpendicular to each axis.
-    const baseline = [-5.5, -1.8, 3];
-    for (const device of [camera, projector]) {
-      const along = baseline.reduce((s, v, a) => s + v * device.right[a], 0);
-      const up = baseline.reduce((s, v, a) => s + v * device.up[a], 0);
-      expect(along).toBeGreaterThan(0);
-      expect(Math.abs(up)).toBeLessThan(1e-12);
-    }
+    // Camera image right is horizontal; projector columns lie in its vertical plane.
+    expect(Math.abs(camera.right[1])).toBeLessThan(1e-12);
+    const f = projector.forward,
+      across = [-f[2], 0, f[0]];
+    expect(
+      Math.abs(across.reduce((s, v, a) => s + v * projector.right[a], 0)),
+    ).toBeLessThan(1e-12);
     const moved = runWorldScan(config, 48, 36);
     expect(moved.capture.frames).not.toEqual(
       runWorldScan(DEFAULT_WORLD, 48, 36).capture.frames,
     );
     expect(moved.metrics.validCount).toBeGreaterThan(100);
-    expect(moved.metrics.rmseDepth!).toBeLessThan(1e-10);
+    expect(moved.metrics.rmseDepth!).toBeLessThan(1e-8);
   });
   it("allows devices directly overhead and on the far side of the object", () => {
     for (const placement of [
@@ -558,9 +615,9 @@ describe("CPU calibrated scanner", () => {
       { cameraX: 0.5, cameraY: 2, cameraZ: -4 },
       { projectorX: 0, projectorY: 4.5, projectorZ: 0 },
     ]) {
-      const scan = runWorldScan({ ...DEFAULT_WORLD, ...placement }, 48, 36);
+      const scan = runWorldScan(legacy(placement), 48, 36);
       expect(scan.metrics.validCount).toBeGreaterThan(100);
-      expect(scan.metrics.rmseDepth!).toBeLessThan(1e-10);
+      expect(scan.metrics.rmseDepth!).toBeLessThan(1e-8);
     }
   });
   it("keeps the ideal direct-only pipeline when interreflection is off", () => {
@@ -587,8 +644,8 @@ describe("CPU calibrated scanner", () => {
     expect(a.capture.frames).toEqual(b.capture.frames);
     const indirect = a.capture.indirect[0];
     expect(Math.max(...indirect)).toBeGreaterThan(0.01);
-    expect(a.metrics.directRmseDepth!).toBeLessThan(1e-10);
-    expect(a.metrics.rmseDepth!).toBeGreaterThan(1e-4);
+    expect(a.metrics.directRmseDepth!).toBeLessThan(1e-8);
+    expect(a.metrics.rmseDepth!).toBeGreaterThan(1e-3);
     a.capture.directOnly!.frames.forEach((frame, k) =>
       frame.forEach((v, i) =>
         expect(v).toBeCloseTo(0.12 + a.capture.direct[k][i], 14),
@@ -610,15 +667,14 @@ describe("CPU calibrated scanner", () => {
   });
   it("renders a glossy highlight only when the specular lobe is enabled", () => {
     // Camera mirrors the projector about the ground so the highlight sits at (0,0,1.2).
-    const mirrored = {
-      ...DEFAULT_WORLD,
+    const mirrored = legacy({
       cameraX: -1.5,
       cameraY: 4,
       cameraZ: 1.2,
       projectorX: 1.5,
       projectorY: 4,
       projectorZ: 1.2,
-    };
+    });
     const matte = captureWorld(mirrored, 48, 36);
     const glossy = captureWorld(
       { ...mirrored, groundSpecular: 0.6, groundRoughness: 0.2 },
@@ -673,8 +729,9 @@ describe("projector fringe coding", () => {
     for (let n = 3; n <= 8; n++) {
       const phases = [-3, -1.2, 0, 0.7, 2.9];
       const frames = Array.from({ length: n }, (_, k) =>
-        Float64Array.from(phases, (phi) =>
-          0.5 + 0.3 * Math.cos(phi + (TAU * k) / n),
+        Float64Array.from(
+          phases,
+          (phi) => 0.5 + 0.3 * Math.cos(phi + (TAU * k) / n),
         ),
       );
       const result = decodeNStep(frames, 0.01);
@@ -685,27 +742,45 @@ describe("projector fringe coding", () => {
       });
     }
   });
-  it("lists N shifted frames, plus N unit-frequency frames only when unwrapping a higher frequency", () => {
-    const base = { fringeFrequency: 1, phaseSteps: 4, temporalUnwrap: true };
+  it("lists N shifted frames, plus N coarse frames for temporal (f > 1) or dual coding", () => {
+    const base = {
+      fringeFrequency: 1,
+      phaseSteps: 4,
+      coding: "temporal" as const,
+      periodRatio: 1.25,
+    };
     expect(fringePatterns(base)).toHaveLength(4);
     expect(fringePatterns({ ...base, fringeFrequency: 8 })).toHaveLength(8);
     expect(
-      fringePatterns({ ...base, fringeFrequency: 8, temporalUnwrap: false }),
+      fringePatterns({ ...base, fringeFrequency: 8, coding: "single" }),
     ).toHaveLength(4);
     expect(
       fringePatterns({ ...base, fringeFrequency: 8 }).map((p) => p.frequency),
     ).toEqual([8, 8, 8, 8, 1, 1, 1, 1]);
+    expect(
+      fringePatterns({ ...base, fringeFrequency: 10, coding: "dual" }).map(
+        (p) => p.frequency,
+      ),
+    ).toEqual([10, 10, 10, 10, 8, 8, 8, 8]);
+    expect(
+      fringePatterns({
+        ...base,
+        fringeFrequency: 12,
+        coding: "coarse",
+        periodRatio: 4,
+      }).map((p) => p.frequency),
+    ).toEqual([12, 12, 12, 12, 3, 3, 3, 3]);
     expect(fringePatterns(DEFAULT_WORLD).map((p) => p.shift)).toEqual([
       ...SHIFTS,
     ]);
   });
-  it("recovers exact depth at high frequency with temporal unwrapping and fails without it", () => {
+  it("recovers exact depth at high frequency with temporal unwrapping and aliases on a single-period window", () => {
     const config = { ...DEFAULT_WORLD, fringeFrequency: 8, phaseSteps: 4 };
     const unwrapped = runWorldScan(config, 48, 36);
     expect(unwrapped.capture.frames).toHaveLength(8);
     expect(unwrapped.reconstruction.lowPhase).not.toBeNull();
     expect(unwrapped.metrics.validCount).toBeGreaterThan(500);
-    expect(unwrapped.metrics.rmseDepth!).toBeLessThan(1e-10);
+    expect(unwrapped.metrics.rmseDepth!).toBeLessThan(1e-8);
     const orders = new Set<number>();
     unwrapped.reconstruction.valid.forEach((v, i) => {
       if (v)
@@ -718,14 +793,23 @@ describe("projector fringe coding", () => {
         );
     });
     expect(orders.size).toBeGreaterThan(1);
-    const ambiguous = runWorldScan(
-      { ...config, temporalUnwrap: false },
+    const ambiguous = runWorldScan({ ...config, coding: "single" }, 48, 36);
+    expect(ambiguous.capture.frames).toHaveLength(4);
+    expect(ambiguous.reconstruction.lowPhase).toBeNull();
+    expect(ambiguous.metrics.rmseDepth!).toBeGreaterThan(1.25);
+    const dual = runWorldScan(
+      { ...config, coding: "dual", periodRatio: 8 / 7 },
       48,
       36,
     );
-    expect(ambiguous.capture.frames).toHaveLength(4);
-    expect(ambiguous.reconstruction.lowPhase).toBeNull();
-    expect(ambiguous.metrics.rmseDepth!).toBeGreaterThan(0.05);
+    expect(dual.metrics.rmseDepth!).toBeLessThan(1e-8);
+    const coarse = runWorldScan(
+      { ...config, coding: "coarse", periodRatio: 8 },
+      48,
+      36,
+    );
+    expect(coarse.capture.frames).toHaveLength(8);
+    expect(coarse.metrics.rmseDepth!).toBeLessThan(1e-8);
   });
   it("uses the configured offset, amplitude and projector FoV in the forward model", () => {
     const dim = runWorldScan(
@@ -741,19 +825,22 @@ describe("projector fringe coding", () => {
       (bright.reconstruction.phase.modulation[i] * 0.1) / 0.36,
       10,
     );
-    expect(dim.metrics.rmseDepth!).toBeLessThan(1e-10);
-    const narrow = getRig({ ...DEFAULT_WORLD, projectorFov: 30 }).projector;
+    expect(dim.metrics.rmseDepth!).toBeLessThan(1e-8);
+    const narrow = getRig(withProjector({ fov: 30 })).projector;
     expect(narrow.fy).toBeGreaterThan(getRig(DEFAULT_WORLD).projector.fy);
     for (const bad of [
       { fringeOffset: 0.3, fringeAmplitude: 0.31 },
       { fringeOffset: 0.8, fringeAmplitude: 0.25 },
       { fringeFrequency: 1.5 },
       { phaseSteps: 2 },
-      { projectorFov: 90 },
-      { temporalUnwrap: "yes" as unknown as boolean },
+      { periodRatio: 1 },
+      { coding: "yes" as unknown as WorldConfig["coding"] },
     ])
       expect(() => validateWorldConfig({ ...DEFAULT_WORLD, ...bad })).toThrow(
         RangeError,
       );
+    expect(() => validateWorldConfig(withProjector({ fov: 90 }))).toThrow(
+      RangeError,
+    );
   });
 });

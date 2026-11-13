@@ -7,42 +7,63 @@ import {
   Crosshair,
   Maximize2,
   Minimize2,
+  Plus,
   Redo2,
   RotateCcw,
   Save,
   ScanLine,
+  Trash2,
   Undo2,
   Upload,
   X,
 } from "lucide-react";
 import {
+  BOARD_SHAPES,
   DEFAULT_WORLD,
+  DEVICE_LIMITS,
   fringePatterns,
+  MAX_DEVICES,
+  migrateLegacyConfig,
+  PCB_REGIONS,
   PCB_SETUP,
   parseWorldConfig,
+  rigTarget,
   validateWorldConfig,
   WORLD_LIMITS,
+  type NumericKey,
   type WorldConfig,
   type WorldScan,
+  type WorldShape,
 } from "./scanner";
+import {
+  fromSpherical,
+  placePreset,
+  RIG_PRESETS,
+  spherical,
+  type Device,
+} from "./devices";
 import { MATERIAL_PRESETS } from "./lightTransport";
+import { applyLocalPreset, LOCAL_PRESETS } from "./localPresets";
 import { InfoButton, InfoHeading } from "./Info";
 import { Field, Tabs } from "./controls";
 import PointCloudPage from "./PointCloudPage";
 import type { ScanRequest, ScanResponse } from "./scan.worker";
-import WorldView, { type WorldViewApi } from "./WorldView";
+import WorldView, { type OverlayCloud, type WorldViewApi } from "./WorldView";
+import MultiViewPage from "../aoi/MultiViewPage";
 import { downloadBlob, rasterize } from "../lib/images";
 import { TAU } from "../core/simulation";
 import "./sandbox.css";
 
 type Scan = WorldScan;
-type NumericKey = keyof typeof WORLD_LIMITS;
-const KEY = "structured-light.sandbox.parameters.v4";
-const LEGACY_KEY = "structured-light.sandbox.parameters.v3";
+const KEY = "structured-light.sandbox.parameters.v5";
+const LEGACY_KEYS = [
+  "structured-light.sandbox.parameters.v4",
+  "structured-light.sandbox.parameters.v3",
+];
 const MODEL = "calibrated-fringe-sandbox";
-const SCHEMA = 4;
+const SCHEMA = 5;
 const HISTORY_LIMIT = 100;
-/** Accepts v4 envelopes and upgrades v3 ones, whose projector settings were fixed at today's defaults. */
+/** Accepts v5 envelopes and upgrades v4 / v3 ones (25 mm units, single camera and projector). */
 function readEnvelope(e: unknown): WorldConfig {
   const envelope = e as {
     schemaVersion?: unknown;
@@ -52,34 +73,15 @@ function readEnvelope(e: unknown): WorldConfig {
   if (envelope?.schemaVersion === SCHEMA && envelope.model === MODEL)
     return parseWorldConfig(envelope.config);
   if (
-    envelope?.schemaVersion === 3 &&
-    envelope.model === "calibrated-one-cycle-sandbox" &&
-    typeof envelope.config === "object" &&
-    envelope.config !== null &&
-    !Array.isArray(envelope.config)
-  ) {
-    const {
-      projectorFov,
-      fringeFrequency,
-      phaseSteps,
-      fringeOffset,
-      fringeAmplitude,
-      temporalUnwrap,
-    } = DEFAULT_WORLD;
-    return parseWorldConfig({
-      projectorFov,
-      fringeFrequency,
-      phaseSteps,
-      fringeOffset,
-      fringeAmplitude,
-      temporalUnwrap,
-      ...envelope.config,
-    });
-  }
+    (envelope?.schemaVersion === 4 && envelope.model === MODEL) ||
+    (envelope?.schemaVersion === 3 &&
+      envelope.model === "calibrated-one-cycle-sandbox")
+  )
+    return migrateLegacyConfig(envelope.config);
   throw new Error("不是此沙盒的參數格式");
 }
 function loadWorld(): WorldConfig {
-  for (const key of [KEY, LEGACY_KEY]) {
+  for (const key of [KEY, ...LEGACY_KEYS]) {
     try {
       const raw = localStorage.getItem(key);
       if (raw) return readEnvelope(JSON.parse(raw));
@@ -87,7 +89,28 @@ function loadWorld(): WorldConfig {
       // Fall through to the next key or the defaults.
     }
   }
-  return { ...DEFAULT_WORLD };
+  return structuredClone(DEFAULT_WORLD);
+}
+/** Fields that change the active-pair scan; analysis-only settings and idle devices do not. */
+function scanKey(c: WorldConfig) {
+  const {
+    references: _r,
+    targetRange: _t,
+    consistencyTolerance: _c,
+    tolerance: _o,
+    roiWidth: _w,
+    roiHeight: _h,
+    cellSize: _s,
+    directTiltLimit: _d,
+    cameras,
+    projectors,
+    ...rest
+  } = c;
+  return JSON.stringify([
+    rest,
+    cameras.find((d) => d.id === c.activeCamera),
+    projectors.find((d) => d.id === c.activeProjector),
+  ]);
 }
 function pack(config: WorldConfig) {
   return JSON.stringify(
@@ -98,8 +121,7 @@ function pack(config: WorldConfig) {
 }
 const f = (value: number, n = 3) =>
   Number.isFinite(value) ? value.toFixed(n) : "N/A";
-const mm = (metres: number) =>
-  metres < 0.000001 ? "＜ 0.001" : (metres * 1000).toFixed(3);
+const mm = (value: number) => (value < 0.001 ? "＜ 0.001" : value.toFixed(3));
 
 function Image({
   values,
@@ -122,7 +144,7 @@ function Image({
   kind?: "intensity" | "phase" | "depth" | "error";
   /** Display multiplier for intensity images. */
   gain?: number;
-  /** Symmetric colour range for error images, in metres. */
+  /** Symmetric colour range for error images, in mm. */
   scale?: number;
   label?: string;
 }) {
@@ -144,7 +166,7 @@ function Image({
           const t = Math.max(-1, Math.min(1, d / scale));
           rgb = [128 + 127 * t, 128 - 90 * Math.abs(t), 128 - 127 * t];
         } else {
-          const t = Math.max(0, Math.min(1, (d - 1) / 9));
+          const t = Math.max(0, Math.min(1, (d - 25) / 225));
           rgb = [255 * (1 - t), 180 * (1 - Math.abs(t - 0.5)), 255 * t];
         }
         image.data.set([...rgb, 255], i * 4);
@@ -219,15 +241,107 @@ const RESULT_TABS = [
   ["depth", "相位與深度"],
   ["transport", "光傳輸"],
 ] as const;
+export type SandboxView = "sandbox" | "analysis" | "multiview";
+const VIEWS = [
+  ["sandbox", "3D 沙盒"],
+  ["analysis", "點雲分析"],
+  ["multiview", "多視角分析"],
+] as const;
+const SHAPES: readonly (readonly [WorldShape, string])[] = [
+  ["sphere", "球體"],
+  ["box", "方塊"],
+  ["ramp", "斜板"],
+  ["vgroove", "V 型槽"],
+  ["pcb", "PCB 板"],
+  ["step", "階梯量規"],
+  ["chip", "Chip + Fillet"],
+  ["plane", "平面"],
+];
+const MATTE_BOARD: Partial<WorldConfig> = {
+  objectAlbedo: 0.5,
+  objectSpecular: 0,
+  objectRoughness: 0.6,
+  chipAlbedo: 0.7,
+  chipSpecular: 0,
+  chipRoughness: 0.5,
+};
+const ASSEMBLY_BOARD: Partial<WorldConfig> = {
+  objectAlbedo: 0.25,
+  objectSpecular: 0.06,
+  objectRoughness: 0.45,
+  chipAlbedo: 0.45,
+  chipSpecular: 0.06,
+  chipRoughness: 0.35,
+  pinAlbedo: 0.15,
+  pinSpecular: 0.6,
+  pinRoughness: 0.4,
+  solderAlbedo: 0.1,
+  solderSpecular: 0.7,
+  solderRoughness: 0.3,
+};
+/** AOI test pieces: board top 2 mm above the ground is the reference plane. */
+const boardSetup = (shape: WorldShape): Partial<WorldConfig> => ({
+  shape,
+  x: 0,
+  y: 2,
+  z: 0,
+  aimX: 0,
+  aimZ: 0,
+  referenceHeight: 2,
+  ...(shape === "chip" ? ASSEMBLY_BOARD : MATTE_BOARD),
+});
+const DEVICE_FIELDS = [
+  ["tilt", "傾角°", [0, 150]],
+  ["azimuth", "方位°", [-360, 360]],
+  ["distance", "距離 mm", [12.5, 600]],
+] as const;
+
+function NumberCell({
+  value,
+  limits,
+  label,
+  onChange,
+  digits = 1,
+}: {
+  value: number;
+  limits: readonly [number, number];
+  label: string;
+  onChange: (v: number) => void;
+  digits?: number;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (text: string) => {
+    const v = Number(text);
+    if (text.trim() !== "" && Number.isFinite(v))
+      onChange(Math.min(limits[1], Math.max(limits[0], v)));
+    setDraft(null);
+  };
+  return (
+    <input
+      type="number"
+      aria-label={label}
+      className="aoi-number"
+      min={limits[0]}
+      max={limits[1]}
+      value={draft ?? String(Number(value.toFixed(digits)))}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => commit(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") setDraft(null);
+      }}
+    />
+  );
+}
 
 export default function Sandbox({
   onGuide,
   onExplore,
-  onAoi,
+  initialView = "sandbox",
 }: {
   onGuide: () => void;
   onExplore: () => void;
-  onAoi: () => void;
+  initialView?: SandboxView;
 }) {
   const [config, setConfig] = useState(loadWorld),
     [scan, setScan] = useState<Scan | null>(null),
@@ -242,7 +356,10 @@ export default function Sandbox({
     [focusSpace, setFocusSpace] = useState(false),
     [showHelp, setShowHelp] = useState(false),
     [resultInfo, setResultInfo] = useState(false),
-    [view, setView] = useState<"sandbox" | "analysis">("sandbox"),
+    [view, setView] = useState<SandboxView>(initialView),
+    [overlay, setOverlay] = useState<(OverlayCloud & { label: string }) | null>(
+      null,
+    ),
     [scanConfig, setScanConfig] = useState<WorldConfig | null>(null),
     [progress, setProgress] = useState(0),
     [toolTab, setToolTab] = useState<(typeof TOOL_TABS)[number][0]>("object"),
@@ -271,16 +388,18 @@ export default function Sandbox({
     worker.current = null;
   };
   const apply = useCallback((next: WorldConfig) => {
+    const rescan = scanKey(next) !== scanKey(latest.current);
     latest.current = next;
-    generation.current++;
-    stopWorker();
-    setBusy(false);
     setConfig(next);
-    setStale(true);
-    setStatus("場景已改，稍後自動重新掃描…");
     setMessage("");
     const h = history.current;
     setHistorySize({ undo: h.past.length, redo: h.future.length });
+    if (!rescan) return;
+    generation.current++;
+    stopWorker();
+    setBusy(false);
+    setStale(true);
+    setStatus("場景已改，稍後自動重新掃描…");
   }, []);
   const update = useCallback(
     (patch: Partial<WorldConfig>) => {
@@ -323,7 +442,7 @@ export default function Sandbox({
     [apply],
   );
   useEffect(() => {
-    if (view !== "sandbox") return;
+    if (view === "analysis") return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
       const target = e.target as HTMLElement | null;
@@ -406,11 +525,12 @@ export default function Sandbox({
     };
     next.postMessage({ config: snapshot } satisfies ScanRequest);
   }, [finishScan]);
+  const currentScanKey = useMemo(() => scanKey(config), [config]);
   useEffect(() => {
     const timer = setTimeout(performScan, firstScan.current ? 120 : 300);
     firstScan.current = false;
     return () => clearTimeout(timer);
-  }, [config, performScan]);
+  }, [currentScanKey, performScan]);
   useEffect(
     () => () => {
       generation.current++;
@@ -449,7 +569,7 @@ export default function Sandbox({
     steps = coding.phaseSteps,
     patterns = fringePatterns(coding),
     frameLabel = (k: number) =>
-      `${k >= steps ? "低頻 " : ""}I${(k % steps) + 1} · ${Math.round((patterns[k].shift * 180) / Math.PI)}°`;
+      `${k >= steps ? (coding.coding === "dual" ? "粗週期 " : "低頻 ") : ""}I${(k % steps) + 1} · ${Math.round((patterns[k].shift * 180) / Math.PI)}°`;
   const depth = scan?.reconstruction.depth[probe] ?? NaN,
     valid = !!scan?.reconstruction.valid[probe],
     phase = scan?.reconstruction.phase.wrapped[probe] ?? NaN,
@@ -493,6 +613,72 @@ export default function Sandbox({
         },
       }
     : null;
+  const aim = rigTarget(config);
+  const activeCamera = config.cameras.find(
+      (d) => d.id === config.activeCamera,
+    )!,
+    activeProjector = config.projectors.find(
+      (d) => d.id === config.activeProjector,
+    )!;
+  const listOf = (kind: "camera" | "projector") =>
+    kind === "camera" ? "cameras" : "projectors";
+  const setDevice = (
+    kind: "camera" | "projector",
+    id: string,
+    patch: Partial<Device>,
+  ) =>
+    update({
+      [listOf(kind)]: config[listOf(kind)].map((d) =>
+        d.id === id ? { ...d, ...patch } : d,
+      ),
+    });
+  const addDevice = (kind: "camera" | "projector") => {
+    const list = config[listOf(kind)],
+      prefix = kind === "camera" ? "C" : "P",
+      used = new Set(list.map((d) => d.id));
+    let n = list.length;
+    while (used.has(`${prefix}${n}`)) n++;
+    const source = kind === "camera" ? activeCamera : activeProjector,
+      s = spherical(source, aim);
+    update({
+      [listOf(kind)]: [
+        ...list,
+        {
+          ...source,
+          ...fromSpherical(aim, s.tilt, (s.azimuth + 90) % 360, s.distance),
+          id: `${prefix}${n}`,
+          name: `${source.name} 副本`,
+        },
+      ],
+    });
+  };
+  const removeDevice = (kind: "camera" | "projector", id: string) => {
+    const list = config[listOf(kind)].filter((d) => d.id !== id);
+    const activeKey = kind === "camera" ? "activeCamera" : "activeProjector";
+    update({
+      [listOf(kind)]: list,
+      [activeKey]: config[activeKey] === id ? list[0].id : config[activeKey],
+    });
+  };
+  const deviceAxis = (
+    kind: "camera" | "projector",
+    axis: "x" | "y" | "z",
+    label: string,
+  ) => {
+    const device = kind === "camera" ? activeCamera : activeProjector;
+    return (
+      <Field
+        key={`${kind}-${axis}`}
+        label={label}
+        value={device[axis]}
+        min={DEVICE_LIMITS[axis][0]}
+        max={DEVICE_LIMITS[axis][1]}
+        step={0.5}
+        unit="mm"
+        onChange={(value) => setDevice(kind, device.id, { [axis]: value })}
+      />
+    );
+  };
   const save = () => {
     try {
       localStorage.setItem(KEY, pack(config));
@@ -507,12 +693,12 @@ export default function Sandbox({
   const csv = () => {
     if (!scan) return;
     const lines = [
-      `# model=${MODEL}; coordinates=world_xyz_m; depth=camera_optical_Z_m; reference=evaluation_only`,
+      `# model=${MODEL}; coordinates=world_xyz_mm; depth=camera_optical_Z_mm; reference=evaluation_only`,
       "# config=" + JSON.stringify(scanConfig ?? config),
       [
         "camera_x,camera_y",
         ...scan.capture.frames.map((_, k) => `frame_${k + 1}`),
-        "wrapped_rad,absolute_rad,projector_column_px,reconstructed_x_m,reconstructed_y_m,reconstructed_z_m,depth_m,valid,reference_depth_m,projector_unlit_mask",
+        "wrapped_rad,absolute_rad,projector_column_px,reconstructed_x_mm,reconstructed_y_mm,reconstructed_z_mm,depth_mm,valid,reference_depth_mm,projector_unlit_mask",
       ].join(","),
     ];
     const cell = (n: number) => (Number.isFinite(n) ? String(n) : "");
@@ -543,7 +729,7 @@ export default function Sandbox({
       "sandbox-3d-reconstruction.csv",
     );
     setMessage(
-      "已匯出所有像素。reference_depth_m 僅為評估真值，不是重建輸入。",
+      "已匯出所有像素（mm）。reference_depth_mm 僅為評估真值，不是重建輸入。",
     );
   };
   return (
@@ -553,7 +739,7 @@ export default function Sandbox({
           <ScanLine size={22} />
           <div>
             <h1>3D 掃描沙盒</h1>
-            <small>結構光實驗室 · N 步 Phase Shifting</small>
+            <small>結構光實驗室 · N 步 Phase Shifting · 單位 mm</small>
           </div>
         </div>
         <div
@@ -561,12 +747,7 @@ export default function Sandbox({
           role="tablist"
           aria-label="沙盒頁面"
         >
-          {(
-            [
-              ["sandbox", "3D 沙盒"],
-              ["analysis", "點雲分析"],
-            ] as const
-          ).map(([id, title]) => (
+          {VIEWS.map(([id, title]) => (
             <button
               key={id}
               role="tab"
@@ -621,10 +802,6 @@ export default function Sandbox({
             一維自由實驗
             <ArrowRight size={16} />
           </button>
-          <button onClick={onAoi} data-testid="open-aoi">
-            AOI 多視角
-            <ArrowRight size={16} />
-          </button>
         </div>
         <span
           className="sandbox-progress"
@@ -639,6 +816,22 @@ export default function Sandbox({
           stale={stale}
         />
       )}
+      {view === "multiview" && (
+        <MultiViewPage
+          config={config}
+          update={update}
+          onShow={(next, pair) => {
+            if (pair)
+              update({
+                activeCamera: pair.cameraId,
+                activeProjector: pair.projectorId,
+              });
+            setOverlay(next);
+            if (next) setShowCloud(false);
+            setView("sandbox");
+          }}
+        />
+      )}
       <div className="sandbox-workspace" hidden={view !== "sandbox"}>
         <aside className="sandbox-tools" aria-label="場景參數">
           <Tabs
@@ -651,33 +844,38 @@ export default function Sandbox({
             {toolTab === "object" && (
               <>
                 <InfoHeading title="形狀">
-                  {config.shape === "pcb" && (
+                  {config.shape === "pcb" ? (
                     <p>
-                      放大模型：板子 1.6×1.2 m、引腳寬約 2.2 cm。U1 QFP、U2
+                      真實尺寸 PCB：板子 40×30 mm、引腳寬約 0.55 mm。U1 QFP、U2
                       SOIC、J1 排針、R1/C1/C2 被動元件共 48
                       支引腳。板子用物體材質，晶片與引腳材質在「材質」分頁；逐引腳結果在「點雲分析」。
                     </p>
-                  )}
+                  ) : BOARD_SHAPES.includes(config.shape) ? (
+                    <p>
+                      AOI 測試件（mm）：板面即基準面。階梯量規 0.1–2.4 mm
+                      六階，適合看量測範圍與混疊；Chip + Fillet 含兩顆 2012
+                      元件、金屬電極、凹形焊錫與 3 mm 高元件（遮擋 /
+                      陰影）；平面可在批次比較中掃描高度。
+                    </p>
+                  ) : undefined}
                 </InfoHeading>
                 <div className="sandbox-palette">
-                  {(
-                    [
-                      ["sphere", "球體"],
-                      ["box", "方塊"],
-                      ["ramp", "斜板"],
-                      ["vgroove", "V 型槽"],
-                      ["pcb", "PCB 板"],
-                    ] as const
-                  ).map(([shape, title]) => (
+                  {SHAPES.map(([shape, title]) => (
                     <button
                       key={shape}
                       aria-pressed={config.shape === shape}
                       onClick={() => {
-                        if (shape !== "pcb") return update({ shape });
-                        update(PCB_SETUP);
-                        setMessage(
-                          "已套用 PCB 檢測擺位：俯拍 Camera 256×192、斜上方 Projector、像素面積積分；可自行調整。",
-                        );
+                        if (shape === "pcb") {
+                          update(PCB_SETUP);
+                          setMessage(
+                            "已套用 PCB 檢測擺位：俯拍 Camera 256×192、斜上方 Projector、像素面積積分；可自行調整。",
+                          );
+                        } else if (BOARD_SHAPES.includes(shape)) {
+                          update(boardSetup(shape));
+                          setMessage(
+                            "已放置 AOI 測試件（板面＝基準面）。要比較多組 Camera／Projector，可在「裝置」分頁套用 AOI 擺位後到「多視角分析」。",
+                          );
+                        } else update({ shape, referenceHeight: 0 });
                       }}
                     >
                       {title}
@@ -690,47 +888,293 @@ export default function Sandbox({
                     unit: "°",
                     digits: 0,
                   })}
+                {config.shape === "pcb" && (
+                  <label className="sandbox-preset">
+                    <span>瞄準區域</span>
+                    <select
+                      aria-label="PCB 瞄準區域"
+                      value={
+                        PCB_REGIONS.find(
+                          ([, , ax, az]) =>
+                            ax === config.aimX && az === config.aimZ,
+                        )?.[0] ?? ""
+                      }
+                      onChange={(e) => {
+                        const region = PCB_REGIONS.find(
+                          ([id]) => id === e.target.value,
+                        );
+                        if (region)
+                          update({ aimX: region[2], aimZ: region[3] });
+                      }}
+                    >
+                      <option value="" disabled>
+                        自訂
+                      </option>
+                      {PCB_REGIONS.map(([id, title]) => (
+                        <option key={id} value={id}>
+                          {title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <InfoHeading title="位置">
                   <p>也可以在 3D 視窗左鍵點物體，拖曳彩色箭頭移動。</p>
                 </InfoHeading>
                 {field("x", "物體 X 位置", {
-                  unit: "m",
+                  step: 0.5,
+                  unit: "mm",
                   testId: "sandbox-object-x",
                 })}
-                {field("y", "物體高度 Y", { unit: "m" })}
-                {field("z", "物體 Z 位置", { unit: "m" })}
+                {field("y", "物體高度 Y", { step: 0.25, unit: "mm" })}
+                {field("z", "物體 Z 位置", { step: 0.5, unit: "mm" })}
+                <InfoHeading title="瞄準點與基準面">
+                  <p>
+                    所有裝置對準「物體位置 + 瞄準偏移」；多視角分析的 ROI
+                    也以它為中心。基準面是 AOI 校正的高度零點（世界 Y），單週期
+                    / 雙週期的相位視窗從它往上算，多視角高度也都相對於它。
+                  </p>
+                </InfoHeading>
+                {field("aimX", "瞄準偏移 X", { step: 0.25, unit: "mm" })}
+                {field("aimZ", "瞄準偏移 Z", { step: 0.25, unit: "mm" })}
+                {field("referenceHeight", "基準面高度", {
+                  step: 0.25,
+                  unit: "mm",
+                })}
               </>
             )}
             {toolTab === "rig" && (
               <>
+                <label className="sandbox-preset">
+                  <span>裝置擺位</span>
+                  <select
+                    aria-label="裝置擺位預設"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value === "single") {
+                        update({
+                          cameras: structuredClone(DEFAULT_WORLD.cameras),
+                          projectors: structuredClone(DEFAULT_WORLD.projectors),
+                          activeCamera: "C0",
+                          activeProjector: "P0",
+                        });
+                        return;
+                      }
+                      const local = LOCAL_PRESETS.find(
+                        (p) => `local:${p.id}` === e.target.value,
+                      );
+                      if (local) {
+                        const next = applyLocalPreset(local, config);
+                        update(next);
+                        try {
+                          validateWorldConfig(next);
+                        } catch {
+                          return; // update() already reported why
+                        }
+                        setMessage(
+                          `已套用本機預設「${local.name}」（src/local，不會進 Git）；到「多視角分析」比較所有 Pair。`,
+                        );
+                        return;
+                      }
+                      const preset = RIG_PRESETS.find(
+                        (p) => p.id === e.target.value,
+                      );
+                      if (!preset) return;
+                      const placed = placePreset(preset, aim);
+                      update({
+                        ...placed,
+                        activeCamera: placed.cameras[0].id,
+                        activeProjector: placed.projectors[0].id,
+                        cameraWidth: Math.max(config.cameraWidth, 192),
+                      });
+                      setMessage(
+                        `已套用「${preset.name}」：${placed.cameras.length} 台 Camera × ${placed.projectors.length} 台 Projector；到「多視角分析」比較所有 Pair。`,
+                      );
+                    }}
+                  >
+                    <option value="">選擇…</option>
+                    <option value="single">
+                      沙盒單組（1 Camera + 1 Projector）
+                    </option>
+                    {RIG_PRESETS.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    {LOCAL_PRESETS.map((p) => (
+                      <option
+                        key={p.id}
+                        value={`local:${p.id}`}
+                        title={p.description}
+                      >
+                        本機：{p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {(
                   [
-                    ["Camera", "cameraX", "cameraY", "cameraZ"],
-                    ["Projector", "projectorX", "projectorY", "projectorZ"],
+                    ["Camera", "camera"],
+                    ["Projector", "projector"],
                   ] as const
-                ).map(([device, ...keys]) => (
-                  <section key={device}>
-                    <InfoHeading title={`${device} 位置`}>
+                ).map(([title, kind]) => (
+                  <section key={kind}>
+                    <InfoHeading title={`使用中 ${title} 位置`}>
                       <p>
-                        也可以在 3D 視窗左鍵點 {device}{" "}
-                        機身，拖曳彩色箭頭移動。兩台裝置永遠對準物體中心。
+                        3D 沙盒掃描的是「使用中」的一組 Camera +
+                        Projector。也可以在 3D
+                        視窗左鍵點機身拖曳；點其他（半透明）機身會把它設為使用中。所有裝置永遠對準瞄準點。
                       </p>
                     </InfoHeading>
-                    {keys.map((key, axis) =>
-                      field(key, `${device} ${"XYZ"[axis]}`, { unit: "m" }),
+                    {(["x", "y", "z"] as const).map((axis) =>
+                      deviceAxis(kind, axis, `${title} ${axis.toUpperCase()}`),
                     )}
+                    <Field
+                      label={`${title} FOV`}
+                      value={
+                        (kind === "camera" ? activeCamera : activeProjector).fov
+                      }
+                      min={DEVICE_LIMITS.fov[0]}
+                      max={DEVICE_LIMITS.fov[1]}
+                      step={0.5}
+                      unit="°"
+                      digits={1}
+                      onChange={(fov) =>
+                        setDevice(
+                          kind,
+                          (kind === "camera" ? activeCamera : activeProjector)
+                            .id,
+                          { fov },
+                        )
+                      }
+                    />
                   </section>
                 ))}
+                <InfoHeading title="全部裝置（多視角）">
+                  <p>
+                    傾角 / 方位 / 距離是相對瞄準點的球座標（方位從 +X 轉向
+                    +Z）。光圈直徑供薄透鏡失焦模型使用，0 為針孔（無失焦）。Pair
+                    類別（直視 / 反対側 / 直交 / 同じ側）由這些幾何即時判定。
+                  </p>
+                </InfoHeading>
+                {(["camera", "projector"] as const).map((kind) => {
+                  const list = config[listOf(kind)],
+                    active =
+                      kind === "camera"
+                        ? config.activeCamera
+                        : config.activeProjector;
+                  return (
+                    <section key={kind}>
+                      <h3 className="sandbox-group">
+                        {kind === "camera" ? "Camera" : "Projector"}（
+                        {list.length}）
+                      </h3>
+                      {list.map((device) => {
+                        const s = spherical(device, aim);
+                        return (
+                          <div
+                            className={`aoi-device ${device.id === active ? "active" : ""}`}
+                            key={device.id}
+                            data-testid={`sandbox-device-${device.id}`}
+                          >
+                            <div className="aoi-device-head">
+                              <input
+                                type="radio"
+                                aria-label={`使用 ${device.id}`}
+                                checked={device.id === active}
+                                onChange={() =>
+                                  update(
+                                    kind === "camera"
+                                      ? { activeCamera: device.id }
+                                      : { activeProjector: device.id },
+                                  )
+                                }
+                              />
+                              <strong>{device.id}</strong>
+                              <input
+                                aria-label={`${device.id} 名稱`}
+                                value={device.name}
+                                onChange={(e) =>
+                                  setDevice(kind, device.id, {
+                                    name: e.target.value,
+                                  })
+                                }
+                              />
+                              <button
+                                aria-label={`移除 ${device.id}`}
+                                title="移除"
+                                disabled={list.length <= 1}
+                                onClick={() => removeDevice(kind, device.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                            <div className="aoi-device-grid">
+                              {DEVICE_FIELDS.map(([key, title, limits]) => (
+                                <label key={key}>
+                                  <span>{title}</span>
+                                  <NumberCell
+                                    label={`${device.id} ${title}`}
+                                    value={s[key]}
+                                    limits={limits}
+                                    onChange={(value) => {
+                                      const next = { ...s, [key]: value };
+                                      setDevice(
+                                        kind,
+                                        device.id,
+                                        fromSpherical(
+                                          aim,
+                                          next.tilt,
+                                          next.azimuth,
+                                          next.distance,
+                                        ),
+                                      );
+                                    }}
+                                  />
+                                </label>
+                              ))}
+                              <label>
+                                <span>FOV°</span>
+                                <NumberCell
+                                  label={`${device.id} FOV°`}
+                                  value={device.fov}
+                                  limits={DEVICE_LIMITS.fov}
+                                  onChange={(fov) =>
+                                    setDevice(kind, device.id, { fov })
+                                  }
+                                />
+                              </label>
+                              <label>
+                                <span>光圈 mm</span>
+                                <NumberCell
+                                  label={`${device.id} 光圈 mm`}
+                                  value={device.aperture}
+                                  limits={DEVICE_LIMITS.aperture}
+                                  onChange={(aperture) =>
+                                    setDevice(kind, device.id, { aperture })
+                                  }
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <button
+                        className="sandbox-reset"
+                        onClick={() => addDevice(kind)}
+                        disabled={list.length >= MAX_DEVICES}
+                      >
+                        <Plus size={14} />
+                        新增 {kind === "camera" ? "Camera" : "Projector"}
+                      </button>
+                    </section>
+                  );
+                })}
                 <InfoHeading title="Camera 鏡頭">
                   <p>
                     開啟面積積分後，跨在邊緣上的像素會混合兩個表面的條紋（混合像素），小細節在低解析度時會重建錯誤或消失。解析度越高掃描越久。
                   </p>
                 </InfoHeading>
-                {field("cameraFov", "Camera FOV", {
-                  step: 1,
-                  unit: "°",
-                  digits: 0,
-                })}
                 <label className="sandbox-preset">
                   <span>解析度</span>
                   <select
@@ -740,7 +1184,7 @@ export default function Sandbox({
                       update({ cameraWidth: Number(e.target.value) })
                     }
                   >
-                    {[96, 160, 256, 384].map((w) => (
+                    {[96, 160, 192, 256, 384].map((w) => (
                       <option key={w} value={w}>
                         {w}×{(w * 3) / 4}
                       </option>
@@ -761,20 +1205,24 @@ export default function Sandbox({
                     <option value={3}>3×3 子像素</option>
                   </select>
                 </label>
+                {field("projectorWidth", "Projector 寬度", {
+                  step: 16,
+                  digits: 0,
+                  unit: "px",
+                  onChange: (v) =>
+                    update({ projectorWidth: Math.round(v / 4) * 4 }),
+                })}
                 <InfoHeading title="Baseline">
-                  <p>
-                    兩光心的距離。影像水平方向沿著 baseline，條紋因此橫跨
-                    baseline 變化。
-                  </p>
+                  <p>使用中 Camera 與 Projector 兩光心的距離。</p>
                 </InfoHeading>
                 <p className="sandbox-note" data-testid="sandbox-baseline">
                   兩光心距離{" "}
                   {Math.hypot(
-                    config.cameraX - config.projectorX,
-                    config.cameraY - config.projectorY,
-                    config.cameraZ - config.projectorZ,
-                  ).toFixed(2)}{" "}
-                  m
+                    activeCamera.x - activeProjector.x,
+                    activeCamera.y - activeProjector.y,
+                    activeCamera.z - activeProjector.z,
+                  ).toFixed(1)}{" "}
+                  mm
                 </p>
               </>
             )}
@@ -798,31 +1246,67 @@ export default function Sandbox({
                   unit: "步",
                   digits: 0,
                 })}
-                {config.fringeFrequency > 1 && (
-                  <>
-                    <InfoHeading title="相位解包">
-                      <p>
-                        開啟時額外投 N 張 f = 1 的條紋，用它的相位 φ₁ 推算條紋序
-                        k = round((f(φ₁+π) − π − φ̂)/2π)，絕對相位 Φ = φ̂ + 2πk。f
-                        很高時 φ₁ 的雜訊會被放大 f 倍，可能讓 k 算錯。
-                      </p>
-                      <p>
-                        關閉時直接把 φ̂ 當成第 0
-                        個週期：除了第一個週期外，其他點都會被三角量測到錯誤的光平面。
-                      </p>
-                    </InfoHeading>
-                    <label className="sandbox-toggle">
-                      <input
-                        type="checkbox"
-                        checked={config.temporalUnwrap}
-                        onChange={(e) =>
-                          update({ temporalUnwrap: e.target.checked })
-                        }
-                      />
-                      時間相位解包（加投單週期條紋）
-                    </label>
-                  </>
-                )}
+                <InfoHeading title="相位解包 / 量測範圍">
+                  <p>
+                    <strong>時間解包</strong>：f &gt; 1 時加投 N 張 f = 1
+                    條紋，用其相位推算條紋序 k；f 很高時雜訊被放大 f 倍，可能讓
+                    k 算錯。
+                  </p>
+                  <p>
+                    <strong>單週期 + 基準面</strong>（AOI
+                    常用）：以校正基準面上的相位決定 k，只在「視窗底部」往上
+                    一個 2π 對應的高度內正確；超出的高度會混疊（量測範圍）。
+                  </p>
+                  <p>
+                    <strong>粗 / 細雙週期</strong>：加投週期 p₂ = R·p₁
+                    的粗條紋，粗相位放在基準面視窗上再決定細條紋的 k，範圍 = R ×
+                    每 2π 高度；R 越大範圍越大，但粗相位雜訊被放大 R 倍。
+                  </p>
+                  <p>
+                    <strong>雙週期（外差）</strong>：加投週期 p₂ = p₁·比值
+                    的條紋，拍頻把範圍擴大 r/(r−1)
+                    倍，代價是雜訊放大、級次錯誤風險上升。
+                  </p>
+                </InfoHeading>
+                <div
+                  className="sandbox-palette"
+                  role="radiogroup"
+                  aria-label="相位解包方式"
+                >
+                  {(
+                    [
+                      ["temporal", "時間解包"],
+                      ["single", "單週期 + 基準面"],
+                      ["coarse", "粗 / 細雙週期"],
+                      ["dual", "雙週期（外差）"],
+                    ] as const
+                  ).map(([id, title]) => (
+                    <button
+                      key={id}
+                      role="radio"
+                      aria-checked={config.coding === id}
+                      aria-pressed={config.coding === id}
+                      onClick={() =>
+                        update({
+                          coding: id,
+                          fringeFrequency:
+                            id === "dual"
+                              ? config.fringeFrequency
+                              : Math.round(config.fringeFrequency),
+                        })
+                      }
+                    >
+                      {title}
+                    </button>
+                  ))}
+                </div>
+                {(config.coding === "dual" || config.coding === "coarse") &&
+                  field("periodRatio", "週期比 p₂/p₁", { step: 0.01 })}
+                {config.coding !== "temporal" &&
+                  field("windowBottom", "相位視窗底部（相對基準面）", {
+                    step: 0.05,
+                    unit: "mm",
+                  })}
                 <p className="sandbox-note" data-testid="sandbox-frame-count">
                   每次掃描投影 {fringePatterns(config).length} 張
                 </p>
@@ -854,16 +1338,32 @@ export default function Sandbox({
                     1 - config.fringeOffset,
                   ),
                 })}
-                <InfoHeading title="Projector 鏡頭">
+                {field("exposure", "曝光增益", { step: 0.05 })}
+                {field("minModulation", "最低調變 B", {
+                  step: 0.001,
+                  digits: 3,
+                })}
+                <InfoHeading title="失焦（薄透鏡）">
                   <p>
-                    FOV 越小，同樣 160 個 column
-                    集中照在較小的範圍，空間解析度越高，但可能照不到整個物體。
+                    模糊圓 c = f·A·|1/s −
+                    1/s_f|（像素，A＝光圈直徑，在「裝置」分頁設定）；以等二階矩高斯
+                    σ = c/4 近似。Projector 失焦降低條紋對比（MTF =
+                    exp(−2π²σ²/P²)），Camera
+                    失焦以逐像素散佈模糊混合鄰近相位。所有裝置對焦在瞄準點正下方「基準面
+                    + 對焦高度」。
                   </p>
                 </InfoHeading>
-                {field("projectorFov", "Projector FOV", {
-                  step: 1,
-                  unit: "°",
-                  digits: 0,
+                <label className="sandbox-toggle">
+                  <input
+                    type="checkbox"
+                    checked={config.defocus}
+                    onChange={(e) => update({ defocus: e.target.checked })}
+                  />
+                  啟用失焦模型
+                </label>
+                {field("focusHeight", "對焦高度（相對基準面）", {
+                  step: 0.1,
+                  unit: "mm",
                 })}
                 <button
                   className="sandbox-reset"
@@ -871,10 +1371,13 @@ export default function Sandbox({
                     update({
                       fringeFrequency: DEFAULT_WORLD.fringeFrequency,
                       phaseSteps: DEFAULT_WORLD.phaseSteps,
-                      temporalUnwrap: DEFAULT_WORLD.temporalUnwrap,
+                      coding: DEFAULT_WORLD.coding,
+                      periodRatio: DEFAULT_WORLD.periodRatio,
+                      windowBottom: DEFAULT_WORLD.windowBottom,
                       fringeOffset: DEFAULT_WORLD.fringeOffset,
                       fringeAmplitude: DEFAULT_WORLD.fringeAmplitude,
-                      projectorFov: DEFAULT_WORLD.projectorFov,
+                      exposure: DEFAULT_WORLD.exposure,
+                      minModulation: DEFAULT_WORLD.minModulation,
                     })
                   }
                 >
@@ -888,20 +1391,45 @@ export default function Sandbox({
                 {(
                   [
                     [
-                      config.shape === "pcb" ? "PCB 板" : "物體",
+                      config.shape === "pcb"
+                        ? "PCB 板"
+                        : BOARD_SHAPES.includes(config.shape)
+                          ? "板面"
+                          : "物體",
                       "objectAlbedo",
                       "objectSpecular",
                       "objectRoughness",
                     ],
-                    ...(config.shape === "pcb"
+                    ...(config.shape === "pcb" ||
+                    config.shape === "step" ||
+                    config.shape === "chip"
                       ? ([
                           [
-                            "晶片",
+                            config.shape === "step" ? "量規" : "晶片",
                             "chipAlbedo",
                             "chipSpecular",
                             "chipRoughness",
                           ],
-                          ["引腳", "pinAlbedo", "pinSpecular", "pinRoughness"],
+                        ] as const)
+                      : []),
+                    ...(config.shape === "pcb" || config.shape === "chip"
+                      ? ([
+                          [
+                            config.shape === "chip" ? "電極" : "引腳",
+                            "pinAlbedo",
+                            "pinSpecular",
+                            "pinRoughness",
+                          ],
+                        ] as const)
+                      : []),
+                    ...(config.shape === "chip"
+                      ? ([
+                          [
+                            "焊錫",
+                            "solderAlbedo",
+                            "solderSpecular",
+                            "solderRoughness",
+                          ],
                         ] as const)
                       : []),
                     [
@@ -956,10 +1484,14 @@ export default function Sandbox({
                 <button
                   className="sandbox-reset"
                   onClick={() => {
-                    const base =
-                      config.shape === "pcb"
-                        ? { ...DEFAULT_WORLD, ...PCB_SETUP }
-                        : DEFAULT_WORLD;
+                    const base: WorldConfig = {
+                      ...DEFAULT_WORLD,
+                      ...(config.shape === "pcb"
+                        ? PCB_SETUP
+                        : BOARD_SHAPES.includes(config.shape)
+                          ? boardSetup(config.shape)
+                          : {}),
+                    };
                     update({
                       objectAlbedo: base.objectAlbedo,
                       objectSpecular: base.objectSpecular,
@@ -973,6 +1505,9 @@ export default function Sandbox({
                       pinAlbedo: base.pinAlbedo,
                       pinSpecular: base.pinSpecular,
                       pinRoughness: base.pinRoughness,
+                      solderAlbedo: base.solderAlbedo,
+                      solderSpecular: base.solderSpecular,
+                      solderRoughness: base.solderRoughness,
                     });
                   }}
                 >
@@ -1043,7 +1578,7 @@ export default function Sandbox({
                 </label>
                 <button
                   className="sandbox-reset"
-                  onClick={() => update({ ...DEFAULT_WORLD })}
+                  onClick={() => update(structuredClone(DEFAULT_WORLD))}
                 >
                   <RotateCcw size={16} />
                   重設場景參數
@@ -1051,20 +1586,20 @@ export default function Sandbox({
                 <InfoHeading title="模型與簡化">
                   <p>
                     <strong>已實作：</strong>已知 Pinhole Camera–Projector
-                    內外參、Camera ray–mesh 交點（BVH 加速）、Projector
-                    視野與遮擋、Lambert + GGX 材質、Monte Carlo 互反射（1–3
-                    次）、三步 Phase Shifting、單週期 column 解碼、ray–plane
-                    Triangulation、重建點雲與深度誤差。
+                    內外參（可多台，一次掃描一組）、Camera ray–mesh 交點（BVH
+                    加速）、Projector 視野與遮擋、Lambert + GGX 材質、Monte
+                    Carlo 互反射（1–3 次）、薄透鏡失焦、N 步 Phase
+                    Shifting、時間 / 單週期基準面 / 雙週期解包、ray–plane
+                    Triangulation、重建點雲與深度誤差。單位為 mm。
                   </p>
                   <p>
-                    <strong>重要假設：</strong>Projector
-                    視野只投單一完整週期，因此 φ 能唯一對應
-                    column。這不是任意高頻條紋都能直接做的絕對解包裹，也不是
+                    <strong>重要假設：</strong>
+                    校正完美已知；各種解包都是一般的多頻 / 基準面方法，不是
                     Micro PS。
                   </p>
                   <p>
                     <strong>仍未支援：</strong>由棋盤格估計
-                    Calibration、鏡頭失真、Defocus、次表面散射、Gamma、量化。Projector
+                    Calibration、鏡頭失真、次表面散射、Gamma、量化。Projector
                     為點光源且未建模距離衰減，材質為無色、Fresnel 為常數。
                   </p>
                   <p>
@@ -1086,17 +1621,30 @@ export default function Sandbox({
             frame={frame}
             showCloud={showCloud}
             showRays={showRays}
+            overlay={overlay}
             onMove={(x, y, z) => update({ x, y, z })}
-            onDevice={(device, x, y, z) =>
+            onDevice={(kind, id, x, y, z) => setDevice(kind, id, { x, y, z })}
+            onActivate={(kind, id) =>
               update(
-                device === "camera"
-                  ? { cameraX: x, cameraY: y, cameraZ: z }
-                  : { projectorX: x, projectorY: y, projectorZ: z },
+                kind === "camera"
+                  ? { activeCamera: id }
+                  : { activeProjector: id },
               )
             }
           />
           <div className="sandbox-overlay sandbox-overlay-top">
-            <span className="sandbox-chip">觀察視角 · 每格 0.5 m</span>
+            <span className="sandbox-chip">觀察視角 · 每格 12.5 mm</span>
+            {overlay && (
+              <span className="sandbox-chip" data-testid="sandbox-overlay-chip">
+                多視角點雲：{overlay.label}
+                <button
+                  aria-label="移除多視角點雲"
+                  onClick={() => setOverlay(null)}
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            )}
             <div className="sandbox-view-buttons">
               <label>
                 <input
@@ -1188,7 +1736,7 @@ export default function Sandbox({
                 選中像素
               </span>
               <strong data-testid="sandbox-probe-depth">
-                {valid ? `${depth.toFixed(3)} m` : "N/A"}
+                {valid ? `${depth.toFixed(2)} mm` : "N/A"}
               </strong>
               <p>
                 {scan
@@ -1308,7 +1856,7 @@ export default function Sandbox({
                       kind="depth"
                       testId="sandbox-depth"
                     />
-                    <figcaption>重建 Depth（色階 1–10 m）</figcaption>
+                    <figcaption>重建 Depth（色階 25–250 mm）</figcaption>
                   </figure>
                   <figure>
                     <Image
@@ -1330,15 +1878,24 @@ export default function Sandbox({
                   </li>
                   {coding.fringeFrequency > 1 && (
                     <li>
-                      {scan.reconstruction.lowPhase ? (
+                      {coding.coding === "temporal" ? (
                         <>
                           單週期 φ₁ = <b>{f(lowPhase)} rad</b> → 條紋序 k ={" "}
                           <b>{Number.isFinite(order) ? order : "N/A"}</b>
                         </>
+                      ) : coding.coding === "dual" ||
+                        coding.coding === "coarse" ? (
+                        <>
+                          粗週期 φ₂ = <b>{f(lowPhase)} rad</b>，
+                          {coding.coding === "dual" ? "拍頻相位" : "粗相位"}
+                          放在基準面視窗 → k ={" "}
+                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                        </>
                       ) : (
                         <>
-                          未解包：假設 k = <b>0</b>（共 {coding.fringeFrequency}{" "}
-                          個週期）
+                          以基準面視窗（{coding.windowBottom} mm 起）決定 k ={" "}
+                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                          ；超出量測範圍會混疊
                         </>
                       )}
                     </li>
@@ -1348,7 +1905,7 @@ export default function Sandbox({
                   </li>
                   <li>
                     Camera 射線 ∩ 該 column 光平面 →{" "}
-                    <b>{valid ? `${depth.toFixed(3)} m` : "無有效交點"}</b>
+                    <b>{valid ? `${depth.toFixed(2)} mm` : "無有效交點"}</b>
                   </li>
                   <li>
                     與真值差{" "}

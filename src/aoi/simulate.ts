@@ -2,25 +2,23 @@ import { buildTraceScene } from "../sandbox/lightTransport";
 import type { ErrorStats } from "../sandbox/analysis";
 import { errorStats } from "../sandbox/analysis";
 import {
-  cameraPinhole,
+  codingOf,
+  createWorld,
+  pinholesFor,
+  reconstructCaptures,
+  validateWorldConfig,
+  type WorldConfig,
+} from "../sandbox/scanner";
+import {
   enumeratePairs,
   makeGrid,
-  projectorPinhole,
-  validateAoiConfig,
-  type AoiConfig,
   type GridSpec,
   type PairClass,
   type PairInfo,
 } from "./rig";
 import { pairTheory, type PairTheory } from "./sensitivity";
-import { buildAoiScene } from "./scene";
 import { pairSeed, renderPair, traceCamera, type CameraTrace } from "./render";
-import {
-  binToGrid,
-  codingOf,
-  reconstructPair,
-  type HeightMap,
-} from "./reconstruct";
+import { binToGrid, type HeightMap } from "./reconstruct";
 import {
   buildTruthMap,
   evaluatePair,
@@ -66,35 +64,31 @@ export interface PairRun {
 }
 
 export interface AoiRun {
-  config: AoiConfig;
+  config: WorldConfig;
   grid: GridSpec;
   truth: TruthMap;
   pairs: PairRun[];
   timing: { sceneMs: number; truthMs: number; totalMs: number };
 }
 
+const pinholesOf = (config: WorldConfig, pair: PairInfo) =>
+  pinholesFor(
+    config,
+    config.cameras[pair.cameraIndex],
+    config.projectors[pair.projectorIndex],
+  );
+
 /** Calibration-only characterisation of every pair (no scene, no truth). */
-export function theoryForAll(config: AoiConfig) {
-  validateAoiConfig(config);
-  const cameras = config.cameras.map((d) =>
-      cameraPinhole(d, config.cameraWidth),
-    ),
-    projectors = config.projectors.map((d) =>
-      projectorPinhole(d, config.projectorWidth),
-    );
-  return enumeratePairs(config).map((pair) => ({
-    pair,
-    theory: pairTheory(
-      config,
-      pair,
-      cameras[pair.cameraIndex],
-      projectors[pair.projectorIndex],
-    ),
-  }));
+export function theoryForAll(config: WorldConfig) {
+  validateWorldConfig(config);
+  return enumeratePairs(config).map((pair) => {
+    const { camera, projector } = pinholesOf(config, pair);
+    return { pair, theory: pairTheory(config, pair, camera, projector) };
+  });
 }
 
 export function runAoi(
-  config: AoiConfig,
+  config: WorldConfig,
   pairIds: readonly string[] | null = null,
   onProgress?: (fraction: number, label: string) => void,
 ): AoiRun {
@@ -105,7 +99,7 @@ export function runAoi(
   );
   if (!selected.length) throw new RangeError("No pair selected");
   const grid = makeGrid(config);
-  const world = buildAoiScene(config);
+  const world = createWorld(config);
   const scene = buildTraceScene(world.meshes);
   const sceneMs = now() - start;
   try {
@@ -119,8 +113,7 @@ export function runAoi(
       onProgress?.(index / selected.length, pair.id);
       const cameraDevice = config.cameras[pair.cameraIndex],
         projectorDevice = config.projectors[pair.projectorIndex],
-        camera = cameraPinhole(cameraDevice, config.cameraWidth),
-        projector = projectorPinhole(projectorDevice, config.projectorWidth);
+        { camera, projector } = pinholesOf(config, pair);
       let cached = traces.get(pair.cameraIndex);
       if (!cached) {
         const t = now();
@@ -142,7 +135,7 @@ export function runAoi(
       const renderMs = now() - t;
       t = now();
       // Explicit field-only payload: truth and visibility never cross this boundary.
-      const reconstruction = reconstructPair(
+      const reconstruction = reconstructCaptures(
         {
           width: captures.width,
           height: captures.height,
@@ -156,12 +149,17 @@ export function runAoi(
       const map = binToGrid(reconstruction, grid);
       const reconstructMs = now() - t;
       t = now();
+      const decoded = reconstruction.phase.valid.map((v, i) =>
+        v && (!reconstruction.lowPhase || reconstruction.lowPhase.valid[i])
+          ? 1
+          : 0,
+      );
       const evaluation = evaluatePair(
         scene,
         grid,
         truth,
         map,
-        reconstruction,
+        decoded,
         captures.clipped,
         camera,
         projector,
@@ -186,7 +184,7 @@ export function runAoi(
           width: captures.width,
           height: captures.height,
           frame: Float32Array.from(captures.frames[0]),
-          modulation: Float32Array.from(reconstruction.modulation),
+          modulation: Float32Array.from(reconstruction.phase.modulation),
           valid: reconstruction.valid,
         },
         evaluation,
@@ -330,7 +328,7 @@ export const SWEEP_VARIABLES = [
   ["fringeFrequency", "細條紋頻率 f₁（週期數）"],
   ["periodRatio", "週期比 p₂/p₁（雙週期）"],
   ["noiseSigma", "Camera 雜訊 σ"],
-  ["planeHeight", "平面高度 mm（平面場景）"],
+  ["y", "物體高度 Y mm（平面場景即平面高度）"],
   ["windowBottom", "相位視窗底部 mm"],
 ] as const;
 export type SweepVariable = (typeof SWEEP_VARIABLES)[number][0];
@@ -345,9 +343,9 @@ export interface SweepRow {
   coverage: number;
   failureRatio: number;
   grossRatio: number;
-  /** Median measured height over measured cells, mm. */
+  /** Median measured height over measured cells, relative to the reference plane, mm. */
   medianHeight: number;
-  /** Median truth height over surface cells (evaluation), mm. */
+  /** Median truth height over surface cells (evaluation), relative to the reference plane, mm. */
   truthHeight: number;
   theoryRange: number;
   theorySigma: number;
@@ -363,7 +361,7 @@ const median = (values: ArrayLike<number>) => {
 
 /** Batch comparison: rerun the selected pairs and the three strategies for each value. */
 export function runSweep(
-  config: AoiConfig,
+  config: WorldConfig,
   pairIds: readonly string[] | null,
   variable: SweepVariable,
   values: readonly number[],
@@ -379,7 +377,7 @@ export function runSweep(
         `${variable}=${value} · ${label}`,
       ),
     );
-    const truthHeight = median(run.truth.mean);
+    const truthHeight = median(run.truth.mean) - variant.referenceHeight;
     for (const p of run.pairs) {
       const e = p.evaluation;
       rows.push({
@@ -392,7 +390,7 @@ export function runSweep(
         coverage: e.coverage,
         failureRatio: e.failureRatio,
         grossRatio: e.surfaceCells ? e.grossCells / e.surfaceCells : NaN,
-        medianHeight: median(p.map.height),
+        medianHeight: median(p.map.height) - variant.referenceHeight,
         truthHeight,
         theoryRange: p.theory.codingRange,
         theorySigma: p.theory.sigmaHeight,
@@ -418,7 +416,7 @@ export function runSweep(
         grossRatio: score.surfaceCells
           ? score.grossCells / score.surfaceCells
           : NaN,
-        medianHeight: median(s.map.height),
+        medianHeight: median(s.map.height) - variant.referenceHeight,
         truthHeight,
         theoryRange: NaN,
         theorySigma: NaN,

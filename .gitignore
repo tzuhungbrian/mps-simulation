@@ -4,6 +4,8 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 .local/
+# Machine-specific / confidential presets (e.g. vendor AOI data); never commit.
+src/local/
 coverage/
 .cache/
 *.log

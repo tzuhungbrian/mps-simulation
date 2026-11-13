@@ -100,7 +100,7 @@ test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度"
   ).toBe(first);
   await page
     .getByRole("slider", { name: "物體 X 位置", exact: true })
-    .fill("0.4");
+    .fill("10");
   await expect(page.getByTestId("sandbox-status")).toContainText("場景已改");
   // Parameter changes rescan automatically after a short pause.
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
@@ -114,13 +114,13 @@ test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度"
     .poll(() => canvas.evaluate((c: HTMLCanvasElement) => c.toDataURL()))
     .not.toBe(beforePan);
   await page.keyboard.up("KeyD");
-  await expect(page.getByTestId("sandbox-object-x")).toHaveValue("0.40");
+  await expect(page.getByTestId("sandbox-object-x")).toHaveValue("10.00");
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
-  await page.getByRole("spinbutton", { name: "物體 Z 位置 數值" }).fill("-0.5");
+  await page.getByRole("spinbutton", { name: "物體 Z 位置 數值" }).fill("-12.5");
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("slider", { name: "物體 Z 位置", exact: true }),
-  ).toHaveValue("-0.5");
+  ).toHaveValue("-12.5");
   await page.getByRole("button", { name: "方塊", exact: true }).click();
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
   await page.getByRole("button", { name: "V 型槽", exact: true }).click();
@@ -128,8 +128,8 @@ test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度"
     .getByRole("slider", { name: "V 型槽夾角", exact: true })
     .fill("60");
   await openTab(page, "裝置");
-  await page.getByRole("slider", { name: "Camera X", exact: true }).fill("-2");
-  await expect(page.getByTestId("sandbox-baseline")).toContainText("5.27");
+  await page.getByRole("slider", { name: "Camera X", exact: true }).fill("-50");
+  await expect(page.getByTestId("sandbox-baseline")).toContainText("131.8");
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
   expect(
     Number(await page.getByTestId("sandbox-valid-count").textContent()),
@@ -188,39 +188,35 @@ test("投影條紋可調頻率與步數，高頻靠時間解包重建，且可�
   await openTab(page, "投影");
   const count = page.getByTestId("sandbox-frame-count");
   await expect(count).toContainText("3 張");
-  await page
-    .getByRole("slider", { name: "條紋頻率 f", exact: true })
-    .fill("8");
+  await page.getByRole("slider", { name: "條紋頻率 f", exact: true }).fill("8");
   await expect(count).toContainText("6 張");
   await expect(status).toContainText("掃描完成");
   await expect(page.getByTestId("sandbox-capture-5")).toBeVisible();
   await expect(page.getByTestId("sandbox-low-phase")).toBeVisible();
-  const unwrap = page.getByRole("checkbox", { name: /時間相位解包/ });
-  await unwrap.uncheck();
+  const single = page.getByRole("radio", { name: "單週期 + 基準面" });
+  const temporal = page.getByRole("radio", { name: "時間解包" });
+  await single.click();
   await expect(count).toContainText("3 張");
   await expect(status).toContainText("掃描完成");
   await expect(page.getByTestId("sandbox-low-phase")).toHaveCount(0);
-  await page
-    .getByRole("slider", { name: "相移步數 N", exact: true })
-    .fill("5");
+  await page.getByRole("slider", { name: "相移步數 N", exact: true }).fill("5");
   await expect(count).toContainText("5 張");
   await expect(status).toContainText("掃描完成");
   await expect(page.getByTestId("sandbox-capture-4")).toBeVisible();
   await page.keyboard.press("Control+z");
   await expect(count).toContainText("3 張");
   await page.keyboard.press("Control+z");
-  await expect(unwrap).toBeChecked();
+  await expect(temporal).toHaveAttribute("aria-checked", "true");
   await expect(count).toContainText("6 張");
   await page.keyboard.press("Control+z");
   await expect(count).toContainText("3 張");
-  await expect(unwrap).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "復原", exact: true }),
   ).toBeDisabled();
   await page.keyboard.press("Control+Shift+z");
   await expect(count).toContainText("6 張");
   await page.getByRole("button", { name: "重做", exact: true }).click();
-  await expect(unwrap).not.toBeChecked();
+  await expect(single).toHaveAttribute("aria-checked", "true");
   await expect(status).toContainText("掃描完成");
 });
 
@@ -238,7 +234,7 @@ test("開啟互反射後在背景 Worker 掃描，並對照無互反射的 RMSE"
   await page.getByRole("button", { name: "V 型槽", exact: true }).click();
   // Raise the projector above the groove rim so both walls are lit.
   await openTab(page, "裝置");
-  await page.getByRole("spinbutton", { name: "Projector Y 數值" }).fill("3");
+  await page.getByRole("spinbutton", { name: "Projector Y 數值" }).fill("75");
   await page.keyboard.press("Enter");
   await openTab(page, "材質");
   await page.getByRole("checkbox", { name: "互反射（間接光）" }).check();
@@ -304,10 +300,10 @@ test("點雲分析頁顯示誤差統計，PCB 顯示逐引腳結果", async ({ p
   const shapeInfo = page.getByRole("button", { name: "形狀說明" });
   await expect(shapeInfo).toHaveCount(0);
   await page.getByRole("button", { name: "PCB 板", exact: true }).click();
-  await expect(page.getByText("放大模型")).toBeHidden();
+  await expect(page.getByText("真實尺寸 PCB")).toBeHidden();
   await shapeInfo.click();
   await expect(shapeInfo).toHaveAttribute("aria-expanded", "true");
-  await expect(page.getByText("放大模型")).toBeVisible();
+  await expect(page.getByText("真實尺寸 PCB")).toBeVisible();
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成", {
     timeout: 30000,
   });

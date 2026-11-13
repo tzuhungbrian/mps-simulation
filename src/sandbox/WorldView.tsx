@@ -9,9 +9,14 @@ import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { createViewControls } from "./viewControls";
 import {
+  BOARD_SHAPES,
   createWorld,
+  DEVICE_LIMITS,
   fringePatterns,
   getRig,
+  LEGACY_UNIT_MM,
+  pinholesFor,
+  rigTarget,
   validateWorldConfig,
   WORLD_LIMITS,
   type WorldConfig,
@@ -21,23 +26,31 @@ import { cameraRay, type Pinhole } from "./geometry";
 
 type Scan = ReturnType<typeof runWorldScan>;
 export type RigDevice = "camera" | "projector";
-type Selection = "object" | RigDevice;
-const RIG_KEYS = [
-  "x",
-  "y",
-  "z",
-  "cameraX",
-  "cameraY",
-  "cameraZ",
-  "projectorX",
-  "projectorY",
-  "projectorZ",
-  "cameraFov",
-  "projectorFov",
-] as const;
+type Selection = "object" | { kind: RigDevice; id: string };
+/** The 3D view keeps its original scale: one display unit is 25 mm. */
+const DISPLAY = 1 / LEGACY_UNIT_MM;
+const rigKey = (c: WorldConfig) =>
+  JSON.stringify([
+    c.x,
+    c.y,
+    c.z,
+    c.aimX,
+    c.aimZ,
+    c.cameras,
+    c.projectors,
+    c.activeCamera,
+    c.activeProjector,
+    c.projectorWidth,
+  ]);
 export interface WorldViewApi {
   resetView: () => void;
   snapshot: () => Promise<Blob>;
+}
+export interface OverlayCloud {
+  /** World points (x, y, z) in mm. */
+  points: Float32Array;
+  /** Height colour range in world Y, mm. */
+  range: [number, number];
 }
 interface Props {
   config: WorldConfig;
@@ -46,10 +59,20 @@ interface Props {
   frame: number;
   showCloud: boolean;
   showRays: boolean;
+  /** Multi-view result shown in the same space (a pair or a fusion). */
+  overlay?: OverlayCloud | null;
   onMove: (x: number, y: number, z: number) => void;
-  onDevice: (device: RigDevice, x: number, y: number, z: number) => void;
+  onDevice: (
+    kind: RigDevice,
+    id: string,
+    x: number,
+    y: number,
+    z: number,
+  ) => void;
+  onActivate: (kind: RigDevice, id: string) => void;
 }
 const v = (p: ArrayLike<number>) => new THREE.Vector3(p[0], p[1], p[2]);
+const display = (p: ArrayLike<number>) => v(p).multiplyScalar(DISPLAY);
 function opticalCamera(p: Pinhole) {
   const c = new THREE.PerspectiveCamera(
     (2 * Math.atan(p.height / (2 * p.fy)) * 180) / Math.PI,
@@ -57,9 +80,9 @@ function opticalCamera(p: Pinhole) {
     0.05,
     25,
   );
-  c.position.copy(v(p.position));
+  c.position.copy(display(p.position));
   c.up.copy(v(p.up));
-  c.lookAt(v(p.position).add(v(p.forward)));
+  c.lookAt(display(p.position).add(v(p.forward)));
   c.updateMatrixWorld(true);
   return c;
 }
@@ -130,20 +153,32 @@ const WorldView = forwardRef<WorldViewApi, Props>(
       );
       const view = createViewControls(viewer, canvas, {
         home: (orbit) => {
-          orbit.target.set(0, 1, 1.8);
-          const distanceScale = Math.max(0.8, 1.25 / viewer.aspect);
+          const p = latest.current;
+          // Millimetre-scale AOI pieces and multi-view clouds need a close look at the aim point.
+          const close =
+            !!p.overlay || BOARD_SHAPES.includes(p.config.shape);
+          const distanceScale =
+            Math.max(0.8, 1.25 / viewer.aspect) * (close ? 0.22 : 1);
+          if (close) orbit.target.copy(display(rigTarget(p.config)));
+          else orbit.target.set(0, 1, 1.8);
           viewer.position
             .copy(orbit.target)
             .add(
               new THREE.Vector3(5.2, 2.8, 5.4).multiplyScalar(distanceScale),
             );
         },
+        minDistance: 0.3,
       });
       const { orbit, reset } = view;
       reset();
+      // scanRoot and measured are in millimetres; housings and helpers in display units.
       const scanRoot = new THREE.Group(),
+        measured = new THREE.Group(),
         helpers = new THREE.Group();
+      scanRoot.scale.setScalar(DISPLAY);
+      measured.scale.setScalar(DISPLAY);
       scene.add(scanRoot, helpers);
+      helpers.add(measured);
       const grid = new THREE.GridHelper(12, 24, "#52708a", "#25394e");
       grid.position.y = 0.008;
       helpers.add(grid);
@@ -193,25 +228,54 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         shadowDirty = true,
         lastScan: Scan | null = null,
         lastProbe = -1,
-        lastRays = false;
-      const cameraHousing = new THREE.Group(),
-        projectorHousing = new THREE.Group();
-      helpers.add(cameraHousing, projectorHousing);
-      const device = (group: THREE.Group, color: string) => {
-        const body = new THREE.Mesh(
-          new THREE.BoxGeometry(0.45, 0.3, 0.36),
-          new THREE.MeshBasicMaterial({ color: "#233c52" }),
-        );
-        const lens = new THREE.Mesh(
+        lastRays = false,
+        lastOverlay: OverlayCloud | null | undefined = undefined,
+        lastRigKey = "";
+      const housings = new THREE.Group();
+      helpers.add(housings);
+      const housingOf = new Map<
+        THREE.Object3D,
+        { kind: RigDevice; id: string }
+      >();
+      const models = new Map<
+        string,
+        {
+          group: THREE.Group;
+          body: THREE.MeshBasicMaterial;
+          lens: THREE.MeshBasicMaterial;
+        }
+      >();
+      const deviceModel = (color: string) => {
+        const group = new THREE.Group();
+        const body = new THREE.MeshBasicMaterial({ color: "#233c52" }),
+          lens = new THREE.MeshBasicMaterial({ color });
+        const lensMesh = new THREE.Mesh(
           new THREE.CylinderGeometry(0.105, 0.105, 0.17, 24),
-          new THREE.MeshBasicMaterial({ color }),
+          lens,
         );
-        lens.rotation.x = Math.PI / 2;
-        lens.position.z = 0.25;
-        group.add(body, lens);
+        lensMesh.rotation.x = Math.PI / 2;
+        lensMesh.position.z = 0.25;
+        group.add(
+          new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 0.36), body),
+          lensMesh,
+        );
+        return { group, body, lens };
       };
-      device(cameraHousing, "#69d9ff");
-      device(projectorHousing, "#ffce72");
+      const styleModel = (
+        m: {
+          group: THREE.Group;
+          body: THREE.MeshBasicMaterial;
+          lens: THREE.MeshBasicMaterial;
+        },
+        active: boolean,
+      ) => {
+        m.body.color.set(active ? "#233c52" : "#1a2938");
+        for (const material of [m.body, m.lens]) {
+          material.transparent = !active;
+          material.opacity = active ? 1 : 0.6;
+        }
+        m.group.scale.setScalar(active ? 1 : 0.7);
+      };
       const rigLines = new THREE.Group(),
         rays = new THREE.Group(),
         cloud = new THREE.Points(
@@ -223,20 +287,32 @@ const WorldView = forwardRef<WorldViewApi, Props>(
             opacity: 0.83,
             depthTest: false,
           }),
+        ),
+        overlayCloud = new THREE.Points(
+          new THREE.BufferGeometry(),
+          new THREE.PointsMaterial({
+            size: 0.03,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.9,
+            depthTest: false,
+          }),
         );
-      helpers.add(rigLines, rays, cloud);
+      measured.add(rigLines, rays, cloud, overlayCloud);
       cloud.renderOrder = 8;
+      overlayCloud.renderOrder = 8;
       const transform = new TransformControls(viewer, canvas);
       transform.setMode("translate");
       transform.setSize(0.7);
-      transform.setTranslationSnap(0.05);
       transform.attach(world.object);
       helpers.add(transform.getHelper());
+      const snap = () =>
+        transform.setTranslationSnap(selected === "object" ? 1.25 : 0.05);
       const clampPose = () => {
         const p = world.object.position;
-        p.x = THREE.MathUtils.clamp(p.x, -2, 2);
-        p.y = THREE.MathUtils.clamp(p.y, 0.65, 2.5);
-        p.z = THREE.MathUtils.clamp(p.z, -2, 2);
+        p.x = THREE.MathUtils.clamp(p.x, ...WORLD_LIMITS.x);
+        p.y = THREE.MathUtils.clamp(p.y, ...WORLD_LIMITS.y);
+        p.z = THREE.MathUtils.clamp(p.z, ...WORLD_LIMITS.z);
         latest.current.onMove(p.x, p.y, p.z);
         shadowDirty = true;
       };
@@ -244,34 +320,40 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         orbit.enabled = !e.value;
       });
       let selected: Selection = "object";
+      snap();
+      const housingFor = (s: Exclude<Selection, "object">) =>
+        [...housingOf].find(
+          ([, d]) => d.kind === s.kind && d.id === s.id,
+        )?.[0] ?? null;
       const selectionTarget = (s: Selection) =>
-        s === "object"
-          ? world.object
-          : s === "camera"
-            ? cameraHousing
-            : projectorHousing;
+        s === "object" ? world.object : (housingFor(s) ?? world.object);
       const onTransform = () => {
         if (selected === "object") return clampPose();
-        const keys =
-          selected === "camera"
-            ? (["cameraX", "cameraY", "cameraZ"] as const)
-            : (["projectorX", "projectorY", "projectorZ"] as const);
-        const p = selectionTarget(selected).position;
-        p.x = THREE.MathUtils.clamp(p.x, ...WORLD_LIMITS[keys[0]]);
-        p.y = THREE.MathUtils.clamp(p.y, ...WORLD_LIMITS[keys[1]]);
-        p.z = THREE.MathUtils.clamp(p.z, ...WORLD_LIMITS[keys[2]]);
+        const target = housingFor(selected);
+        if (!target) return;
+        const list =
+          selected.kind === "camera" ? current.cameras : current.projectors;
+        const device = list.find(
+          (d) => d.id === (selected as { id: string }).id,
+        );
+        if (!device) return;
+        const mm = target.position.clone().divideScalar(DISPLAY);
+        mm.x = THREE.MathUtils.clamp(mm.x, ...DEVICE_LIMITS.x);
+        mm.y = THREE.MathUtils.clamp(mm.y, ...DEVICE_LIMITS.y);
+        mm.z = THREE.MathUtils.clamp(mm.z, ...DEVICE_LIMITS.z);
+        const key = selected.kind === "camera" ? "cameras" : "projectors";
         try {
           validateWorldConfig({
             ...current,
-            [keys[0]]: p.x,
-            [keys[1]]: p.y,
-            [keys[2]]: p.z,
+            [key]: list.map((d) =>
+              d === device ? { ...d, x: mm.x, y: mm.y, z: mm.z } : d,
+            ),
           });
         } catch {
-          p.set(current[keys[0]], current[keys[1]], current[keys[2]]);
+          target.position.copy(display([device.x, device.y, device.z]));
           return;
         }
-        latest.current.onDevice(selected, p.x, p.y, p.z);
+        latest.current.onDevice(selected.kind, device.id, mm.x, mm.y, mm.z);
       };
       transform.addEventListener("objectChange", onTransform);
       const clearGroup = (group: THREE.Group) => {
@@ -294,7 +376,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         );
       const frustum = (p: Pinhole, color: string) => {
         const origin = v(p.position),
-          distance = 2.4;
+          distance = 2.4 / DISPLAY;
         const corners = [
           [-0.5, -0.5],
           [p.width - 0.5, -0.5],
@@ -306,6 +388,11 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         for (const c of corners) rigLines.add(line([origin, c], color, 0.4));
         rigLines.add(line([...corners, corners[0]], color, 0.6));
       };
+      const place = (group: THREE.Object3D, p: Pinhole) => {
+        group.position.copy(display(p.position));
+        group.up.copy(v(p.up));
+        group.lookAt(display(p.position).add(v(p.forward)));
+      };
       const updateRig = () => {
         rig = getRig(current);
         projector = opticalCamera(rig.projector);
@@ -313,16 +400,57 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           projector.projectionMatrix,
           projector.matrixWorldInverse,
         );
-        shared.projectorPosition.value.copy(v(rig.projector.position));
-        cameraHousing.position.copy(v(rig.camera.position));
-        cameraHousing.up.copy(v(rig.camera.up));
-        cameraHousing.lookAt(v(rig.camera.position).add(v(rig.camera.forward)));
-        projectorHousing.position.copy(v(rig.projector.position));
-        projectorHousing.up.copy(v(rig.projector.up));
-        projectorHousing.lookAt(
-          v(rig.projector.position).add(v(rig.projector.forward)),
-        );
+        shared.projectorPosition.value.copy(display(rig.projector.position));
         clearGroup(rigLines);
+        const seen = new Set<string>();
+        for (const [kind, list, active, color] of [
+          ["camera", current.cameras, current.activeCamera, "#69d9ff"],
+          ["projector", current.projectors, current.activeProjector, "#ffce72"],
+        ] as const)
+          for (const device of list) {
+            const key = `${kind}:${device.id}`,
+              on = device.id === active;
+            seen.add(key);
+            let model = models.get(key);
+            if (!model) {
+              model = deviceModel(color);
+              models.set(key, model);
+              housings.add(model.group);
+              housingOf.set(model.group, { kind, id: device.id });
+            }
+            styleModel(model, on);
+            const pinholes = pinholesFor(
+              current,
+              kind === "camera" ? device : current.cameras[0],
+              kind === "projector" ? device : current.projectors[0],
+            );
+            place(
+              model.group,
+              kind === "camera" ? pinholes.camera : pinholes.projector,
+            );
+            if (!on)
+              rigLines.add(
+                line(
+                  [v([device.x, device.y, device.z]), v(rigTarget(current))],
+                  color,
+                  0.18,
+                ),
+              );
+          }
+        for (const [key, model] of models)
+          if (!seen.has(key)) {
+            if (transform.object === model.group) {
+              selected = "object";
+              transform.attach(world.object);
+              snap();
+            }
+            housings.remove(model.group);
+            housingOf.delete(model.group);
+            model.group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+            model.body.dispose();
+            model.lens.dispose();
+            models.delete(key);
+          }
         frustum(rig.camera, "#63cefa");
         frustum(rig.projector, "#ffd17b");
         rigLines.add(
@@ -334,13 +462,10 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         );
         shadowDirty = true;
       };
-      updateRig();
       const cameraLabel = document.createElement("span"),
         projectorLabel = document.createElement("span");
       cameraLabel.className = "sandbox-world-label camera";
       projectorLabel.className = "sandbox-world-label projector";
-      cameraLabel.textContent = "Camera";
-      projectorLabel.textContent = "Projector";
       parent.append(cameraLabel, projectorLabel);
       const render = () => {
         if (shadowDirty) {
@@ -363,7 +488,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           [cameraLabel, rig.camera.position],
           [projectorLabel, rig.projector.position],
         ] as const) {
-          const p = v(position)
+          const p = display(position)
             .add(new THREE.Vector3(0, 0.36, 0))
             .project(viewer);
           element.style.left = `${(p.x * 0.5 + 0.5) * parent.clientWidth}px`;
@@ -371,33 +496,56 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           element.hidden = p.z > 1;
         }
       };
-      const rebuildCloud = (scan: Scan | null) => {
-        cloud.geometry.dispose();
-        const positions: number[] = [],
-          colors: number[] = [];
-        if (scan) {
-          for (let i = 0; i < scan.reconstruction.valid.length; i++) {
-            if (!scan.reconstruction.valid[i]) continue;
-            const point = scan.reconstruction.points.subarray(i * 3, i * 3 + 3);
-            positions.push(...point);
-            const color = new THREE.Color().setHSL(
-              0.52 - Math.min(2.5, Math.max(0, point[1])) * 0.15,
-              0.85,
-              0.6,
-            );
-            colors.push(color.r, color.g, color.b);
-          }
+      const setCloud = (
+        target: THREE.Points,
+        positions: ArrayLike<number>,
+        colorOf: (y: number) => THREE.Color,
+      ) => {
+        target.geometry.dispose();
+        const colors = new Float32Array(positions.length);
+        for (let i = 0; i < positions.length; i += 3) {
+          const c = colorOf(positions[i + 1]);
+          colors.set([c.r, c.g, c.b], i);
         }
-        cloud.geometry = new THREE.BufferGeometry();
-        cloud.geometry.setAttribute(
+        target.geometry = new THREE.BufferGeometry();
+        target.geometry.setAttribute(
           "position",
-          new THREE.Float32BufferAttribute(positions, 3),
+          new THREE.Float32BufferAttribute(Array.from(positions), 3),
         );
-        cloud.geometry.setAttribute(
+        target.geometry.setAttribute(
           "color",
           new THREE.Float32BufferAttribute(colors, 3),
         );
-        cloud.geometry.computeBoundingSphere();
+        target.geometry.computeBoundingSphere();
+      };
+      const rebuildCloud = (scan: Scan | null) => {
+        const positions: number[] = [];
+        if (scan)
+          for (let i = 0; i < scan.reconstruction.valid.length; i++)
+            if (scan.reconstruction.valid[i])
+              positions.push(
+                ...scan.reconstruction.points.subarray(i * 3, i * 3 + 3),
+              );
+        setCloud(cloud, positions, (y) =>
+          new THREE.Color().setHSL(
+            0.52 - Math.min(2.5, Math.max(0, y * DISPLAY)) * 0.15,
+            0.85,
+            0.6,
+          ),
+        );
+      };
+      const rebuildOverlay = (overlay: OverlayCloud | null | undefined) => {
+        const [lo, hi] = overlay?.range ?? [0, 1];
+        setCloud(overlayCloud, overlay?.points ?? [], (y) =>
+          new THREE.Color().setHSL(
+            0.66 -
+              0.66 *
+                Math.min(1, Math.max(0, (y - lo) / Math.max(1e-6, hi - lo))),
+            0.9,
+            0.58,
+          ),
+        );
+        overlayCloud.visible = !!overlay;
       };
       const rebuildRays = (p: Props) => {
         clearGroup(rays);
@@ -410,23 +558,24 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         rays.add(line([v(scan.camera.position), point], "#6bd9ff"));
         rays.add(line([v(scan.projector.position), point], "#ffd278"));
         const marker = new THREE.Mesh(
-          new THREE.SphereGeometry(0.065, 16, 12),
+          new THREE.SphereGeometry(0.065 / DISPLAY, 16, 12),
           new THREE.MeshBasicMaterial({ color: "#ff8c73", depthTest: false }),
         );
         marker.position.copy(point);
         marker.renderOrder = 9;
         rays.add(marker);
         const u = scan.reconstruction.column[p.probe],
-          origin = v(scan.projector.position);
+          origin = v(scan.projector.position),
+          reach = 6 / DISPLAY;
         const top = origin
             .clone()
-            .add(v(cameraRay(scan.projector, u, -0.5)).multiplyScalar(6)),
+            .add(v(cameraRay(scan.projector, u, -0.5)).multiplyScalar(reach)),
           bottom = origin
             .clone()
             .add(
               v(
                 cameraRay(scan.projector, u, scan.projector.height - 0.5),
-              ).multiplyScalar(6),
+              ).multiplyScalar(reach),
             );
         const geometry = new THREE.BufferGeometry().setFromPoints([
           origin,
@@ -466,7 +615,6 @@ const WorldView = forwardRef<WorldViewApi, Props>(
             p.config.shape !== current.shape ||
             (p.config.shape === "vgroove" &&
               p.config.grooveAngle !== current.grooveAngle);
-          const rigChanged = RIG_KEYS.some((k) => p.config[k] !== current[k]);
           if (shapeChanged) {
             transform.detach();
             scanRoot.remove(world.scene);
@@ -477,6 +625,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
             adopt();
             transform.attach(selectionTarget(selected));
             shadowDirty = true;
+            if (!view.userMoved) reset();
           }
           if (
             current.x !== p.config.x ||
@@ -487,7 +636,19 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           current = p.config;
           world.object.position.set(current.x, current.y, current.z);
           world.scene.updateMatrixWorld(true);
-          if (rigChanged) updateRig();
+          const key = rigKey(current);
+          if (key !== lastRigKey) {
+            lastRigKey = key;
+            updateRig();
+          }
+          cameraLabel.textContent =
+            current.cameras.length > 1
+              ? `Camera ${current.activeCamera}`
+              : "Camera";
+          projectorLabel.textContent =
+            current.projectors.length > 1
+              ? `Projector ${current.activeProjector}`
+              : "Projector";
           const patterns = fringePatterns(current),
             pattern = patterns[Math.min(p.frame, patterns.length - 1)];
           shared.phaseShift.value = pattern.shift;
@@ -512,6 +673,11 @@ const WorldView = forwardRef<WorldViewApi, Props>(
             lastProbe = -1;
           }
           cloud.visible = p.showCloud && !!p.scan;
+          if (lastOverlay !== p.overlay) {
+            rebuildOverlay(p.overlay);
+            if (lastOverlay !== undefined) reset();
+            lastOverlay = p.overlay;
+          }
           if (lastProbe !== p.probe || lastRays !== p.showRays || !p.scan) {
             rebuildRays(p);
             lastProbe = p.probe;
@@ -532,26 +698,24 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           -((e.clientY - r.top) / r.height) * 2 + 1,
         );
         picker.setFromCamera(pointer, viewer);
+        const candidates = [world.object, ...housingOf.keys()];
         let hit: THREE.Object3D | null =
-          picker.intersectObjects(
-            [world.object, cameraHousing, projectorHousing],
-            true,
-          )[0]?.object ?? null;
-        while (
-          hit &&
-          hit !== world.object &&
-          hit !== cameraHousing &&
-          hit !== projectorHousing
-        )
+          picker.intersectObjects(candidates, true)[0]?.object ?? null;
+        while (hit && hit !== world.object && !housingOf.has(hit))
           hit = hit.parent;
         if (!hit) return;
-        selected =
-          hit === cameraHousing
-            ? "camera"
-            : hit === projectorHousing
-              ? "projector"
-              : "object";
+        const device = housingOf.get(hit);
+        selected = device ?? "object";
         transform.attach(selectionTarget(selected));
+        snap();
+        if (device) {
+          const active =
+            device.kind === "camera"
+              ? current.activeCamera
+              : current.activeProjector;
+          if (device.id !== active)
+            latest.current.onActivate(device.kind, device.id);
+        }
         render();
       };
       canvas.addEventListener("pointerdown", pick);

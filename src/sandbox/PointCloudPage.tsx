@@ -7,15 +7,22 @@ import {
 } from "react";
 import { RotateCcw } from "lucide-react";
 import * as THREE from "three";
-import { createWorld, type WorldConfig, type WorldScan } from "./scanner";
+import {
+  createWorld,
+  LEGACY_UNIT_MM,
+  type WorldConfig,
+  type WorldScan,
+} from "./scanner";
 import { analyzeScan, FAILURE_CAUSES, type ScanAnalysis } from "./analysis";
 import { PCB_PINS, SURFACE } from "./pcb";
 import { createViewControls } from "./viewControls";
 import { InfoButton, InfoHeading } from "./Info";
 
 type ColorMode = "error" | "height" | "surface";
-const SURFACE_COLORS = ["#5bbdcd", "#7d8a99", "#b7a0fa", "#ffcf6e"];
-const mm = (m: number) => (m * 1000).toFixed(m < 0.01 ? 3 : 1);
+const SURFACE_COLORS = ["#5bbdcd", "#7d8a99", "#b7a0fa", "#ffcf6e", "#e0e6ee"];
+const mm = (v: number) => v.toFixed(v < 10 ? 3 : 1);
+/** Scene data are in mm; the view keeps its original scale of 25 mm per display unit. */
+const DISPLAY = 1 / LEGACY_UNIT_MM;
 const STATUS = {
   success: ["成功", "ok"],
   partial: ["部分", "warn"],
@@ -74,6 +81,9 @@ function PointCloudView({
     );
     const grid = new THREE.GridHelper(12, 48, "#3e5870", "#1d2e3f");
     scene.add(grid);
+    const root = new THREE.Group();
+    root.scale.setScalar(DISPLAY);
+    scene.add(root);
 
     const positions: number[] = [],
       colors: number[] = [];
@@ -89,7 +99,7 @@ function PointCloudView({
         color.set(SURFACE_COLORS[capture.surface[i]] ?? "#ffffff");
       else if (colorMode === "height")
         color.setHSL(
-          0.66 - Math.min(1, Math.max(0, p[1] / 2.5)) * 0.66,
+          0.66 - Math.min(1, Math.max(0, (p[1] * DISPLAY) / 2.5)) * 0.66,
           0.8,
           0.55,
         );
@@ -117,7 +127,7 @@ function PointCloudView({
         vertexColors: true,
       }),
     );
-    scene.add(points);
+    root.add(points);
 
     const world = createWorld(config);
     const truthMaterial = new THREE.MeshBasicMaterial({
@@ -130,15 +140,17 @@ function PointCloudView({
     truth.matrixAutoUpdate = false;
     truth.matrix.copy(world.object.matrixWorld);
     truth.visible = showTruth;
-    scene.add(truth);
+    root.add(truth);
 
     const sphere = geometry.boundingSphere;
     const center =
       sphere && sphere.radius > 0
-        ? sphere.center
-        : new THREE.Vector3(config.x, config.y, config.z);
+        ? sphere.center.clone().multiplyScalar(DISPLAY)
+        : new THREE.Vector3(config.x, config.y, config.z).multiplyScalar(
+            DISPLAY,
+          );
     const radius =
-      sphere && sphere.radius > 0 ? Math.min(sphere.radius, 4) : 1.5;
+      sphere && sphere.radius > 0 ? Math.min(sphere.radius * DISPLAY, 4) : 1.5;
     const view = createViewControls(viewer, canvas, {
       home: (orbit) => {
         orbit.target.copy(center);
@@ -249,7 +261,7 @@ export default function PointCloudPage({
   config: WorldConfig;
   stale: boolean;
 }) {
-  const [toleranceMm, setToleranceMm] = useState(5),
+  const [toleranceMm, setToleranceMm] = useState(0.125),
     [colorMode, setColorMode] = useState<ColorMode>("error"),
     [showGround, setShowGround] = useState(false),
     [showTruth, setShowTruth] = useState(true);
@@ -258,9 +270,7 @@ export default function PointCloudPage({
   const isPcb = config.shape === "pcb";
   const analysis = useMemo(
     () =>
-      scan
-        ? analyzeScan(scan, toleranceMm / 1000, isPcb ? PCB_PINS : null)
-        : null,
+      scan ? analyzeScan(scan, toleranceMm, isPcb ? PCB_PINS : null) : null,
     [scan, toleranceMm, isPcb],
   );
   if (!scan || !analysis)
@@ -373,8 +383,7 @@ export default function PointCloudPage({
         <section>
           <InfoHeading title="誤差摘要" level={2}>
             <p>
-              誤差 = 重建 Camera Z − 真值 Camera
-              Z。真值只用於評估，不參與重建。
+              誤差 = 重建 Camera Z − 真值 Camera Z。真值只用於評估，不參與重建。
             </p>
           </InfoHeading>
           <dl className="analysis-stats" data-testid="analysis-stats">
@@ -416,9 +425,9 @@ export default function PointCloudPage({
             <input
               type="number"
               aria-label="誤差容差 mm"
-              min={0.1}
-              max={100}
-              step={0.5}
+              min={0.001}
+              max={10}
+              step={0.025}
               value={toleranceMm}
               onChange={(e) => {
                 const v = Number(e.target.value);

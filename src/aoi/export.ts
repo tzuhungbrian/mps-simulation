@@ -1,4 +1,5 @@
-import { cellCenter, type AoiConfig } from "./rig";
+﻿import { cellCenter } from "./rig";
+import type { WorldConfig } from "../sandbox/scanner";
 import { REASONS } from "./evaluate";
 import { CELL_STATUS } from "./fusion";
 import type {
@@ -20,13 +21,14 @@ export const DISCLAIMER =
 const cell = (n: number) =>
   Number.isFinite(n) ? String(Number(n.toPrecision(10))) : "";
 
-/** Per-cell CSV in the unified board frame (x = world X, y = world Z, height = world Y, mm). */
+/** Per-cell CSV in the unified board frame (x = world X, y = world Z, height = world Y − referenceHeight, mm). */
 export function aoiCsv(
   run: Pick<AoiRun, "grid" | "truth" | "pairs">,
-  config: AoiConfig,
+  config: WorldConfig,
   strategies: readonly StrategyResult[],
 ): string {
   const { grid, truth, pairs } = run;
+  const h = (n: number) => cell(n - config.referenceHeight);
   const header = [
     "board_x_mm",
     "board_y_mm",
@@ -43,6 +45,7 @@ export function aoiCsv(
   const lines = [
     `# model=${AOI_MODEL}; ${DISCLAIMER}`,
     "# truth_* columns are evaluation-only and never enter reconstruction or fusion",
+    `# heights are relative to the reference plane at world Y = ${config.referenceHeight} mm`,
     "# config=" + JSON.stringify(config),
     header.join(","),
   ];
@@ -52,16 +55,16 @@ export function aoiCsv(
       [
         cell(x),
         cell(y),
-        cell(truth.mean[c]),
+        h(truth.mean[c]),
         cell(truth.range[c]),
         truth.slot[c] === 255 ? "" : truth.slot[c],
         ...pairs.flatMap((p) => [
-          cell(p.map.height[c]),
+          h(p.map.height[c]),
           cell(p.map.sigma[c]),
           REASONS[p.evaluation.reasons[c]][0],
         ]),
         ...strategies.flatMap((s) => [
-          cell(s.map.height[c]),
+          h(s.map.height[c]),
           CELL_STATUS[s.map.status[c]][0],
         ]),
       ].join(","),
@@ -77,7 +80,7 @@ const stats = (
 
 /** Summary JSON: config, calibration-only theory, simulated metrics; no per-cell arrays. */
 export function aoiJson(input: {
-  config: AoiConfig;
+  config: WorldConfig;
   theory: { pair: PairInfo; theory: PairTheory }[];
   run: AoiRun | null;
   strategies: { result: StrategyResult; score: StrategyScore }[];
@@ -125,7 +128,7 @@ export function aoiJson(input: {
         orderErrorProbability: t.orderErrorProbability,
         depthOfField: t.depthOfField.map(finite),
         maxFrequencySingle: t.maxFrequencySingle,
-        maxFrequencyDual: t.maxFrequencyDual,
+        maxFrequencyCoded: t.maxFrequencyCoded,
       })),
       simulation: run && {
         grid: run.grid,

@@ -1,10 +1,6 @@
 .aoi-shell {
   font-size: 14px;
 }
-.aoi-message {
-  margin: 0;
-  border-radius: 0;
-}
 .aoi-workspace {
   flex: 1;
   min-height: 0;
@@ -317,26 +313,60 @@
   flex: 1 1 200px;
 }
 
-/* 3D */
-.aoi-cloud-page {
+/* 3D view overlay chip */
+.sandbox-chip button {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  vertical-align: -2px;
+}
+.aoi-actions {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 520px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 4px;
 }
-.aoi-cloud {
-  position: relative;
-  flex: 1;
-  min-height: 460px;
-  border: 1px solid #22354a;
+.aoi-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 1px solid #3e5267;
   border-radius: 6px;
-  overflow: hidden;
+  background: #162536;
+  color: #c2d8e9;
+  font-size: 13px;
 }
-.aoi-cloud > canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-  touch-action: none;
+.aoi-actions .sandbox-scan-button {
+  background: #a3e7c7;
+  border-color: #b9f0d6;
+  color: #09251c;
+  font-weight: 600;
+}
+.aoi-run-status {
+  margin: 4px 0;
+  color: #b4e1ce;
+}
+.aoi-run-status.busy {
+  color: #f1d9a6;
+}
+.aoi-row-actions {
+  display: flex;
+  gap: 4px;
+}
+.aoi-device.active {
+  border-color: #71bda1;
+}
+.aoi-device-head input[type="radio"] {
+  flex: 0 0 auto;
+  accent-color: #7ad9b2;
+}
+.aoi-main {
+  position: relative;
 }
 
 @media (max-width: 860px) {

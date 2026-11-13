@@ -1,4 +1,4 @@
-import type { AoiConfig } from "./rig";
+﻿import type { WorldConfig } from "../sandbox/scanner";
 import {
   runAoi,
   runSweep,
@@ -9,10 +9,10 @@ import {
 } from "./simulate";
 
 export type AoiRequest =
-  | { type: "run"; config: AoiConfig; pairIds: string[] | null }
+  | { type: "run"; config: WorldConfig; pairIds: string[] | null }
   | {
       type: "sweep";
-      config: AoiConfig;
+      config: WorldConfig;
       pairIds: string[] | null;
       variable: SweepVariable;
       values: number[];

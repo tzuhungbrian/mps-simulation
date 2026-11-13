@@ -59,7 +59,9 @@ Camera 解析度可選 96×72 到 384×288，並可開啟 2×2 / 3×3 像素面�
 - **有效量測圖**：每格原因為準確、超差、邊緣混合、級次錯、範圍混疊、Camera FOV 外、視線遮擋、Projector FOV 外、陰影、飽和、失焦、調變不足、無取樣。幾何原因使用真值，只供評估。
 - **Fusion**（不使用真值）：① 直視 + 斜視補洞、② 單一斜視、③ 斜視 + 斜視共識融合（與最多 Pair 一致的值勝出，剔除離群後 1/σ² 加權；σ 來自各 Pair 自己的調變 B、感測器雜訊規格與 |dφ/dh|）。Cross-pair Consistency Check 列出兩兩 Pair 的高度差，並以真值驗證「一致 / 矛盾」格的實際 RMSE。
 - **Benchmark**：RMSE / MAE / Bias、平坦區 RMSE、覆蓋率、失效比例、粗大誤差、各材質（板面 / 元件 / 電極 / Fillet）、Worker 內計算時間；可單獨或批次執行 Pair，固定 seed 的參數掃描（f₁、p₂/p₁、雜訊、平面高度、視窗底部）；匯出每格 CSV、摘要 JSON、批次 CSV。
-- **AOI 參考值**：可輸入廠商或實機的直視 / 反対側 / 直交 / 同じ側數值並列比較；不進入任何計算，也不會使模擬結果過期。
+- **AOI 參考值**：可輸入廠商或實機的直視 / 反対側 / 直交 / 同じ側數值（每 2π 高度、範圍、感度比、高度雜訊比）並列比較；不進入任何計算，也不會使模擬結果過期。
+- **條紋編碼**：時間解包、單週期 + 基準面、粗 / 細雙週期（範圍 = R × 每 2π 高度）、雙週期外差（× r/(r−1)）。
+- **本機預設**：`src/local/*.preset.json`（已列入 `.gitignore`）會出現在「裝置擺位預設」的「本機：…」選項，用來放不可公開的設備配置與參考值。格式見 `src/sandbox/localPresets.ts` 的 `LocalPreset`。注意 `npm run build` 會把它打包進 `dist/`，含機密預設時不要公開發佈 build。
 
 資料路徑：`renderPair → { frames, clipped } → reconstructPair（條紋編碼 + 校正）→ binToGrid → Fusion`；真值只進入 `buildTruthMap / evaluatePair / scoreStrategy`。
 

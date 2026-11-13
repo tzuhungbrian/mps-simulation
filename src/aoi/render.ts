@@ -1,20 +1,20 @@
 import * as THREE from "three";
 import { cameraRay, projectPoint, type Pinhole } from "../sandbox/geometry";
+import { evaluateBrdf, type TraceScene } from "../sandbox/lightTransport";
 import {
-  evaluateBrdf,
-  type SurfaceMaterial,
-  type TraceScene,
-} from "../sandbox/lightTransport";
-import { AMBIENT, fringeIntensity, insideProjector } from "../sandbox/scanner";
+  AMBIENT,
+  cameraBlurSigma,
+  fringeIntensity,
+  fringePatterns,
+  insideProjector,
+  projectorContrast,
+  surfaceMaterials,
+  type WorldConfig,
+} from "../sandbox/scanner";
+import { NO_SURFACE } from "../sandbox/pcb";
+import { scatterBlur } from "../sandbox/optics";
+import type { Device } from "../sandbox/devices";
 import { createSeededRandom, TAU } from "../core/simulation";
-import {
-  aoiPatterns,
-  MATERIAL_SLOTS,
-  type AoiConfig,
-  type AoiDevice,
-} from "./rig";
-import { axisDepth, blurDiameter, blurSigma, gaussianMtf } from "./sensitivity";
-import { NO_SURFACE } from "./scene";
 
 /** Camera rays are shared by every projector paired with the camera. */
 export interface CameraTrace {
@@ -92,48 +92,6 @@ export interface PairCaptures {
   clipped: Uint8Array;
 }
 
-const MAX_BLUR_RADIUS = 20;
-
-/**
- * Spatially varying defocus: every source pixel spreads with its own Gaussian
- * (separable two-pass approximation, exact for uniform σ; energy kept inside the image).
- */
-export function scatterBlur(
-  images: Float64Array[],
-  width: number,
-  height: number,
-  sigma: Float64Array,
-): Float64Array[] {
-  const pass = (input: Float64Array[], horizontal: boolean) => {
-    const output = input.map(() => new Float64Array(width * height));
-    const weights = new Float64Array(2 * MAX_BLUR_RADIUS + 1);
-    for (let i = 0; i < width * height; i++) {
-      const s = sigma[i];
-      if (!(s >= 0.2)) {
-        for (let k = 0; k < input.length; k++) output[k][i] += input[k][i];
-        continue;
-      }
-      const x = i % width,
-        y = Math.floor(i / width),
-        pos = horizontal ? x : y,
-        size = horizontal ? width : height,
-        radius = Math.min(MAX_BLUR_RADIUS, Math.ceil(3 * s)),
-        lo = Math.max(-radius, -pos),
-        hi = Math.min(radius, size - 1 - pos);
-      let total = 0;
-      for (let d = lo; d <= hi; d++)
-        total += weights[d + radius] = Math.exp((-d * d) / (2 * s * s));
-      for (let d = lo; d <= hi; d++) {
-        const j = horizontal ? i + d : i + d * width,
-          w = weights[d + radius] / total;
-        for (let k = 0; k < input.length; k++) output[k][j] += w * input[k][i];
-      }
-    }
-    return output;
-  };
-  return pass(pass(images, true), false);
-}
-
 /** Deterministic per-pair noise stream derived from the global seed. */
 export const pairSeed = (
   seed: number,
@@ -146,29 +104,27 @@ export const pairSeed = (
   0;
 
 /**
- * Forward model for one camera–projector pair: projector point light with exact
- * visibility, Lambert + GGX BRDF, thin-lens projector defocus (Gaussian MTF on
- * each sinusoid), camera defocus (scatter blur), additive Gaussian noise and clipping.
- * Direct illumination only; interreflection is not modelled here.
+ * Direct-light forward model for one pair, identical physics to the sandbox
+ * captureWorld (same BRDF, projector defocus contrast, camera scatter blur,
+ * exposure, noise and clipping) but reusing a shared camera trace.
+ * Interreflection is not modelled here.
  */
 export function renderPair(
   scene: TraceScene,
   trace: CameraTrace,
   camera: Pinhole,
   projector: Pinhole,
-  cameraDevice: AoiDevice,
-  projectorDevice: AoiDevice,
-  config: AoiConfig,
+  cameraDevice: Device,
+  projectorDevice: Device,
+  config: WorldConfig,
   seed: number,
 ): PairCaptures {
-  const patterns = aoiPatterns(config),
+  const patterns = fringePatterns(config),
     frames = patterns.length,
     { width, height, grid } = trace,
     count = width * height,
     sub = grid * grid;
-  const materials: SurfaceMaterial[] = MATERIAL_SLOTS.map(
-    (slot) => config.materials[slot],
-  );
+  const materials = surfaceMaterials(config);
   const signal = patterns.map(() => new Float64Array(count));
   const projectorOrigin = new THREE.Vector3(...projector.position),
     point = new THREE.Vector3(),
@@ -176,8 +132,7 @@ export function renderPair(
     wo = new THREE.Vector3(),
     wi = new THREE.Vector3(),
     back = new THREE.Vector3();
-  const projectorFocus = axisDepth(projectorDevice, config.focusHeight),
-    contrast = new Float64Array(frames);
+  const contrast = new Float64Array(frames);
   for (let s = 0; s < count * sub; s++) {
     const slot = trace.slot[s];
     if (slot === NO_SURFACE) continue;
@@ -202,22 +157,14 @@ export function renderPair(
     )
       continue;
     const radiance = evaluateBrdf(materials[slot], normal, wi, wo) * cos;
-    const sigma =
-      config.defocus && projectorDevice.aperture > 0
-        ? blurSigma(
-            blurDiameter(
-              projector.fx,
-              projectorDevice.aperture,
-              pp.depth,
-              projectorFocus,
-            ),
-          )
-        : 0;
-    for (let k = 0; k < frames; k++)
-      contrast[k] =
-        sigma > 0
-          ? gaussianMtf(sigma, projector.width / patterns[k].frequency)
-          : 1;
+    projectorContrast(
+      projector,
+      projectorDevice,
+      config,
+      patterns,
+      pp.depth,
+      contrast,
+    );
     const pixel = Math.floor(s / sub);
     for (let k = 0; k < frames; k++)
       signal[k][pixel] +=
@@ -234,18 +181,13 @@ export function renderPair(
   // π maps radiance to normalized intensity (white Lambertian facing the projector reads p_k).
   const gain = (Math.PI * config.exposure) / sub;
   for (const image of signal) for (let i = 0; i < count; i++) image[i] *= gain;
-  let blurred = signal;
-  if (config.defocus && cameraDevice.aperture > 0) {
-    const focus = axisDepth(cameraDevice, config.focusHeight);
-    const sigma = trace.centerDepth.map((depth) =>
-      Number.isFinite(depth)
-        ? blurSigma(
-            blurDiameter(camera.fx, cameraDevice.aperture, depth, focus),
-          )
-        : 0,
-    );
-    blurred = scatterBlur(signal, width, height, sigma);
-  }
+  const sigma = cameraBlurSigma(
+    camera,
+    cameraDevice,
+    config,
+    trace.centerDepth,
+  );
+  const blurred = sigma ? scatterBlur(signal, width, height, sigma) : signal;
   const random = createSeededRandom(seed);
   const gaussian = () =>
     Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(TAU * random());

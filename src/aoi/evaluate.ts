@@ -2,26 +2,23 @@ import * as THREE from "three";
 import { errorStats, type ErrorStats } from "../sandbox/analysis";
 import { projectPoint, type Pinhole, type Vec3 } from "../sandbox/geometry";
 import type { TraceScene } from "../sandbox/lightTransport";
-import { insideProjector } from "../sandbox/scanner";
 import {
-  cellCenter,
-  MATERIAL_SLOTS,
-  type AoiConfig,
-  type AoiDevice,
-  type GridSpec,
-} from "./rig";
-import type { HeightMap, PairReconstruction } from "./reconstruct";
-import { NO_SURFACE } from "./scene";
+  focusDepth,
+  heightSensitivity,
+  insideProjector,
+  type WorldConfig,
+} from "../sandbox/scanner";
+import { NO_SURFACE, SURFACE_NAMES } from "../sandbox/pcb";
 import {
-  axisDepth,
   blurDiameter,
   blurSigma,
   CAMERA_BLUR_LIMIT,
-  codingRange,
   gaussianMtf,
-  heightPer2Pi,
-  heightSensitivity,
-} from "./sensitivity";
+} from "../sandbox/optics";
+import type { Device } from "../sandbox/devices";
+import { cellCenter, type GridSpec } from "./rig";
+import type { HeightMap } from "./reconstruct";
+import { codingRange, heightPer2Pi } from "./sensitivity";
 
 /** Ground truth on the unified grid. Evaluation only: never passed to reconstruction or fusion. */
 export interface TruthMap {
@@ -156,7 +153,7 @@ export function scoreHeightMap(
     accurateCells = 0,
     grossCells = 0;
   const flat: number[] = [];
-  const slots = MATERIAL_SLOTS.map((_, slot) => ({
+  const slots = SURFACE_NAMES.map((_, slot) => ({
     slot,
     cells: 0,
     measured: 0,
@@ -213,16 +210,18 @@ export function evaluatePair(
   grid: GridSpec,
   truth: TruthMap,
   map: HeightMap,
-  reconstruction: Pick<PairReconstruction, "decoded">,
+  /** Pixels whose every pattern decoded (modulation above threshold, not clipped). */
+  decoded: Uint8Array,
   clipped: Uint8Array,
   camera: Pinhole,
   projector: Pinhole,
-  cameraDevice: AoiDevice,
-  projectorDevice: AoiDevice,
-  config: AoiConfig,
+  cameraDevice: Device,
+  projectorDevice: Device,
+  config: WorldConfig,
 ): PairEvaluation {
   const f1 = config.fringeFrequency,
-    cells = grid.nx * grid.ny;
+    cells = grid.nx * grid.ny,
+    windowBottom = config.referenceHeight + config.windowBottom;
   const reasons = new Uint8Array(cells);
   const direction = new THREE.Vector3(),
     origin = new THREE.Vector3();
@@ -264,8 +263,8 @@ export function evaluatePair(
         const range = codingRange(per2Pi, config);
         const inside =
           config.coding === "temporal" ||
-          (truth.mean[c] >= config.windowBottom &&
-            truth.mean[c] < config.windowBottom + range);
+          (truth.mean[c] >= windowBottom &&
+            truth.mean[c] < windowBottom + range);
         reasons[c] = inside ? REASON_INDEX.orderError : REASON_INDEX.rangeAlias;
       }
       continue;
@@ -293,21 +292,21 @@ export function evaluatePair(
         Math.min(camera.height - 1, Math.round(pc.v)) * camera.width +
         Math.min(camera.width - 1, Math.round(pc.u));
       if (clipped[pixel]) reasons[c] = REASON_INDEX.saturated;
-      else if (!reconstruction.decoded[pixel]) {
+      else if (!decoded[pixel]) {
         const pp = projectPoint(projector, t)!;
         const projectorBlur = blurSigma(
             blurDiameter(
               projector.fx,
               projectorDevice.aperture,
               pp.depth,
-              axisDepth(projectorDevice, config.focusHeight),
+              focusDepth(projector, config),
             ),
           ),
           cameraBlur = blurDiameter(
             camera.fx,
             cameraDevice.aperture,
             pc.depth,
-            axisDepth(cameraDevice, config.focusHeight),
+            focusDepth(camera, config),
           );
         const defocused =
           config.defocus &&

@@ -1,37 +1,41 @@
 import { describe, expect, it } from "vitest";
 import { TAU } from "../core/simulation";
-import { cameraRay, type Vec3 } from "../sandbox/geometry";
+import type { Vec3 } from "../sandbox/geometry";
+import { buildTraceScene } from "../sandbox/lightTransport";
 import {
-  aoiPatterns,
-  cameraPinhole,
+  captureWorld,
+  createWorld,
+  DEFAULT_WORLD,
+  getRig,
+  parseWorldConfig,
+  pinholesFor,
+  projectorPhase,
+  validateWorldConfig,
+  type WorldConfig,
+} from "../sandbox/scanner";
+import {
   classifyPair,
-  DEFAULT_AOI,
-  DEFAULT_CAMERAS,
-  DEFAULT_PROJECTORS,
-  enumeratePairs,
   foldAzimuth,
-  makeGrid,
-  parseAoiConfig,
-  projectorPinhole,
-  validateAoiConfig,
-  type AoiConfig,
-  type AoiDevice,
-} from "./rig";
+  fromSpherical,
+  placePreset,
+  RIG_PRESETS,
+  spherical,
+  type Device,
+} from "../sandbox/devices";
+import { blurDiameter, gaussianMtf, scatterBlur } from "../sandbox/optics";
+import { enumeratePairs, makeGrid } from "./rig";
 import {
-  blurDiameter,
   boardPeriod,
   codingRange,
   depthOfField,
   erfc,
-  gaussianMtf,
   heightSensitivity,
   orderErrorProbability,
   pairTheory,
   parallelSensitivity,
-  projectorPhase,
 } from "./sensitivity";
-import { scatterBlur } from "./render";
-import { binToGrid, reconstructPair, codingOf } from "./reconstruct";
+import { renderPair, traceCamera } from "./render";
+import { binToGrid } from "./reconstruct";
 import {
   consistencyMatrix,
   fuseDirectWithOblique,
@@ -49,18 +53,49 @@ import {
 import { MEASURED_REASONS, REASON_INDEX } from "./evaluate";
 import { aoiCsv, aoiJson } from "./export";
 
-const config = (patch: Partial<AoiConfig> = {}): AoiConfig => ({
-  ...DEFAULT_AOI,
-  scene: "plane",
-  planeHeight: 0.5,
+/** AOI rig placed around a board whose top (the reference plane) is 2 mm above the ground. */
+const REF = 2;
+const AOI = placePreset(RIG_PRESETS[0], [0, REF, 0]);
+const MATTE: Partial<WorldConfig> = {
+  objectAlbedo: 0.5,
+  objectSpecular: 0,
+  objectRoughness: 0.6,
+  chipAlbedo: 0.7,
+  chipSpecular: 0,
+  chipRoughness: 0.5,
+};
+/** C0 straight down, C1 oblique at 0°, P2 at 180°: C0-P2 direct, C1-P2 opposite. */
+const config = (patch: Partial<WorldConfig> = {}): WorldConfig => ({
+  ...DEFAULT_WORLD,
+  ...MATTE,
+  shape: "plane",
+  y: REF + 0.5,
+  referenceHeight: REF,
+  cameras: [AOI.cameras[0], AOI.cameras[1]],
+  projectors: [AOI.projectors[2]],
+  activeCamera: "C0",
+  activeProjector: "P2",
+  cameraWidth: 64,
+  projectorWidth: 640,
+  phaseSteps: 4,
+  fringeFrequency: 16,
+  coding: "single",
+  fringeOffset: 0.45,
+  fringeAmplitude: 0.4,
+  minModulation: 0.015,
   noiseSigma: 0,
   defocus: false,
-  cameraWidth: 64,
+  seed: 7,
   cellSize: 0.3,
-  cameras: [DEFAULT_CAMERAS[0], DEFAULT_CAMERAS[1]],
-  projectors: [DEFAULT_PROJECTORS[2]],
   ...patch,
 });
+const fullRig = (patch: Partial<WorldConfig> = {}) =>
+  config({
+    ...AOI,
+    activeCamera: "C0",
+    activeProjector: "P0",
+    ...patch,
+  });
 const median = (values: ArrayLike<number>) => {
   const v = Array.from(values)
     .filter(Number.isFinite)
@@ -68,9 +103,9 @@ const median = (values: ArrayLike<number>) => {
   return v[Math.floor((v.length - 1) / 2)];
 };
 
-describe("AOI rig and pair classification", () => {
-  it("derives 4 opposite, 8 orthogonal, 4 same-side and 4 direct pairs from the default geometry", () => {
-    const pairs = enumeratePairs(DEFAULT_AOI);
+describe("multi-view rig and pair classification", () => {
+  it("derives 4 opposite, 8 orthogonal, 4 same-side and 4 direct pairs from the AOI preset geometry", () => {
+    const pairs = enumeratePairs(fullRig());
     const count = (kind: string) => pairs.filter((p) => p.kind === kind).length;
     expect(pairs).toHaveLength(20);
     expect([
@@ -82,26 +117,26 @@ describe("AOI rig and pair classification", () => {
   });
 
   it("classifies by azimuth difference and tilt, not by device count", () => {
-    const device = (azimuth: number, tilt = 35): AoiDevice => ({
-      ...DEFAULT_CAMERAS[1],
-      azimuth,
-      tilt,
-    });
     expect(foldAzimuth(350, 10)).toBeCloseTo(20);
     expect(foldAzimuth(-90, 90)).toBeCloseTo(180);
-    expect(classifyPair(device(0), device(30), 10)).toBe("same");
-    expect(classifyPair(device(0), device(100), 10)).toBe("orthogonal");
-    expect(classifyPair(device(0), device(200), 10)).toBe("opposite");
-    expect(classifyPair(device(0, 5), device(200), 10)).toBe("direct");
-    const custom = {
-      ...DEFAULT_AOI,
-      cameras: [device(0), device(120)].map((d, i) => ({ ...d, id: `C${i}` })),
-      projectors: [0, 100, 200].map((a, i) => ({
-        ...DEFAULT_PROJECTORS[0],
-        id: `P${i}`,
-        azimuth: a,
-      })),
-    };
+    expect(classifyPair(35, 0, 30, 10)).toBe("same");
+    expect(classifyPair(35, 0, 100, 10)).toBe("orthogonal");
+    expect(classifyPair(35, 0, 200, 10)).toBe("opposite");
+    expect(classifyPair(5, 0, 200, 10)).toBe("direct");
+    const aim: Vec3 = [0, REF, 0];
+    const at = (id: string, azimuth: number, tilt: number): Device => ({
+      id,
+      name: id,
+      ...fromSpherical(aim, tilt, azimuth, 110),
+      fov: 8,
+      aperture: 0,
+    });
+    const custom = config({
+      cameras: [at("C0", 0, 35), at("C1", 120, 35)],
+      projectors: [at("P0", 0, 30), at("P1", 100, 30), at("P2", 200, 30)],
+      activeCamera: "C0",
+      activeProjector: "P0",
+    });
     expect(enumeratePairs(custom).map((p) => p.kind)).toEqual([
       "same",
       "orthogonal",
@@ -112,54 +147,36 @@ describe("AOI rig and pair classification", () => {
     ]);
   });
 
-  it("validates and round-trips configs, rejecting unknown or out-of-range values", () => {
-    validateAoiConfig(DEFAULT_AOI);
-    expect(parseAoiConfig(JSON.parse(JSON.stringify(DEFAULT_AOI)))).toEqual(
-      DEFAULT_AOI,
-    );
+  it("round-trips device spherical coordinates and keeps the shared config valid", () => {
+    const aim: Vec3 = [3, REF, -2];
+    const s = spherical(fromSpherical(aim, 35, 270, 110), aim);
+    expect(s.tilt).toBeCloseTo(35, 3);
+    expect(s.azimuth).toBeCloseTo(270, 3);
+    expect(s.distance).toBeCloseTo(110, 3);
+    const c = fullRig();
+    validateWorldConfig(c);
+    expect(parseWorldConfig(JSON.parse(JSON.stringify(c)))).toEqual(c);
     expect(() =>
-      validateAoiConfig({ ...DEFAULT_AOI, periodRatio: 1 }),
-    ).toThrow();
-    expect(() => validateAoiConfig({ ...DEFAULT_AOI, cameras: [] })).toThrow();
-    expect(() =>
-      validateAoiConfig({
-        ...DEFAULT_AOI,
-        projectors: [DEFAULT_PROJECTORS[0], DEFAULT_PROJECTORS[0]],
+      validateWorldConfig({
+        ...c,
+        projectors: [c.projectors[0], c.projectors[0]],
       }),
     ).toThrow(/unique/);
-  });
-
-  it("orders fine patterns first, then the coarse set", () => {
-    const p = aoiPatterns({
-      phaseSteps: 4,
-      fringeFrequency: 20,
-      coding: "dual",
-      periodRatio: 1.25,
-    });
-    expect(p.map((x) => x.frequency)).toEqual([20, 20, 20, 20, 16, 16, 16, 16]);
-    expect(
-      aoiPatterns({ ...DEFAULT_AOI, coding: "temporal" }).at(-1)!.frequency,
-    ).toBe(1);
   });
 });
 
 describe("phase sensitivity and measurement range", () => {
-  const rig = (camera: AoiDevice, projector: AoiDevice) => ({
-    camera: cameraPinhole(camera, 192),
-    projector: projectorPinhole(projector, 640),
-  });
+  const rig = (camera: Device, projector: Device, c = config()) =>
+    pinholesFor(c, camera, projector, 192);
 
   it("matches a finite difference of the projector phase along the camera ray", () => {
-    const { camera, projector } = rig(
-      DEFAULT_CAMERAS[1],
-      DEFAULT_PROJECTORS[2],
-    );
+    const { camera, projector } = rig(AOI.cameras[1], AOI.projectors[2]);
     for (const [x, y] of [
       [0, 0],
       [3, -2],
       [-2.5, 2.8],
     ]) {
-      const point: Vec3 = [x, 0.4, y];
+      const point: Vec3 = [x, REF + 0.4, y];
       const ray = point.map((v, i) => v - camera.position[i]) as Vec3;
       const at = (h: number) =>
         projectorPhase(
@@ -170,7 +187,7 @@ describe("phase sensitivity and measurement range", () => {
               camera.position[i] + (r * (h - camera.position[1])) / ray[1],
           ) as Vec3,
         )!;
-      const numeric = (at(0.4 + 1e-4) - at(0.4 - 1e-4)) / 2e-4;
+      const numeric = (at(point[1] + 1e-4) - at(point[1] - 1e-4)) / 2e-4;
       expect(heightSensitivity(camera, projector, 16, point)).toBeCloseTo(
         numeric,
         3,
@@ -178,42 +195,31 @@ describe("phase sensitivity and measurement range", () => {
     }
   });
 
-  it("approaches the far-field formula (2π/p)|tanθp − tanθc·cosΔα| for every pair class", () => {
-    const far = (d: AoiDevice): AoiDevice => ({
-      ...d,
-      distance: 1e5,
-      fov: 0.01,
-    });
-    for (const [camera, projector] of [
-      [DEFAULT_CAMERAS[0], DEFAULT_PROJECTORS[0]],
-      [DEFAULT_CAMERAS[1], DEFAULT_PROJECTORS[2]],
-      [DEFAULT_CAMERAS[1], DEFAULT_PROJECTORS[1]],
-      [DEFAULT_CAMERAS[1], { ...DEFAULT_PROJECTORS[0], tilt: 50 }],
-    ] as const) {
-      const r = rig(far(camera), far(projector));
-      const p = boardPeriod(r.projector, 16, [0, 0, 0]);
-      const expected = parallelSensitivity(
-        camera.tilt,
-        projector.tilt,
-        foldAzimuth(camera.azimuth, projector.azimuth),
-        p,
+  it("equals the far-field formula (2π/p)|tanθp − tanθc·cosΔα| at the aim point for every pair class", () => {
+    const c = fullRig({ y: REF });
+    for (const { pair } of theoryForAll(c)) {
+      const { camera, projector } = pinholesFor(
+        c,
+        c.cameras[pair.cameraIndex],
+        c.projectors[pair.projectorIndex],
       );
+      const p = boardPeriod(projector, 16, [0, REF, 0]);
       expect(
-        Math.abs(heightSensitivity(r.camera, r.projector, 16, [0, 0, 0])),
-      ).toBeCloseTo(expected, 6);
+        Math.abs(heightSensitivity(camera, projector, 16, [0, REF, 0])),
+      ).toBeCloseTo(
+        parallelSensitivity(
+          pair.cameraTilt,
+          pair.projectorTilt,
+          pair.deltaAzimuth,
+          p,
+        ),
+        6,
+      );
     }
-    // Same side with equal tilts: rays are parallel, no triangulation at all.
-    const same = rig(
-      far({ ...DEFAULT_CAMERAS[1], tilt: 30 }),
-      far(DEFAULT_PROJECTORS[0]),
-    );
-    expect(
-      Math.abs(heightSensitivity(same.camera, same.projector, 16, [0, 0, 0])),
-    ).toBeLessThan(1e-6);
   });
 
   it("orders range per 2π: opposite < orthogonal ≈ direct < same side", () => {
-    const theory = theoryForAll(DEFAULT_AOI);
+    const theory = theoryForAll(fullRig());
     const mean = (kind: string) => {
       const list = theory.filter((t) => t.pair.kind === kind);
       return list.reduce((s, t) => s + t.theory.heightPer2Pi, 0) / list.length;
@@ -230,27 +236,19 @@ describe("phase sensitivity and measurement range", () => {
   });
 
   it("extends the range by r/(r−1) for dual periods and trades it for order-error risk", () => {
+    const base = { periodRatio: 1.25, fringeFrequency: 16 };
+    expect(codingRange(1, { ...base, coding: "single" })).toBe(1);
+    expect(codingRange(1, { ...base, coding: "dual" })).toBeCloseTo(5);
+    expect(codingRange(1, { ...base, coding: "temporal" })).toBe(16);
     expect(
-      codingRange(1, {
-        coding: "single",
-        periodRatio: 1.25,
-        fringeFrequency: 16,
-      }),
-    ).toBe(1);
-    expect(
-      codingRange(1, {
-        coding: "dual",
-        periodRatio: 1.25,
-        fringeFrequency: 16,
-      }),
-    ).toBeCloseTo(5);
-    expect(
-      codingRange(1, {
-        coding: "temporal",
-        periodRatio: 1.25,
-        fringeFrequency: 16,
-      }),
-    ).toBe(16);
+      codingRange(1.5, { ...base, coding: "coarse", periodRatio: 10 }),
+    ).toBeCloseTo(15, 12);
+    const coarseRisk = (r: number) =>
+      orderErrorProbability(
+        { coding: "coarse", periodRatio: r, fringeFrequency: 16 },
+        0.02,
+      );
+    expect(coarseRisk(20)).toBeGreaterThan(coarseRisk(5));
     const risk = (r: number) =>
       orderErrorProbability(
         { coding: "dual", periodRatio: r, fringeFrequency: 16 },
@@ -263,20 +261,21 @@ describe("phase sensitivity and measurement range", () => {
   });
 
   it("puts the depth-of-field limits exactly where the blur circle reaches the criterion", () => {
-    const device = DEFAULT_CAMERAS[1],
-      fx = cameraPinhole(device, 192).fx;
-    const [lo, hi] = depthOfField(device, fx, 0, 2);
-    const cos = Math.cos((device.tilt * Math.PI) / 180);
+    const c = config({ defocus: true });
+    const device = AOI.cameras[1];
+    const { camera } = pinholesFor(c, device, AOI.projectors[2]);
+    const [lo, hi] = depthOfField(camera, device, c, 2);
+    const depthAt = (h: number) =>
+      [0, REF + h, 0].reduce(
+        (s, v, i) => s + (v - camera.position[i]) * camera.forward[i],
+        0,
+      );
+    const focus = depthAt(0);
     for (const h of [lo, hi])
       expect(
-        blurDiameter(
-          fx,
-          device.aperture,
-          device.distance - h * cos,
-          device.distance,
-        ),
+        blurDiameter(camera.fx, device.aperture, depthAt(h), focus),
       ).toBeCloseTo(2, 6);
-    expect(depthOfField({ ...device, aperture: 0 }, fx, 0, 2)).toEqual([
+    expect(depthOfField(camera, { ...device, aperture: 0 }, c, 2)).toEqual([
       -Infinity,
       Infinity,
     ]);
@@ -285,12 +284,42 @@ describe("phase sensitivity and measurement range", () => {
   });
 });
 
-describe("forward model and reconstruction", () => {
+describe("shared forward model and reconstruction", () => {
+  it("renders exactly what the sandbox scan captures for the same pair", () => {
+    const c = config({ noiseSigma: 0.004, defocus: true, focusHeight: 2 });
+    const capture = captureWorld(c);
+    const { camera, projector } = getRig(c);
+    const world = createWorld(c);
+    const scene = buildTraceScene(world.meshes);
+    try {
+      const frames = renderPair(
+        scene,
+        traceCamera(scene, camera, c.pixelGrid),
+        camera,
+        projector,
+        c.cameras[0],
+        c.projectors[0],
+        c,
+        c.seed,
+      ).frames;
+      frames.forEach((frame, k) =>
+        frame.forEach((v, i) =>
+          expect(v).toBeCloseTo(capture.frames[k][i], 12),
+        ),
+      );
+    } finally {
+      scene.dispose();
+      world.dispose();
+    }
+  });
+
   it("recovers a flat plane inside the phase window for direct and oblique pairs", () => {
     const run = runAoi(config());
     for (const pair of run.pairs) {
       expect(pair.evaluation.coverage).toBeGreaterThan(0.8);
-      expect(Math.abs(median(pair.map.height) - 0.5)).toBeLessThan(2e-3);
+      expect(Math.abs(median(pair.map.height) - (REF + 0.5))).toBeLessThan(
+        2e-3,
+      );
     }
   });
 
@@ -298,36 +327,30 @@ describe("forward model and reconstruction", () => {
     const theory = theoryForAll(config()).find(
       (t) => t.pair.kind === "opposite",
     )!.theory;
-    const height = DEFAULT_AOI.windowBottom + 1.2 * theory.codingRange;
-    const run = runAoi(config({ planeHeight: height }), ["C1-P3"]);
-    const measured = median(run.pairs[0].map.height);
-    expect(measured).toBeCloseTo(height - theory.codingRange, 1);
+    const height = DEFAULT_WORLD.windowBottom + 1.2 * theory.codingRange;
+    const run = runAoi(config({ y: REF + height }), ["C1-P2"]);
+    expect(median(run.pairs[0].map.height) - REF).toBeCloseTo(
+      height - theory.codingRange,
+      1,
+    );
     expect(
       run.pairs[0].evaluation.reasonCounts[REASON_INDEX.rangeAlias],
     ).toBeGreaterThan(0);
-    // Dual periods extend the window and recover the same plane.
-    const dual = runAoi(config({ planeHeight: height, coding: "dual" }), [
-      "C1-P3",
-    ]);
-    expect(Math.abs(median(dual.pairs[0].map.height) - height)).toBeLessThan(
-      2e-3,
-    );
-    const temporal = runAoi(
-      config({ planeHeight: height, coding: "temporal" }),
-      ["C1-P3"],
-    );
-    expect(
-      Math.abs(median(temporal.pairs[0].map.height) - height),
-    ).toBeLessThan(2e-3);
+    for (const coding of ["dual", "temporal", "coarse"] as const) {
+      const other = runAoi(config({ y: REF + height, coding }), ["C1-P2"]);
+      expect(
+        Math.abs(median(other.pairs[0].map.height) - REF - height),
+      ).toBeLessThan(2e-3);
+    }
   });
 
   it("matches the theoretical modulation and height noise on the reference plane", () => {
-    const quiet = config({ planeHeight: 0 });
-    const clean = runAoi(quiet, ["C0-P3"]).pairs[0];
+    const quiet = config({ y: REF });
+    const clean = runAoi(quiet, ["C0-P2"]).pairs[0];
     const { width, height, modulation } = clean.image;
     const centre = (height / 2) * width + width / 2;
     expect(modulation[centre] / clean.theory.modulation).toBeCloseTo(1, 2);
-    const noisy = runAoi({ ...quiet, noiseSigma: 0.004 }, ["C0-P3"]).pairs[0];
+    const noisy = runAoi({ ...quiet, noiseSigma: 0.004 }, ["C0-P2"]).pairs[0];
     const ys: number[] = [];
     for (let i = 1; i < noisy.points.length; i += 3) ys.push(noisy.points[i]);
     const mean = ys.reduce((s, v) => s + v, 0) / ys.length;
@@ -340,12 +363,12 @@ describe("forward model and reconstruction", () => {
 
   it("lowers projector-fringe contrast out of focus as the Gaussian MTF predicts", () => {
     const blurred = config({
-      planeHeight: 0,
+      y: REF,
       defocus: true,
       focusHeight: 3,
       fringeFrequency: 64,
-      cameras: [{ ...DEFAULT_CAMERAS[0], aperture: 0 }],
-      projectors: [{ ...DEFAULT_PROJECTORS[2], aperture: 12 }],
+      cameras: [{ ...AOI.cameras[0], aperture: 0 }],
+      projectors: [{ ...AOI.projectors[2], aperture: 12 }],
     });
     const sharp = { ...blurred, defocus: false };
     const centre = (run: ReturnType<typeof runAoi>) => {
@@ -360,43 +383,17 @@ describe("forward model and reconstruction", () => {
     expect(Math.abs(ratio / predicted - 1)).toBeLessThan(0.05);
   });
 
-  it("rejects captures that do not match the coding", () => {
-    const c = config();
-    const camera = cameraPinhole(c.cameras[0], c.cameraWidth),
-      projector = projectorPinhole(c.projectors[0], c.projectorWidth);
-    const count = camera.width * camera.height;
-    expect(() =>
-      reconstructPair(
-        {
-          width: camera.width,
-          height: camera.height,
-          frames: [new Float64Array(count)],
-          clipped: new Uint8Array(count),
-        },
-        camera,
-        projector,
-        codingOf(c),
-      ),
-    ).toThrow(RangeError);
-    expect(cameraRay(camera, camera.cx, camera.cy)[1]).toBeLessThan(-0.999);
-  });
-
   it("is reproducible for a fixed seed and changes with the seed", () => {
     const noisy = config({ noiseSigma: 0.004 });
-    const a = runAoi(noisy, ["C0-P3"]).pairs[0].map.height,
-      b = runAoi(noisy, ["C0-P3"]).pairs[0].map.height,
-      c = runAoi({ ...noisy, seed: 8 }, ["C0-P3"]).pairs[0].map.height;
+    const a = runAoi(noisy, ["C0-P2"]).pairs[0].map.height,
+      b = runAoi(noisy, ["C0-P2"]).pairs[0].map.height,
+      c = runAoi({ ...noisy, seed: 8 }, ["C0-P2"]).pairs[0].map.height;
     expect(Array.from(a)).toEqual(Array.from(b));
     expect(Array.from(a)).not.toEqual(Array.from(c));
   });
 
   it("bins with the median so a single outlier pixel cannot move a cell", () => {
-    const grid = makeGrid({
-      ...DEFAULT_AOI,
-      roiWidth: 1,
-      roiHeight: 1,
-      cellSize: 1,
-    });
+    const grid = makeGrid(config({ roiWidth: 1, roiHeight: 1, cellSize: 1 }));
     const points = new Float64Array([0, 1, 0, 0.1, 1.01, 0.1, -0.1, 9, -0.1]);
     const map = binToGrid(
       {
@@ -429,12 +426,7 @@ describe("forward model and reconstruction", () => {
 describe("evaluation, failure reasons and fusion", () => {
   it("explains every cell and finds occlusion and shadow around a tall part", () => {
     const run = runAoi(
-      config({
-        scene: "chip",
-        materials: DEFAULT_AOI.materials,
-        cellSize: 0.2,
-        cameraWidth: 96,
-      }),
+      config({ shape: "chip", y: REF, cellSize: 0.2, cameraWidth: 96 }),
     );
     for (const p of run.pairs) {
       const e = p.evaluation;
@@ -486,12 +478,12 @@ describe("evaluation, failure reasons and fusion", () => {
   });
 
   it("fills direct-view holes from oblique pairs on a real scene", () => {
-    const c = config({
-      scene: "step",
+    const c = fullRig({
+      shape: "step",
+      y: REF,
       cellSize: 0.2,
       cameraWidth: 96,
-      cameras: DEFAULT_CAMERAS,
-      projectors: [DEFAULT_PROJECTORS[0], DEFAULT_PROJECTORS[2]],
+      projectors: [AOI.projectors[0], AOI.projectors[2]],
     });
     const run = runAoi(c);
     const all = defaultFusionOptions(run.pairs.map((p) => p.pair));
@@ -530,32 +522,35 @@ describe("evaluation, failure reasons and fusion", () => {
     ]);
   });
 
-  it("exposes theory that depends only on calibration", () => {
-    const withReference = {
-      ...DEFAULT_AOI,
-      scene: "chip" as const,
+  it("keeps theory independent of the scene and of AOI reference values", () => {
+    const base = fullRig();
+    const other = {
+      ...base,
+      shape: "chip" as const,
       references: {
-        ...DEFAULT_AOI.references,
-        opposite: { heightPer2Pi: 0.42, range: 0.5, note: "vendor sheet" },
+        ...base.references,
+        opposite: {
+          heightPer2Pi: 0.42,
+          range: 0.5,
+          sensitivityRatio: 3,
+          noiseRatio: 0.3,
+          note: "vendor sheet",
+        },
       },
     };
-    const a = pairTheory(
-      DEFAULT_AOI,
-      enumeratePairs(DEFAULT_AOI)[5],
-      cameraPinhole(DEFAULT_CAMERAS[1], 192),
-      projectorPinhole(DEFAULT_PROJECTORS[0], 640),
+    const pair = enumeratePairs(base)[5];
+    const pins = pinholesFor(
+      base,
+      base.cameras[pair.cameraIndex],
+      base.projectors[pair.projectorIndex],
     );
-    const b = pairTheory(
-      withReference,
-      enumeratePairs(DEFAULT_AOI)[5],
-      cameraPinhole(DEFAULT_CAMERAS[1], 192),
-      projectorPinhole(DEFAULT_PROJECTORS[0], 640),
+    expect(pairTheory(base, pair, pins.camera, pins.projector)).toEqual(
+      pairTheory(other, pair, pins.camera, pins.projector),
     );
-    expect(a).toEqual(b);
   });
 
-  it("exports per-cell CSV and a summary JSON with the disclaimer and no non-finite numbers", () => {
-    const c = config({ cameras: [DEFAULT_CAMERAS[0]] });
+  it("exports per-cell CSV relative to the reference plane and a summary JSON with the disclaimer", () => {
+    const c = config({ cameras: [AOI.cameras[0]] });
     const run = runAoi(c);
     const { strategies, consistency } = runStrategies(
       run.pairs,
@@ -567,11 +562,11 @@ describe("evaluation, failure reasons and fusion", () => {
     const header = csv
       .find((line) => line.startsWith("board_x_mm"))!
       .split(",");
-    expect(header).toContain("h_C0-P3_mm");
-    expect(header).toContain("reason_C0-P3");
-    expect(csv.filter((l) => /^-?\d/.test(l))).toHaveLength(
-      run.grid.nx * run.grid.ny,
-    );
+    expect(header).toContain("h_C0-P2_mm");
+    expect(header).toContain("reason_C0-P2");
+    const rows = csv.filter((l) => /^-?\d/.test(l));
+    expect(rows).toHaveLength(run.grid.nx * run.grid.ny);
+    expect(Number(rows[0].split(",")[2])).toBeCloseTo(0.5, 6);
     const json = JSON.parse(
       aoiJson({
         config: c,
@@ -586,7 +581,7 @@ describe("evaluation, failure reasons and fusion", () => {
       }),
     );
     expect(json.disclaimer).toMatch(/not AOI machine performance/);
-    expect(json.simulation.pairs[0].pair).toBe("C0-P3");
+    expect(json.simulation.pairs[0].pair).toBe("C0-P2");
     expect(json.theory[0].window[1]).toBeGreaterThan(json.theory[0].window[0]);
   });
 });
