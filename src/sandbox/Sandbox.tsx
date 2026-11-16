@@ -337,10 +337,12 @@ function NumberCell({
 export default function Sandbox({
   onGuide,
   onExplore,
+  onCalibration,
   initialView = "sandbox",
 }: {
   onGuide: () => void;
   onExplore: () => void;
+  onCalibration: () => void;
   initialView?: SandboxView;
 }) {
   const [config, setConfig] = useState(loadWorld),
@@ -800,6 +802,10 @@ export default function Sandbox({
           </button>
           <button onClick={onExplore}>
             一維自由實驗
+            <ArrowRight size={16} />
+          </button>
+          <button onClick={onCalibration}>
+            Calibration 課程
             <ArrowRight size={16} />
           </button>
         </div>

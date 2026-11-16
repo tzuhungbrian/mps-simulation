@@ -1,0 +1,592 @@
+.calib-shell {
+  min-height: 100vh;
+  background: #0c1017;
+  color: #e7edf5;
+  font-family: "Segoe UI", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.8;
+}
+.calib-shell code {
+  font-family: Consolas, monospace;
+  font-size: 0.9em;
+  color: #9fe8cf;
+  background: #16202b;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.calib-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 28px;
+  background: #0c1017ee;
+  border-bottom: 1px solid #2a3544;
+  backdrop-filter: blur(6px);
+}
+.calib-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.calib-brand > svg {
+  color: #7ee4bf;
+}
+.calib-brand small {
+  display: block;
+  font-weight: 400;
+  font-size: 13px;
+  color: #a6b6ca;
+}
+.calib-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.calib-header-actions button,
+.calib-reset,
+.calib-scene figcaption button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #3a4757;
+  border-radius: 7px;
+  font-size: 14px;
+  background: #141c26;
+}
+.calib-header-actions button:hover,
+.calib-reset:hover,
+.calib-scene figcaption button:hover {
+  background: #1d2834;
+}
+.calib-header-actions .calib-lab-link,
+.calib-lab-callout button {
+  background: #5ee4bd;
+  color: #0c1017;
+  border-color: #5ee4bd;
+  font-weight: 600;
+}
+.calib-header-actions .calib-lab-link:hover,
+.calib-lab-callout button:hover {
+  background: #7ef0cf;
+}
+.calib-lab-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 860px;
+  margin: 12px 0 20px;
+  padding: 14px 18px;
+  border: 1px solid #5ee4bd;
+  border-radius: 10px;
+  background: #11231f;
+}
+.calib-lab-callout p {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: #c6d2df;
+}
+.calib-lab-callout button {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+.calib-roadmap {
+  max-width: 1180px;
+  margin: 20px auto 0;
+  padding: 0 28px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.calib-roadmap-chapter > span {
+  display: block;
+  font-size: 13px;
+  color: #93a4b8;
+  margin-bottom: 4px;
+}
+.calib-roadmap ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.calib-roadmap li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid #263240;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #a6b4c4;
+}
+.calib-roadmap li b {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1f2a36;
+  font-size: 12px;
+}
+.calib-roadmap li small {
+  margin-left: auto;
+  font-size: 11px;
+  color: #7f8fa3;
+}
+.calib-roadmap li.is-here {
+  border-color: #5ee4bd;
+  color: #e7edf5;
+  background: #11231f;
+}
+.calib-roadmap li.is-here b {
+  background: #5ee4bd;
+  color: #0c1017;
+}
+.calib-roadmap li.is-here small {
+  color: #5ee4bd;
+}
+.calib-roadmap li.is-done small {
+  color: #9fc9b8;
+}
+.calib-roadmap li.is-planned {
+  opacity: 0.6;
+}
+
+.calib-article {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 12px 28px 80px;
+}
+.calib-article h1 {
+  font-size: 34px;
+  line-height: 1.3;
+  margin: 26px 0 12px;
+}
+.calib-article h2 {
+  font-size: 26px;
+  margin: 46px 0 12px;
+  padding-top: 18px;
+  border-top: 1px solid #263240;
+  scroll-margin-top: 70px;
+}
+.calib-article h3 {
+  font-size: 20px;
+  margin: 26px 0 8px;
+  color: #cfe0f0;
+  scroll-margin-top: 70px;
+}
+.calib-article h4 {
+  font-size: 18px;
+  margin: 18px 0 8px;
+}
+.calib-article h5 {
+  font-size: 16px;
+  margin: 8px 0;
+}
+.calib-article section > p,
+.calib-article section > ul,
+.calib-article section > ol,
+.calib-lead {
+  max-width: 860px;
+}
+.calib-lead {
+  font-size: 19px;
+  color: #c6d2df;
+}
+.calib-toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 14px 0;
+  font-size: 15px;
+}
+.calib-toc a {
+  color: #8fd8c0;
+}
+.calib-formula {
+  max-width: 860px;
+  margin: 12px 0;
+  padding: 4px 18px;
+  overflow-x: auto;
+  border-left: 3px solid #5ee4bd;
+  background: #121a24;
+}
+.calib-formula .katex-display {
+  margin: 0.6em 0;
+}
+.calib-shell .katex {
+  font-size: 1.08em;
+}
+.calib-formula .katex {
+  font-size: 1.18em;
+}
+.calib-code {
+  max-width: 860px;
+  margin: 12px 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  background: #0f151d;
+  border: 1px solid #263240;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.calib-shell .calib-code code {
+  background: none;
+  padding: 0;
+  color: #d6e2ee;
+}
+.calib-pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 15px;
+}
+.calib-pipeline > span {
+  padding: 4px 10px;
+  border: 1px solid #3a4757;
+  border-radius: 6px;
+  background: #141c26;
+}
+.calib-pipeline i {
+  font-style: normal;
+  color: #8fd8c0;
+}
+.calib-defs {
+  max-width: 860px;
+}
+.calib-defs dt {
+  font-weight: 600;
+  margin-top: 10px;
+  color: #cfe0f0;
+}
+.calib-defs dd {
+  margin: 2px 0 0 0;
+  color: #c6d2df;
+}
+.calib-note {
+  font-size: 14px;
+  color: #9aabbe;
+  line-height: 1.6;
+}
+.calib-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(220px, 1fr);
+  gap: 20px;
+  align-items: start;
+  max-width: 860px;
+  padding: 14px;
+  border: 1px solid #263240;
+  border-radius: 10px;
+  background: #101821;
+}
+.calib-demo svg {
+  width: 100%;
+  background: #0b1118;
+  border-radius: 6px;
+}
+.calib-demo-ideal {
+  fill: none;
+  stroke: #3a4757;
+  stroke-width: 1;
+}
+.calib-demo-warped {
+  fill: none;
+  stroke: #5ee4bd;
+  stroke-width: 1.4;
+}
+
+.calib-table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.calib-table th,
+.calib-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid #263240;
+  text-align: left;
+  vertical-align: top;
+}
+.calib-table th {
+  color: #93a4b8;
+  font-weight: 500;
+}
+.calib-table td {
+  font-variant-numeric: tabular-nums;
+}
+.calib-shell .bad {
+  color: #ff9b85;
+}
+.calib-pose {
+  font-size: 13px;
+}
+
+.calib-lab {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 20px;
+  margin: 14px 0 30px;
+  padding: 18px;
+  border: 1px solid #2f3d4d;
+  border-radius: 12px;
+  background: #0f161f;
+}
+.calib-lab.is-stale .calib-results {
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.calib-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: sticky;
+  top: 80px;
+  align-self: start;
+}
+.calib-slider {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.calib-slider > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #b9c7d6;
+}
+.calib-slider b {
+  font-weight: 600;
+  color: #e7edf5;
+  font-variant-numeric: tabular-nums;
+}
+.calib-slider small {
+  color: #93a4b8;
+  font-weight: 400;
+}
+.calib-slider input {
+  width: 100%;
+  accent-color: #5ee4bd;
+}
+.calib-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.calib-check input {
+  flex: none;
+  margin-top: 5px;
+  accent-color: #5ee4bd;
+}
+.calib-check code {
+  font-size: 11px;
+  word-break: break-all;
+}
+.calib-radio {
+  border: 1px solid #2f3d4d;
+  border-radius: 8px;
+  padding: 6px 10px 8px;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.calib-radio legend {
+  color: #93a4b8;
+  padding: 0 4px;
+}
+.calib-radio label {
+  display: flex;
+  gap: 8px;
+}
+.calib-reset {
+  align-self: flex-start;
+}
+.calib-results {
+  min-width: 0;
+}
+.calib-results h4:first-child {
+  margin-top: 0;
+}
+.calib-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 8px 0;
+}
+.calib-metrics > div {
+  padding: 6px 12px;
+  border: 1px solid #2a3644;
+  border-radius: 8px;
+  background: #131c26;
+  display: grid;
+  line-height: 1.4;
+}
+.calib-metrics span {
+  font-size: 12px;
+  color: #93a4b8;
+}
+.calib-metrics b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.calib-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin: 10px 0;
+}
+.calib-view-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #a6b4c4;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+.calib-view-picker select {
+  background: #141c26;
+  color: inherit;
+  border: 1px solid #3a4757;
+  border-radius: 5px;
+  padding: 2px 4px;
+}
+.calib-image {
+  width: 100%;
+  background: #0b1118;
+  border-radius: 6px;
+}
+.calib-image-frame {
+  fill: #0b1118;
+  stroke: #3a4757;
+  stroke-width: 3;
+}
+.calib-image-grid {
+  fill: none;
+  stroke: #33414f;
+  stroke-width: 2;
+}
+.calib-image-error {
+  stroke: #ff9b85;
+  stroke-width: 3;
+}
+.calib-image-corner {
+  fill: none;
+  stroke: #5ee4bd;
+  stroke-width: 2;
+}
+.calib-image-pp-truth line {
+  stroke: #e7edf5;
+  stroke-width: 3;
+}
+.calib-image-pp-est {
+  fill: none;
+  stroke: #ffd166;
+  stroke-width: 3;
+}
+.calib-scene {
+  margin: 0;
+}
+.calib-scene-canvas {
+  height: 360px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #263240;
+  color: #9aabbe;
+  font-size: 14px;
+}
+.calib-scene-canvas canvas {
+  display: block;
+}
+.calib-scene figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #a6b4c4;
+}
+.calib-scene-help {
+  color: #7f8fa3;
+}
+.calib-scene figcaption button {
+  margin-left: auto;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+.calib-tasks {
+  grid-column: 1 / -1;
+  padding: 12px 16px;
+  border: 1px dashed #4b5d70;
+  border-radius: 10px;
+  background: #121a23;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.calib-tasks strong {
+  color: #ffd166;
+}
+.calib-tasks ol {
+  margin: 6px 0 0;
+  padding-left: 22px;
+}
+.calib-tasks li + li {
+  margin-top: 4px;
+}
+.calib-error {
+  color: #ff9b85;
+}
+.calib-pitfalls li + li {
+  margin-top: 4px;
+}
+
+@media (max-width: 1000px) {
+  .calib-roadmap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .calib-lab,
+  .calib-two,
+  .calib-demo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .calib-controls {
+    position: static;
+  }
+}
+@media (max-width: 560px) {
+  .calib-roadmap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .calib-header,
+  .calib-article,
+  .calib-roadmap {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

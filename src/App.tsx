@@ -43,8 +43,17 @@ import {
 import { downloadBlob, exportPng, rasterize } from "./lib/images";
 const PatternScene = lazy(() => import("./components/PatternScene"));
 const Sandbox = lazy(() => import("./sandbox/Sandbox"));
-type LearningMode = "guided" | "explore" | "sandbox";
-const LEARNING_MODES: readonly string[] = ["guided", "explore", "sandbox"];
+const CalibrationCourse = lazy(() => import("./calibration/CalibrationCourse"));
+const CalibrationLab = lazy(() => import("./calibration/lab/LabPage"));
+type LearningMode =
+  "guided" | "explore" | "sandbox" | "calibration" | "calib-lab";
+const LEARNING_MODES: readonly string[] = [
+  "guided",
+  "explore",
+  "sandbox",
+  "calibration",
+  "calib-lab",
+];
 const COLORS = ["#5ee4bd", "#b7a0fa", "#edbd79"];
 type Tab = "lab" | "notes" | "limits";
 function format(v: number, digits = 3) {
@@ -251,7 +260,8 @@ export default function App() {
   const changeMode = (mode: LearningMode) => {
     setLearningMode(mode);
     const url = new URL(location.href);
-    if (mode === "sandbox") url.searchParams.set("workspace", mode);
+    if (mode === "sandbox" || mode === "calibration" || mode === "calib-lab")
+      url.searchParams.set("workspace", mode);
     else url.searchParams.delete("workspace");
     history.replaceState(null, "", url);
     try {
@@ -382,8 +392,31 @@ export default function App() {
         <Sandbox
           onGuide={() => changeMode("guided")}
           onExplore={() => changeMode("explore")}
+          onCalibration={() => changeMode("calibration")}
           initialView={initialSandboxView}
         />
+      </Suspense>
+    );
+  if (tab === "lab" && learningMode === "calibration")
+    return (
+      <Suspense
+        fallback={
+          <div className="scene-loading">正在載入 Calibration 課程…</div>
+        }
+      >
+        <CalibrationCourse
+          onGuide={() => changeMode("guided")}
+          onSandbox={() => changeMode("sandbox")}
+          onLab={() => changeMode("calib-lab")}
+        />
+      </Suspense>
+    );
+  if (tab === "lab" && learningMode === "calib-lab")
+    return (
+      <Suspense
+        fallback={<div className="scene-loading">正在載入 3D 實驗室…</div>}
+      >
+        <CalibrationLab onBack={() => changeMode("calibration")} />
       </Suspense>
     );
   if (tab === "lab" && learningMode === "guided")
