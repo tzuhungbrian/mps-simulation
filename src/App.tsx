@@ -13,7 +13,6 @@ import {
   FlaskConical,
   Focus,
   Info,
-  Layers3,
   MousePointer2,
   RotateCcw,
   Save,
@@ -41,19 +40,15 @@ import {
   serializeParameters,
 } from "./lib/io";
 import { downloadBlob, exportPng, rasterize } from "./lib/images";
+import PathHome from "./path/PathHome";
+import PathNav from "./path/PathNav";
+import { pathProgress } from "./path/progress";
+import { parseRoute, rememberRoute, routeUrl } from "./path/route";
+import type { Route } from "./path/stations";
 const PatternScene = lazy(() => import("./components/PatternScene"));
 const Sandbox = lazy(() => import("./sandbox/Sandbox"));
-const CalibrationCourse = lazy(() => import("./calibration/CalibrationCourse"));
+const StationPage = lazy(() => import("./path/StationPage"));
 const CalibrationLab = lazy(() => import("./calibration/lab/LabPage"));
-type LearningMode =
-  "guided" | "explore" | "sandbox" | "calibration" | "calib-lab";
-const LEARNING_MODES: readonly string[] = [
-  "guided",
-  "explore",
-  "sandbox",
-  "calibration",
-  "calib-lab",
-];
 const COLORS = ["#5ee4bd", "#b7a0fa", "#edbd79"];
 type Tab = "lab" | "notes" | "limits";
 function format(v: number, digits = 3) {
@@ -237,39 +232,22 @@ function initialState(): { config: SimulationConfig; message: string } {
 }
 
 export default function App() {
-  // The multi-view analysis lives inside the sandbox; ?workspace=aoi opens that tab.
-  const [initialSandboxView] = useState(() =>
-    new URLSearchParams(location.search).get("workspace") === "aoi"
-      ? ("multiview" as const)
-      : ("sandbox" as const),
-  );
-  const [learningMode, setLearningMode] = useState<LearningMode>(() => {
-    const requested = new URLSearchParams(location.search).get("workspace");
-    if (requested === "aoi") return "sandbox";
-    if (requested && LEARNING_MODES.includes(requested))
-      return requested as LearningMode;
-    try {
-      const saved = sessionStorage.getItem("structured-light.view-mode");
-      return saved && LEARNING_MODES.includes(saved)
-        ? (saved as LearningMode)
-        : "sandbox";
-    } catch {
-      return "sandbox";
-    }
-  });
-  const changeMode = (mode: LearningMode) => {
-    setLearningMode(mode);
-    const url = new URL(location.href);
-    if (mode === "sandbox" || mode === "calibration" || mode === "calib-lab")
-      url.searchParams.set("workspace", mode);
-    else url.searchParams.delete("workspace");
-    history.replaceState(null, "", url);
-    try {
-      sessionStorage.setItem("structured-light.view-mode", mode);
-    } catch {
-      /* Optional view preference: the in-memory mode still works. */
-    }
+  const [route, setRoute] = useState<Route>(() => parseRoute(location.search));
+  useEffect(() => {
+    const pop = () => setRoute(parseRoute(location.search));
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, []);
+  const go = (next: Route) => {
+    history.pushState(null, "", routeUrl(next));
+    rememberRoute(next);
+    setTab("lab");
+    setRoute(next);
+    window.scrollTo({ top: 0 });
   };
+  const tool = route.kind === "tool" ? route : null;
+  const toolStation = tool?.station;
+  const nav = <PathNav station={toolStation} onGo={go} />;
   const [initial] = useState(initialState),
     [config, setConfig] = useState(initial.config),
     [message, setMessage] = useState(initial.message),
@@ -384,42 +362,48 @@ export default function App() {
     setProbeRowFraction(0.5);
     notify("已重設目前實驗；不會覆寫已保存的參數。");
   };
-  if (tab === "lab" && learningMode === "sandbox")
+  if (route.kind === "home") return <PathHome onGo={go} />;
+  if (route.kind === "station")
+    return (
+      <Suspense fallback={<div className="scene-loading">正在載入站點…</div>}>
+        <StationPage n={route.n} part={route.part} onGo={go} />
+      </Suspense>
+    );
+  const sandboxView =
+    tool?.tool === "aoi"
+      ? ("multiview" as const)
+      : tool?.tool === "analysis"
+        ? ("analysis" as const)
+        : ("sandbox" as const);
+  if (
+    tab === "lab" &&
+    tool &&
+    ["sandbox", "aoi", "analysis"].includes(tool.tool)
+  )
     return (
       <Suspense
         fallback={<div className="scene-loading">正在建立 3D 沙盒…</div>}
       >
         <Sandbox
-          onGuide={() => changeMode("guided")}
-          onExplore={() => changeMode("explore")}
-          onCalibration={() => changeMode("calibration")}
-          initialView={initialSandboxView}
+          key={sandboxView}
+          nav={<PathNav station={toolStation} onGo={go} compact />}
+          initialView={sandboxView}
         />
       </Suspense>
     );
-  if (tab === "lab" && learningMode === "calibration")
-    return (
-      <Suspense
-        fallback={
-          <div className="scene-loading">正在載入 Calibration 課程…</div>
-        }
-      >
-        <CalibrationCourse
-          onGuide={() => changeMode("guided")}
-          onSandbox={() => changeMode("sandbox")}
-          onLab={() => changeMode("calib-lab")}
-        />
-      </Suspense>
-    );
-  if (tab === "lab" && learningMode === "calib-lab")
+  if (tab === "lab" && tool?.tool === "calib-lab")
     return (
       <Suspense
         fallback={<div className="scene-loading">正在載入 3D 實驗室…</div>}
       >
-        <CalibrationLab onBack={() => changeMode("calibration")} />
+        <CalibrationLab
+          nav={nav}
+          initialStep={tool.step}
+          onTasks={pathProgress.reportAuto}
+        />
       </Suspense>
     );
-  if (tab === "lab" && learningMode === "guided")
+  if (tab === "lab" && tool?.tool === "guided")
     return (
       <LearningExperience
         config={config}
@@ -435,10 +419,16 @@ export default function App() {
         }}
         onSelectX={setProbeFraction}
         onChoosePixel={choosePixel}
-        onExplore={() => changeMode("explore")}
-        onSandbox={() => changeMode("sandbox")}
+        onExplore={() =>
+          go({ kind: "tool", tool: "explore", station: toolStation })
+        }
+        onSandbox={() =>
+          go({ kind: "tool", tool: "sandbox", station: toolStation })
+        }
         onReadNotes={() => setTab("notes")}
         onReadLimits={() => setTab("limits")}
+        nav={nav}
+        initialStep={tool.step ? Number(tool.step) : undefined}
       />
     );
   return (
@@ -486,55 +476,6 @@ export default function App() {
             實作邊界
           </button>
         </nav>
-        <div className="sidebar-label roadmap-label">DEVELOPMENT ROADMAP</div>
-        <div className="roadmap">
-          <button
-            className="roadmap-item current"
-            onClick={() => setTab("lab")}
-          >
-            <span className="roadmap-step">01</span>
-            <span>
-              <strong>Phase Shifting</strong>
-              <small>三步相移與數學模型</small>
-            </span>
-            <span className="live-dot" />
-          </button>
-          {[
-            [Box, "02", "Virtual 3D Scanner", "3D 沙盒 · 基礎版已支援"],
-            [Layers3, "03", "Micro Phase Shifting", "Gupta & Nayar · F+2"],
-            [Activity, "04", "Non-ideal Effects", "物理效應與誤差分析"],
-          ].map(([Icon, n, title, sub]) => {
-            const I = Icon as typeof Box;
-            return (
-              <button
-                className={
-                  n === "02"
-                    ? "roadmap-item sandbox-ready"
-                    : "roadmap-item future"
-                }
-                key={String(n)}
-                onClick={() => {
-                  if (n === "02") {
-                    setTab("lab");
-                    changeMode("sandbox");
-                  } else setTab("limits");
-                }}
-                title={
-                  n === "02"
-                    ? "進入 3D 沙盒（已知校正基礎版）"
-                    : "尚未實作，查看開發範圍"
-                }
-              >
-                <span className="roadmap-step">{n as string}</span>
-                <span>
-                  <strong>{title as string}</strong>
-                  <small>{sub as string}</small>
-                </span>
-                <I size={14} />
-              </button>
-            );
-          })}
-        </div>
         <div className="sidebar-bottom">
           <div className="model-badge">
             <span className="live-dot" />
@@ -554,16 +495,13 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
-            工作空間
+            工作台
             <ChevronRight size={13} />
-            <span>三步 Phase Shifting</span>
+            <span>1D 自由實驗</span>
           </div>
           <div className="top-meta">
-            <span className="linear-pill">
-              <span />
-              Linear response
-            </span>
             <span className="local-label">本機運算 · 無資料上傳</span>
+            {nav}
           </div>
         </header>
         <main>
@@ -591,10 +529,9 @@ export default function App() {
             </div>
             <button
               className="help-button"
-              onClick={() => {
-                setTab("lab");
-                changeMode("guided");
-              }}
+              onClick={() =>
+                go({ kind: "tool", tool: "guided", station: toolStation ?? 3 })
+              }
               aria-label="一步一步學"
             >
               <CircleHelp size={18} />

@@ -64,6 +64,7 @@ export function Slider({
   step,
   unit,
   onChange,
+  disabled,
 }: {
   label: string;
   value: number;
@@ -72,6 +73,7 @@ export function Slider({
   step: number;
   unit?: string;
   onChange: (v: number) => void;
+  disabled?: boolean;
 }) {
   return (
     <label className="calib-slider">
@@ -88,6 +90,7 @@ export function Slider({
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
       />
     </label>

@@ -4,6 +4,7 @@ import {
   LAB_CAMERA,
   LAB_PROJECTOR,
   boardTilt,
+  cameraAt,
   defocusSigma,
   exposureGain,
   placementPose,
@@ -59,10 +60,18 @@ export const CELL_NAMES = [
 export function hintsFor(
   placement: BoardPlacement,
   settings: CaptureSettings,
-  previous: BoardPlacement[],
+  previous: { placement: BoardPlacement; settings: CaptureSettings }[],
 ): Hint[] {
   const hints: Hint[] = [];
-  const truth = truthProjections(placement);
+  const truth = truthProjections(placement, settings.focusMm);
+  const prevFocus = previous[0]?.settings.focusMm;
+  if (prevFocus !== undefined && settings.focusMm !== prevFocus) {
+    const dfx = cameraAt(settings.focusMm).fx - cameraAt(prevFocus).fx;
+    hints.push({
+      level: "error",
+      text: `對焦距離 ${settings.focusMm} mm 與已納入的照片（${prevFocus} mm）不同：轉對焦環會移動鏡片，焦距 fx 跟著變了約 ${dfx > 0 ? "+" : ""}${dfx.toFixed(1)} px。同一組校正混用不同對焦，K 只會是折衷值。請轉回 ${prevFocus} mm，或刪掉舊照片重拍。`,
+    });
+  }
   const outCam = truth.camera.filter(
     (p) => !inside(p, LAB_CAMERA.width, LAB_CAMERA.height, 8),
   ).length;
@@ -96,7 +105,7 @@ export function hintsFor(
   if (sigma > 2)
     hints.push({
       level: "warn",
-      text: `失焦：模糊 σ ≈ ${sigma.toFixed(1)} px（板子 ${z.toFixed(0)} mm、對焦 ${settings.focusMm} mm）。調整對焦或縮小光圈（f 值調大）。`,
+      text: `失焦：模糊 σ ≈ ${sigma.toFixed(1)} px（板子 ${z.toFixed(0)} mm、對焦 ${settings.focusMm} mm）。${previous.length ? "已經拍過照片就別再轉對焦環：把板子移近對焦距離，或縮小光圈（f 值調大）。" : "調整對焦（之後就鎖住），或縮小光圈（f 值調大）。"}`,
     });
   const peak = exposureGain(settings) * BOARD.white * (1 + settings.ambient);
   if (peak > 250)
@@ -118,7 +127,7 @@ export function hintsFor(
       text: "板子在畫面中很小（太遠）：角點只佔一小塊區域，對畸變的約束很弱。",
     });
   const similar = previous.findIndex(
-    (q) =>
+    ({ placement: q }) =>
       Math.hypot(q.x - placement.x, q.y - placement.y, q.z - placement.z) <
         15 &&
       Math.abs(q.rx - placement.rx) +

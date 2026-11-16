@@ -13,6 +13,7 @@ import {
   LAB_PROJECTOR,
   LAB_STEREO,
   boardCorners,
+  cameraAt,
   truthProjections,
   type BoardPlacement,
 } from "./rig";
@@ -129,6 +130,27 @@ describe("simulated bench", () => {
     expect(
       hintsFor(DEFAULT_PLACEMENT, DEFAULT_SETTINGS, []).every(
         (h) => h.level !== "error",
+      ),
+    ).toBe(true);
+  });
+
+  it("refocusing changes fx (focus breathing) and the assistant flags it", () => {
+    expect(cameraAt(DEFAULT_SETTINGS.focusMm).fx).toBe(LAB_CAMERA.fx);
+    // Thin lens f = 16 mm: v(300) / v(520) = 1.0238.
+    expect(cameraAt(300).fx / LAB_CAMERA.fx).toBeCloseTo(1.0238, 4);
+    expect(cameraAt(1000).fx).toBeLessThan(LAB_CAMERA.fx);
+    const previous = [
+      { placement: DEFAULT_PLACEMENT, settings: DEFAULT_SETTINGS },
+    ];
+    const placement = { ...DEFAULT_PLACEMENT, rx: 25 };
+    expect(
+      hintsFor(placement, DEFAULT_SETTINGS, previous).every(
+        (h) => h.level !== "error",
+      ),
+    ).toBe(true);
+    expect(
+      hintsFor(placement, { ...DEFAULT_SETTINGS, focusMm: 600 }, previous).some(
+        (h) => h.level === "error" && h.text.includes("對焦"),
       ),
     ).toBe(true);
   });

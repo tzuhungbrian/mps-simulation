@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft,
-  Camera,
-  Check,
-  RotateCcw,
-  Shuffle,
-  Trash2,
-  X,
-} from "lucide-react";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Camera, Check, RotateCcw, Shuffle, Trash2, X } from "lucide-react";
 import { createSeededRandom } from "../../core/simulation";
 import { norm3, rotationAngleDeg, rotationToVector, sub3 } from "../linalg";
 import type { Intrinsics, Point2 } from "../camera";
@@ -31,6 +30,7 @@ import {
   LAB_PROJECTOR,
   LAB_STEREO,
   boardTilt,
+  cameraAt,
   placementPose,
   truthProjections,
   type BoardPlacement,
@@ -50,10 +50,10 @@ import "./lab.css";
 
 type Step = "capture" | "camera" | "projector" | "verify";
 const STEPS: { id: Step; label: string }[] = [
-  { id: "capture", label: "① 擺板子・拍照" },
-  { id: "camera", label: "② Camera 校正" },
-  { id: "projector", label: "③ Projector 校正" },
-  { id: "verify", label: "④ 驗證" },
+  { id: "capture", label: "擺板子・拍照" },
+  { id: "camera", label: "Camera 校正" },
+  { id: "projector", label: "Projector 校正" },
+  { id: "verify", label: "驗證" },
 ];
 
 interface Shot {
@@ -117,7 +117,10 @@ function LivePreview({
   shots: Shot[];
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const K = useMemo(() => scaleIntrinsics(LAB_CAMERA, PREVIEW_SCALE), []);
+  const K = useMemo(
+    () => scaleIntrinsics(cameraAt(settings.focusMm), PREVIEW_SCALE),
+    [settings.focusMm],
+  );
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const terms = sceneTerms(K, placementPose(placement), settings, 1);
@@ -177,6 +180,7 @@ function LivePreview({
 }
 
 function ProjectorCoverage({ placement }: { placement: BoardPlacement }) {
+  // Projector pixels do not depend on the camera focus.
   const pts = truthProjections(placement).projector;
   const W = LAB_PROJECTOR.width,
     H = LAB_PROJECTOR.height;
@@ -277,11 +281,33 @@ function IntrinsicsRows({
   );
 }
 
-export default function LabPage({ onBack }: { onBack: () => void }) {
+const TASK_IDS = [
+  "lab.atLeast3",
+  "lab.sameFocus",
+  "lab.atLeast10",
+  "lab.coverage",
+  "lab.directions",
+  "lab.camRms",
+  "lab.stereo",
+  "lab.verify",
+];
+
+export default function LabPage({
+  nav,
+  initialStep,
+  onTasks,
+}: {
+  nav?: ReactNode;
+  initialStep?: string;
+  onTasks?: (done: Record<string, boolean>) => void;
+}) {
   const request = useLabWorker();
-  const [step, setStep] = useState<Step>("capture");
+  const [step, setStep] = useState<Step>(() =>
+    STEPS.some((s) => s.id === initialStep) ? (initialStep as Step) : "capture",
+  );
   const [placement, setPlacement] = useState<BoardPlacement>(DEFAULT_PLACEMENT);
   const [settings, setSettings] = useState<CaptureSettings>(DEFAULT_SETTINGS);
+  const [focusLocked, setFocusLocked] = useState(false);
   const [mode, setMode] = useState<"translate" | "rotate">("rotate");
   const [shots, setShots] = useState<Shot[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
@@ -293,6 +319,7 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
   const [camResult, setCamResult] = useState<{
     result: CameraCalibrationResult;
     keys: number[];
+    focus: number[];
   } | null>(null);
   const [projResult, setProjResult] = useState<{
     result: ProjectorCalibrationResult;
@@ -314,11 +341,12 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
       hintsFor(
         placement,
         settings,
-        shots.map((s) => s.placement),
+        shots.filter((s) => s.include),
       ),
     [placement, settings, shots],
   );
   const good = shots.filter((s) => s.include && s.capture.corners);
+  const goodFocus = new Set(good.map((s) => s.settings.focusMm));
   const projGood = good.filter((s) => s.capture.projector?.every(Boolean));
   const cells = coverage(good.map((s) => s.capture.corners!));
   const directions = new Set(
@@ -365,7 +393,7 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
         ry: Math.round((r() * 2 - 1) * 35),
         rz: Math.round((r() * 2 - 1) * 20),
       };
-      const t = truthProjections(p);
+      const t = truthProjections(p, settings.focusMm);
       const ok = (q: Point2 | null, w: number, h: number) =>
         !!q && q[0] > 10 && q[1] > 10 && q[0] < w - 10 && q[1] < h - 10;
       if (
@@ -390,7 +418,11 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
         views: good.map((s) => s.capture.corners!),
         flags,
       });
-      setCamResult({ result, keys: good.map((s) => s.key) });
+      setCamResult({
+        result,
+        keys: good.map((s) => s.key),
+        focus: good.map((s) => s.settings.focusMm),
+      });
       setProjResult(null);
       setStatus(
         `Camera 校正完成：RMS = ${fmt(result.rms, 3)} px（${good.length} 張）。`,
@@ -454,6 +486,10 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
       done: good.length >= 3,
       text: "至少 3 張成功偵測到角點（calibrateCamera 的最低需求）",
     },
+    {
+      done: good.length >= 3 && goodFocus.size === 1,
+      text: `納入的照片都用同一個對焦距離（拍照前先鎖定對焦環${goodFocus.size > 1 ? `；目前混用 ${goodFocus.size} 種` : ""}）`,
+    },
     { done: good.length >= 10, text: "至少 10 張成功的照片" },
     {
       done: cells.every(Boolean),
@@ -484,8 +520,17 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
     },
   ];
 
+  const taskKey = tasks.map((t) => (t.done ? 1 : 0)).join("");
+  useEffect(() => {
+    onTasks?.(
+      Object.fromEntries(TASK_IDS.map((id, i) => [id, taskKey[i] === "1"])),
+    );
+  }, [taskKey, onTasks]);
+
   const sel = shots.find((s) => s.key === selected) ?? null;
   const camIndex = camResult && sel ? camResult.keys.indexOf(sel.key) : -1;
+  const camFocus = camResult ? [...new Set(camResult.focus)] : [];
+  const camTruth = cameraAt(camFocus[0] ?? settings.focusMm);
   const setP = (patch: Partial<BoardPlacement>) =>
     setPlacement((p) => ({ ...p, ...patch }));
   const setS = (patch: Partial<CaptureSettings>) =>
@@ -525,12 +570,7 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
             </button>
           ))}
         </nav>
-        <div className="calib-header-actions">
-          <button onClick={onBack}>
-            <ArrowLeft size={16} />
-            回到課程
-          </button>
-        </div>
+        {nav}
       </header>
 
       <div className="lab-status" role="status">
@@ -768,8 +808,20 @@ export default function LabPage({ onBack }: { onBack: () => void }) {
                     max={1000}
                     step={5}
                     unit="mm"
+                    disabled={focusLocked}
                     onChange={(v) => setS({ focusMm: v })}
                   />
+                  <label className="calib-check">
+                    <input
+                      type="checkbox"
+                      checked={focusLocked}
+                      onChange={(e) => setFocusLocked(e.target.checked)}
+                    />
+                    <span>
+                      鎖定對焦環（目前 <M>{"f_x"}</M> 真值 ≈{" "}
+                      {fmt(cameraAt(settings.focusMm).fx, 1)} px）
+                    </span>
+                  </label>
                   <Slider
                     label="環境光"
                     value={settings.ambient}
@@ -890,10 +942,22 @@ if ok:
                       <b>{camResult.keys.length}</b>
                     </div>
                   </div>
+                  {camFocus.length > 1 && (
+                    <p className="lab-hint lab-hint-error">
+                      這組照片混用了 {camFocus.length} 種對焦距離（
+                      {camFocus
+                        .map((f) => `${f} mm → fx ${fmt(cameraAt(f).fx, 1)} px`)
+                        .join("、")}
+                      ）。每種對焦其實是不同的 K，calibrateCamera
+                      只能找一個折衷值：RMS
+                      變大，參數也不對應任何一張。真值欄以第 1 張的對焦（
+                      {camFocus[0]} mm）為準。
+                    </p>
+                  )}
                   <IntrinsicsRows
                     est={camResult.result.K}
                     std={camResult.result.stdIntrinsics}
-                    truth={LAB_CAMERA}
+                    truth={camTruth}
                     showTruth={showTruth}
                   />
                   <h4>每張照片的重投影誤差（點選查看）</h4>
@@ -1089,7 +1153,8 @@ if ok:
               </div>
               {!camResult && (
                 <p className="calib-note">
-                  需要先完成 ② Camera 校正：stereoCalibrate 會固定 Camera 內參。
+                  需要先完成「Camera 校正」：stereoCalibrate 會固定 Camera
+                  內參。
                 </p>
               )}
               <p className="calib-note">
@@ -1152,7 +1217,9 @@ rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
                 座標），量相鄰角點的距離。格子真實大小是 {BOARD.square} mm。
               </p>
               {checks.length === 0 ? (
-                <p className="calib-note">先完成 ② 與 ③。</p>
+                <p className="calib-note">
+                  先完成「Camera 校正」與「Projector 校正」。
+                </p>
               ) : (
                 <>
                   <div className="calib-metrics">

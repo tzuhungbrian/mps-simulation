@@ -65,107 +65,6 @@
 .calib-scene figcaption button:hover {
   background: #1d2834;
 }
-.calib-header-actions .calib-lab-link,
-.calib-lab-callout button {
-  background: #5ee4bd;
-  color: #0c1017;
-  border-color: #5ee4bd;
-  font-weight: 600;
-}
-.calib-header-actions .calib-lab-link:hover,
-.calib-lab-callout button:hover {
-  background: #7ef0cf;
-}
-.calib-lab-callout {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 860px;
-  margin: 12px 0 20px;
-  padding: 14px 18px;
-  border: 1px solid #5ee4bd;
-  border-radius: 10px;
-  background: #11231f;
-}
-.calib-lab-callout p {
-  margin: 4px 0 0;
-  font-size: 15px;
-  color: #c6d2df;
-}
-.calib-lab-callout button {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-}
-
-.calib-roadmap {
-  max-width: 1180px;
-  margin: 20px auto 0;
-  padding: 0 28px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-.calib-roadmap-chapter > span {
-  display: block;
-  font-size: 13px;
-  color: #93a4b8;
-  margin-bottom: 4px;
-}
-.calib-roadmap ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 4px;
-}
-.calib-roadmap li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border: 1px solid #263240;
-  border-radius: 6px;
-  font-size: 14px;
-  line-height: 1.4;
-  color: #a6b4c4;
-}
-.calib-roadmap li b {
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #1f2a36;
-  font-size: 12px;
-}
-.calib-roadmap li small {
-  margin-left: auto;
-  font-size: 11px;
-  color: #7f8fa3;
-}
-.calib-roadmap li.is-here {
-  border-color: #5ee4bd;
-  color: #e7edf5;
-  background: #11231f;
-}
-.calib-roadmap li.is-here b {
-  background: #5ee4bd;
-  color: #0c1017;
-}
-.calib-roadmap li.is-here small {
-  color: #5ee4bd;
-}
-.calib-roadmap li.is-done small {
-  color: #9fc9b8;
-}
-.calib-roadmap li.is-planned {
-  opacity: 0.6;
-}
 
 .calib-article {
   max-width: 1180px;
@@ -567,9 +466,6 @@
 }
 
 @media (max-width: 1000px) {
-  .calib-roadmap {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
   .calib-lab,
   .calib-two,
   .calib-demo {
@@ -580,12 +476,8 @@
   }
 }
 @media (max-width: 560px) {
-  .calib-roadmap {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .calib-header,
-  .calib-article,
-  .calib-roadmap {
+  .calib-article {
     padding-left: 14px;
     padding-right: 14px;
   }

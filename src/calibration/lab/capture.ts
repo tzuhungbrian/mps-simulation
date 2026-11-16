@@ -7,7 +7,7 @@ import { expose, saturation, sceneTerms, shade } from "./render";
 import {
   BOARD,
   FRINGE,
-  LAB_CAMERA,
+  cameraAt,
   placementPose,
   type BoardPlacement,
   type CaptureSettings,
@@ -48,7 +48,7 @@ export function runCapture(
   cv: CV,
 ): Capture {
   const t0 = performance.now();
-  const K = LAB_CAMERA;
+  const K = cameraAt(settings.focusMm);
   const W = K.width,
     H = K.height;
   const terms = sceneTerms(K, placementPose(placement), settings, 2);

@@ -2,7 +2,7 @@ import { composePose, project, type Intrinsics, type Pose } from "../camera";
 import { matMul, mul3, rodrigues, sub3, type Vec3 } from "../linalg";
 import { aimAtPixel } from "../simulate";
 
-/** Bench camera: 16 mm lens on a 10 µm-pitch 1024×768 sensor. */
+/** Bench camera: 16 mm lens on a 10 µm-pitch 1024×768 sensor, focused at DEFAULT_SETTINGS.focusMm (see cameraAt). */
 export const LAB_CAMERA: Intrinsics = {
   width: 1024,
   height: 768,
@@ -113,6 +113,15 @@ export const DEFAULT_SETTINGS: CaptureSettings = {
   ambient: 0.08,
 };
 
+/** Thin-lens lens-to-sensor distance when focused at d mm. */
+const imageDistance = (d: number) => (LENS.focalMm * d) / (d - LENS.focalMm);
+
+/** Focus breathing: refocusing moves the lens, so fx and fy scale with the image distance. */
+export function cameraAt(focusMm: number): Intrinsics {
+  const s = imageDistance(focusMm) / imageDistance(DEFAULT_SETTINGS.focusMm);
+  return { ...LAB_CAMERA, fx: LAB_CAMERA.fx * s, fy: LAB_CAMERA.fy * s };
+}
+
 /** Thin-lens blur σ in camera pixels for an object at depth z. */
 export function defocusSigma(s: CaptureSettings, z: number): number {
   const f = LENS.focalMm;
@@ -127,11 +136,15 @@ export function exposureGain(s: CaptureSettings): number {
 }
 
 /** Pixel positions of the inner corners in camera and projector, truth (for the lab assistant only). */
-export function truthProjections(p: BoardPlacement) {
+export function truthProjections(
+  p: BoardPlacement,
+  focusMm = DEFAULT_SETTINGS.focusMm,
+) {
   const pose = placementPose(p);
   const pts = boardCorners();
+  const camera = cameraAt(focusMm);
   return {
-    camera: pts.map((X) => project(LAB_CAMERA, pose, X)),
+    camera: pts.map((X) => project(camera, pose, X)),
     projector: pts.map((X) =>
       project(LAB_PROJECTOR, composePose(LAB_STEREO, pose), X),
     ),

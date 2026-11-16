@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowDownToLine,
-  ArrowLeft,
-  ArrowRight,
   Check,
   Crosshair,
   Maximize2,
@@ -335,14 +340,10 @@ function NumberCell({
 }
 
 export default function Sandbox({
-  onGuide,
-  onExplore,
-  onCalibration,
+  nav,
   initialView = "sandbox",
 }: {
-  onGuide: () => void;
-  onExplore: () => void;
-  onCalibration: () => void;
+  nav?: ReactNode;
   initialView?: SandboxView;
 }) {
   const [config, setConfig] = useState(loadWorld),
@@ -796,19 +797,8 @@ export default function Sandbox({
             <RotateCcw size={16} />
             重新掃描
           </button>
-          <button onClick={onGuide}>
-            <ArrowLeft size={16} />
-            一步一步學
-          </button>
-          <button onClick={onExplore}>
-            一維自由實驗
-            <ArrowRight size={16} />
-          </button>
-          <button onClick={onCalibration}>
-            Calibration 課程
-            <ArrowRight size={16} />
-          </button>
         </div>
+        {nav}
         <span
           className="sandbox-progress"
           hidden={!busy}

@@ -1,4 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { ArrowLeft, ArrowRight, BookOpen, Check, ScanLine } from "lucide-react";
 import {
   DEFAULT_CONFIG,
@@ -25,6 +32,8 @@ interface Props {
   onSandbox: () => void;
   onReadNotes: () => void;
   onReadLimits: () => void;
+  nav?: ReactNode;
+  initialStep?: number;
 }
 function Capture({
   frame,
@@ -114,6 +123,8 @@ export default function LearningExperience({
   onSandbox,
   onReadNotes,
   onReadLimits,
+  nav,
+  initialStep,
 }: Props) {
   const [step, setStep] = useState(0),
     [relative, setRelative] = useState(false),
@@ -175,6 +186,14 @@ export default function LearningExperience({
     setRelative(false);
     setStep(1);
   };
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !initialStep || initialStep < 1 || initialStep > 4)
+      return;
+    opened.current = true;
+    start();
+    setStep(initialStep);
+  }, []);
   const stepTitles = [
     "",
     "第 1 步：同一個場景，拍三次。",
@@ -202,16 +221,7 @@ export default function LearningExperience({
             結構光實驗室<small>Structured Light Lab</small>
           </span>
         </a>
-        <div className="learning-header-actions">
-          <button className="sandbox-entry-button" onClick={onSandbox}>
-            進入 3D 沙盒
-            <ArrowRight size={18} />
-          </button>
-          <button className="lesson-secondary" onClick={onExplore}>
-            自由實驗
-            <ArrowRight size={18} />
-          </button>
-        </div>
+        {nav}
       </header>
       <main
         className={`learning-main ${step === 4 ? "with-unwrapping" : step > 0 ? "with-scene" : ""}`}

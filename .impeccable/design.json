@@ -1,0 +1,394 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-16T00:00:00Z",
+  "title": "Design System: Structured Light Lab · 結構光實驗室",
+  "extensions": {
+    "colorMeta": {
+      "phosphor-mint": {
+        "role": "primary",
+        "displayName": "Phosphor Mint",
+        "tonalRamp": [
+          "#0b1f19",
+          "#11231f",
+          "#1d4a3d",
+          "#2f7a63",
+          "#46b393",
+          "#5ee4bd",
+          "#9af1d6",
+          "#d6fbef"
+        ]
+      },
+      "phosphor-mint-hover": {
+        "role": "primary",
+        "displayName": "Phosphor Mint Hover"
+      },
+      "phosphor-mint-soft": {
+        "role": "primary",
+        "displayName": "Soft Phosphor"
+      },
+      "mint-ink": { "role": "primary", "displayName": "Mint Ink" },
+      "mint-wash": { "role": "primary", "displayName": "Mint Wash" },
+      "mint-deep-ink": { "role": "primary", "displayName": "Mint Deep Ink" },
+      "mint-edge": { "role": "primary", "displayName": "Mint Edge" },
+      "camera-cyan": {
+        "role": "secondary",
+        "displayName": "Camera Cyan",
+        "tonalRamp": [
+          "#0a2230",
+          "#0f3448",
+          "#17567a",
+          "#2589b8",
+          "#47b8ea",
+          "#69d9ff",
+          "#a6e9ff",
+          "#dcf6ff"
+        ]
+      },
+      "projector-lavender": {
+        "role": "secondary",
+        "displayName": "Projector Lavender",
+        "tonalRamp": [
+          "#1e1733",
+          "#2c2250",
+          "#45367d",
+          "#6750b3",
+          "#8d76e0",
+          "#b7a0fa",
+          "#d4c7fc",
+          "#efeafe"
+        ]
+      },
+      "estimate-amber": {
+        "role": "secondary",
+        "displayName": "Estimate Amber",
+        "tonalRamp": [
+          "#2a2415",
+          "#46391a",
+          "#746241",
+          "#a8862c",
+          "#e0b24a",
+          "#ffd166",
+          "#ffe1a5",
+          "#fff4dc"
+        ]
+      },
+      "error-salmon": {
+        "role": "secondary",
+        "displayName": "Error Salmon",
+        "tonalRamp": [
+          "#2e1612",
+          "#4a221b",
+          "#7a3a2e",
+          "#b25a48",
+          "#e27d66",
+          "#ff9b85",
+          "#ffc3b5",
+          "#ffe9e3"
+        ]
+      },
+      "stale-amber-ink": {
+        "role": "secondary",
+        "displayName": "Stale Amber Ink"
+      },
+      "stale-amber-wash": {
+        "role": "secondary",
+        "displayName": "Stale Amber Wash"
+      },
+      "amber-edge": { "role": "secondary", "displayName": "Amber Edge" },
+      "darkroom-black": {
+        "role": "neutral",
+        "displayName": "Darkroom Black",
+        "tonalRamp": [
+          "#0b1118",
+          "#0c1017",
+          "#141c26",
+          "#263240",
+          "#3a4757",
+          "#7f8fa3",
+          "#a6b4c4",
+          "#e7edf5"
+        ]
+      },
+      "instrument-well": {
+        "role": "neutral",
+        "displayName": "Instrument Well"
+      },
+      "bench-surface": { "role": "neutral", "displayName": "Bench Surface" },
+      "formula-well": { "role": "neutral", "displayName": "Formula Well" },
+      "raised-surface": { "role": "neutral", "displayName": "Raised Surface" },
+      "raised-surface-hover": {
+        "role": "neutral",
+        "displayName": "Raised Surface Hover"
+      },
+      "hairline": { "role": "neutral", "displayName": "Hairline" },
+      "control-edge": { "role": "neutral", "displayName": "Control Edge" },
+      "scrim": { "role": "neutral", "displayName": "Scrim" },
+      "text-primary": { "role": "neutral", "displayName": "Text Primary" },
+      "text-secondary": { "role": "neutral", "displayName": "Text Secondary" },
+      "text-muted": { "role": "neutral", "displayName": "Text Muted" },
+      "text-label": { "role": "neutral", "displayName": "Text Label" },
+      "text-faint": { "role": "neutral", "displayName": "Text Faint" },
+      "sandbox-panel": { "role": "neutral", "displayName": "Sandbox Panel" },
+      "sandbox-field": { "role": "neutral", "displayName": "Sandbox Field" },
+      "sandbox-field-edge": {
+        "role": "neutral",
+        "displayName": "Sandbox Field Edge"
+      },
+      "sandbox-field-text": {
+        "role": "neutral",
+        "displayName": "Sandbox Field Text"
+      },
+      "sandbox-accent": { "role": "primary", "displayName": "Sandbox Accent" }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "教學單元的開場標題。"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "課程文章 h1；學習路徑站點標題（34/700/1.25）與「繼續」卡標題（34/650）。"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "課程章節 h2，上方有 Hairline 分隔線；檢核頁「通過條件」。"
+      },
+      "subtitle": {
+        "displayName": "Subtitle",
+        "purpose": "h3；學習路徑首頁區塊標題（20/650/1.4）。"
+      },
+      "body-lesson": {
+        "displayName": "Body – Lesson",
+        "purpose": "一步一步學的正文。"
+      },
+      "body-article": {
+        "displayName": "Body – Article",
+        "purpose": "Calibration 課程正文，段落最寬 860px。"
+      },
+      "body-tool": {
+        "displayName": "Body – Tool",
+        "purpose": "沙盒與 3D 實驗室等操作介面。"
+      },
+      "label": { "displayName": "Label", "purpose": "欄位標籤、按鈕、表格。" },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "圖說、場景提示、圖例；站點狀態、來源標籤、產出出處。"
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "數值欄位、指標、座標、像素讀數。"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "background 0.14s, color 0.14s, border-color 0.14s",
+        "purpose": "按鈕 hover／active 的狀態轉換。"
+      },
+      {
+        "name": "stale-fade",
+        "value": "opacity 0.2s",
+        "purpose": "結果過期時降低透明度。"
+      },
+      {
+        "name": "progress",
+        "value": "transform 0.15s",
+        "purpose": "沙盒 header 底部的掃描進度條。"
+      },
+      {
+        "name": "spinner",
+        "value": "rotate 0.8s linear infinite",
+        "purpose": "3D 實驗室計算中的轉圈指示。"
+      },
+      {
+        "name": "control-mark-hover",
+        "value": "transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "路線圖檢查點 hover／focus 放大到 1.12 倍；reduced-motion 時取消。"
+      }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "560px" },
+      { "name": "lesson-compact", "value": "680px" },
+      { "name": "path-compact", "value": "860px" },
+      { "name": "single-column", "value": "1000px" },
+      { "name": "lab-single-column", "value": "1100px" },
+      { "name": "sandbox-compact", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "主要動作，例如進入 3D 實驗室、拍攝、執行校正。一個畫面最多一個。",
+      "html": "<button class=\"ds-btn-primary\">進入 3D 實驗室</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #5ee4bd; border-radius: 7px; background: #5ee4bd; color: #0c1017; font: 600 14px/1.6 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; cursor: pointer; transition: background 0.14s, border-color 0.14s; } .ds-btn-primary:hover { background: #7ef0cf; border-color: #7ef0cf; } .ds-btn-primary:active { filter: brightness(0.88); } .ds-btn-primary:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "一般動作與頁面切換。",
+      "html": "<button class=\"ds-btn-secondary\">← 3D 沙盒</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #3a4757; border-radius: 7px; background: #141c26; color: #e7edf5; font: 400 14px/1.6 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; cursor: pointer; transition: background 0.14s; } .ds-btn-secondary:hover { background: #1d2834; } .ds-btn-secondary:active { filter: brightness(0.88); } .ds-btn-secondary:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; }"
+    },
+    {
+      "name": "Lesson Primary Button",
+      "kind": "button",
+      "refersTo": "button-lesson-primary",
+      "description": "教學頁的大型主要按鈕。",
+      "html": "<button class=\"ds-btn-lesson\">開始第一步</button>",
+      "css": ".ds-btn-lesson { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 54px; padding: 14px 22px; border: 1px solid #9af1cd; border-radius: 7px; background: #88e0bc; color: #0b2118; font: 550 16px/1.5 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; cursor: pointer; transition: background 0.14s; } .ds-btn-lesson:hover { background: #acf4d6; } .ds-btn-lesson:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; }"
+    },
+    {
+      "name": "Numeric Field",
+      "kind": "input",
+      "refersTo": "input-numeric",
+      "description": "沙盒的緊湊數值欄位：上方標籤、等寬數值、下方 slider。",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">條紋頻率 f</span><span class=\"ds-field-value\"><input value=\"4\" inputmode=\"decimal\"> 週期</span><input class=\"ds-field-range\" type=\"range\" min=\"1\" max=\"32\" value=\"4\"></label>",
+      "css": ".ds-field { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; width: 280px; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-field-label { font-size: 14px; color: #c8d7e5; } .ds-field-value { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #9fb4c7; } .ds-field-value input { width: 78px; padding: 3px 6px; border: 1px solid #3f5870; border-radius: 4px; background: #102232; color: #d2e3f2; font: 13px Consolas, monospace; text-align: right; } .ds-field-value input:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; } .ds-field-range { grid-column: 1 / -1; width: 100%; height: 22px; margin: 0; accent-color: #7ad9b2; }"
+    },
+    {
+      "name": "Sandbox Tabs",
+      "kind": "nav",
+      "description": "沙盒參數分頁：平均分配寬度，選中時底部顯示 accent 線。",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">物體</button><button role=\"tab\" aria-selected=\"false\">裝置</button><button role=\"tab\" aria-selected=\"false\">投影</button><button role=\"tab\" aria-selected=\"false\">材質</button></div>",
+      "css": ".ds-tabs { display: flex; width: 360px; border-bottom: 1px solid #2a3c4e; background: #0f1925; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-tabs button { flex: 1; min-height: 42px; padding: 8px 4px; border: 0; border-bottom: 2px solid transparent; background: none; color: #9fb4c7; font-size: 14px; cursor: pointer; } .ds-tabs button:hover { color: #e3ecf7; } .ds-tabs button[aria-selected='true'] { color: #e3ecf7; border-bottom-color: #8de2c6; background: #13212f; } .ds-tabs button:focus-visible { outline: 2px solid #5ee4bd; outline-offset: -2px; }"
+    },
+    {
+      "name": "Control Mark",
+      "kind": "custom",
+      "refersTo": "control-mark",
+      "description": "定向越野檢查點：未開始空心、進行中薄荷空心、已通過實心、規劃中虛線、目前這一站雙圈。",
+      "html": "<div class=\"ds-marks\"><span class=\"ds-mark is-done\">1</span><span class=\"ds-mark is-partial\">4</span><span class=\"ds-mark is-partial is-current\">5</span><span class=\"ds-mark\">6</span><span class=\"ds-mark is-planned\">7</span></div>",
+      "css": ".ds-marks { display: flex; align-items: center; gap: 18px; padding: 8px; } .ds-mark { display: inline-grid; place-items: center; box-sizing: border-box; width: 36px; height: 36px; border: 2px solid #3a4757; border-radius: 50%; background: #0c1017; color: #a6b4c4; font: 600 16.5px/1 Consolas, 'SFMono-Regular', monospace; font-variant-numeric: tabular-nums; transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1); } .ds-mark:hover { transform: scale(1.12); } .ds-mark.is-partial { border-color: #5ee4bd; color: #5ee4bd; } .ds-mark.is-done { border-color: #5ee4bd; background: #5ee4bd; color: #0c1017; } .ds-mark.is-planned { border-style: dashed; color: #7f8fa3; } .ds-mark.is-current { outline: 2px solid #5ee4bd; outline-offset: 3px; background: #11231f; color: #e7edf5; }"
+    },
+    {
+      "name": "Source Tag",
+      "kind": "chip",
+      "refersTo": "source-tag-reference",
+      "description": "產出來源：薄荷＝你的結果、琥珀＝參考值、灰色虛線＝尚未產生。",
+      "html": "<ul class=\"ds-artifacts\"><li><b>Camera 內參 K_c 與畸變</b><span class=\"ds-tag is-mine\">你的結果</span><small>第 2 站產出</small></li><li><b>絕對相位</b><span class=\"ds-tag is-reference\">參考值</span><small>第 3–4 站產出</small></li><li><b>單套裝置的點雲</b><span class=\"ds-tag is-missing\">尚未產生</span><small>第 6 站產出</small></li></ul>",
+      "css": ".ds-artifacts { list-style: none; width: 320px; margin: 0; padding: 0; border-top: 1px solid #263240; color: #e7edf5; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-artifacts li { display: grid; grid-template-columns: 1fr auto; gap: 0 10px; padding: 9px 2px; border-bottom: 1px solid #263240; line-height: 1.5; } .ds-artifacts b { font-size: 15px; font-weight: 600; } .ds-artifacts small { grid-column: 1 / -1; font-size: 13px; color: #93a4b8; } .ds-tag { align-self: center; padding: 0 8px; border-radius: 4px; font-size: 13px; line-height: 1.6; white-space: nowrap; } .ds-tag.is-mine { border: 1px solid #2f7a63; color: #5ee4bd; } .ds-tag.is-reference { border: 1px solid #746241; color: #ffd166; } .ds-tag.is-missing { border: 1px dashed #3a4757; color: #7f8fa3; }"
+    },
+    {
+      "name": "Path Nav",
+      "kind": "nav",
+      "refersTo": "path-nav-button",
+      "description": "共用學習路徑導覽：學習路徑、目前站、Ctrl K 站點切換、工作台選單。",
+      "html": "<nav class=\"ds-pathnav\"><button><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#5ee4bd\" stroke-width=\"2\"><circle cx=\"6\" cy=\"19\" r=\"3\"/><path d=\"M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15\"/><circle cx=\"18\" cy=\"5\" r=\"3\"/></svg>學習路徑</button><button class=\"is-station\">第 5 / 9 站 · Projector Calibration</button><button class=\"is-search\"><svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg>跳到…<kbd>Ctrl K</kbd></button><button>工作台<svg width=\"15\" height=\"15\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"m6 9 6 6 6-6\"/></svg></button></nav>",
+      "css": ".ds-pathnav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 14px/1.4 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-pathnav button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 5px 12px; border: 1px solid #3a4757; border-radius: 7px; background: #141c26; color: #e7edf5; font: inherit; white-space: nowrap; cursor: pointer; } .ds-pathnav button:hover { background: #1d2834; } .ds-pathnav button:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; } .ds-pathnav .is-station { border-color: #2f7a63; background: #11231f; } .ds-pathnav .is-search { min-width: 150px; color: #a6b4c4; } .ds-pathnav kbd { margin-left: auto; padding: 0 5px; border: 1px solid #3a4757; border-radius: 4px; font: 12px Consolas, monospace; color: #93a4b8; }"
+    },
+    {
+      "name": "Activity Card",
+      "kind": "card",
+      "refersTo": "activity-card-primary",
+      "description": "實驗分頁的工具入口；主要實驗用薄荷邊框與 Mint Wash，其他用 Control Edge。",
+      "html": "<div class=\"ds-acts\"><div class=\"ds-act is-primary\"><div><h3>3D 實驗室：Projector 校正與驗證</h3><p>用拍好的照片與條紋解出 Projector 角點。</p></div><button>開啟 →</button></div><div class=\"ds-act\"><div><h3>3D 沙盒：擺放裝置</h3><p>調整 Camera 與 Projector 的相對位置。</p></div><button>開啟 →</button></div></div>",
+      "css": ".ds-acts { display: grid; gap: 10px; max-width: 640px; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-act { display: flex; align-items: center; gap: 20px; padding: 14px 18px; border: 1px solid #3a4757; border-radius: 10px; background: #0f161f; } .ds-act > div { flex: 1; min-width: 0; } .ds-act h3 { margin: 0; font-size: 18px; line-height: 1.45; color: #e7edf5; } .ds-act p { margin: 2px 0 0; font-size: 15px; line-height: 1.6; color: #c6d2df; } .ds-act button { min-height: 40px; padding: 8px 16px; border: 1px solid #3a4757; border-radius: 7px; background: #141c26; color: #e7edf5; font-family: inherit; font-size: 15px; line-height: 1.4; white-space: nowrap; cursor: pointer; } .ds-act button:hover { background: #1d2834; } .ds-act.is-primary { border-color: #5ee4bd; background: #11231f; } .ds-act.is-primary button { min-height: 48px; padding: 10px 20px; border-color: #5ee4bd; background: #5ee4bd; color: #0c1017; font-size: 16px; font-weight: 600; } .ds-act.is-primary button:hover { background: #7ef0cf; border-color: #7ef0cf; } .ds-act button:focus-visible { outline: 2px solid #5ee4bd; outline-offset: 4px; }"
+    },
+    {
+      "name": "Soft-Check List",
+      "kind": "custom",
+      "description": "通過條件：提示不阻擋；實驗室判定項自動打勾，其他可自行勾選。",
+      "html": "<div class=\"ds-checks\"><ul><li class=\"is-ok\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M20 6 9 17l-5-5\"/></svg><span>至少 3 張成功偵測到角點</span><small>實驗室判定</small></li><li><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-dasharray=\"3 3\"><circle cx=\"12\" cy=\"12\" r=\"9\"/></svg><span>Camera 校正 RMS &lt; 0.3 px</span><small>實驗室判定</small></li><li><label><input type=\"checkbox\"><span>能說明 K 的每個元素代表什麼</span></label></li></ul><p>已通過 1 / 3 項。</p></div>",
+      "css": ".ds-checks { max-width: 560px; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-checks ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid #263240; } .ds-checks li { display: flex; align-items: flex-start; gap: 12px; padding: 10px 2px; border-bottom: 1px solid #263240; font-size: 16px; line-height: 1.6; color: #c6d2df; } .ds-checks li > svg { flex: none; margin-top: 4px; color: #7f8fa3; } .ds-checks li.is-ok { color: #e7edf5; } .ds-checks li.is-ok > svg { color: #5ee4bd; } .ds-checks li > span { flex: 1; } .ds-checks small { flex: none; margin-top: 3px; padding: 0 8px; border: 1px solid #3a4757; border-radius: 4px; font-size: 12px; color: #93a4b8; } .ds-checks label { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; } .ds-checks input { width: 18px; height: 18px; margin-top: 5px; accent-color: #5ee4bd; } .ds-checks p { margin: 12px 0 0; font-size: 15px; color: #8fd8c0; }"
+    },
+    {
+      "name": "Metric Tile",
+      "kind": "card",
+      "refersTo": "metric-tile",
+      "description": "小型讀數磚：標籤在上，等寬數值在下。",
+      "html": "<div class=\"ds-metrics\"><div><span>RMS 重投影誤差</span><b>0.142 px</b></div><div><span>fx</span><b>1203.6</b></div><div class=\"is-bad\"><span>k₁ 誤差</span><b>+18.4 %</b></div></div>",
+      "css": ".ds-metrics { display: flex; flex-wrap: wrap; gap: 10px; font-family: 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-metrics > div { display: grid; padding: 6px 12px; border: 1px solid #2a3644; border-radius: 8px; background: #131c26; line-height: 1.4; } .ds-metrics span { font-size: 12px; color: #93a4b8; } .ds-metrics b { font-size: 17px; color: #e7edf5; font-variant-numeric: tabular-nums; } .ds-metrics .is-bad b { color: #ff9b85; }"
+    },
+    {
+      "name": "Formula Block",
+      "kind": "custom",
+      "refersTo": "formula-block",
+      "description": "KaTeX 公式區塊，左側 Phosphor Mint 邊線。",
+      "html": "<div class=\"ds-formula\"><p>s · [u, v, 1]ᵀ = K · [R | t] · [X, Y, Z, 1]ᵀ</p></div>",
+      "css": ".ds-formula { max-width: 520px; margin: 12px 0; padding: 4px 18px; border-left: 3px solid #5ee4bd; background: #121a24; color: #e7edf5; overflow-x: auto; } .ds-formula p { margin: 0.6em 0; font: 19px/1.6 'Cambria Math', 'Times New Roman', serif; }"
+    },
+    {
+      "name": "Task Box",
+      "kind": "custom",
+      "description": "任務清單：虛線邊框表示待完成，標題使用 Estimate Amber。",
+      "html": "<div class=\"ds-tasks\"><strong>任務</strong><ol><li>從至少 3 個不同角度拍攝校正板。</li><li>讓 RMS 重投影誤差低於 0.3 px。</li></ol></div>",
+      "css": ".ds-tasks { max-width: 480px; padding: 12px 16px; border: 1px dashed #4b5d70; border-radius: 10px; background: #121a23; color: #e7edf5; font: 15px/1.7 'Segoe UI', 'Microsoft JhengHei', system-ui, sans-serif; } .ds-tasks strong { color: #ffd166; } .ds-tasks ol { margin: 6px 0 0; padding-left: 22px; } .ds-tasks li + li { margin-top: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Darkroom Optical Bench",
+    "overview": "結構光實驗本來就在暗處進行：關燈，只留投影的條紋與相機的讀數。介面延續這個場景，以接近黑的深藍灰（darkroom-black）為底，介面本身退到背景，讓條紋影像、相位圖、點雲、公式成為畫面上最亮的東西。整套系統只有一個強調色：Phosphor Mint（螢光薄荷），像示波器上的螢光軌跡，只出現在「現在在這裡」、「下一步做這個」、「這筆資料有效」三種地方。\n\n密度依工作區調整，但規則一致。教學頁（一步一步學、Calibration 課程）是閱讀優先：18–20 px 正文、1.8 行高、860 px 以內的段落寬度。工具頁（3D 沙盒、AOI、3D 實驗室）是操作優先：15 px 正文、緊湊的數值欄位、等寬數字。兩者共用同一套色彩、邊框與元件語言，所以從課程跳到實驗室不會像換了一個產品。\n\n層次只靠色階與 1 px 細邊框表達，不使用陰影，不使用漸層，也不靠裝飾性發光。明確拒絕「AI SaaS 儀表板」的常見樣式：紫藍漸層、卡片套卡片、裝飾性 glow、每個標題上方都放一個圓角圖示方塊。",
+    "keyCharacteristics": [
+      "暗室底色，介面安靜，資料與影像是主角。",
+      "單一強調色 Phosphor Mint，少量使用，作為訊號。",
+      "裝置與資料有固定的顏色語意：Camera 青、Projector 淡紫、估計值琥珀、真值白、錯誤鮭紅。",
+      "平面：用色階與細邊框分層，沒有陰影。",
+      "數字一律等寬、表格數字（tabular-nums）。",
+      "繁體中文為主，技術名詞保留英文；字型堆疊以 Segoe UI + Microsoft JhengHei 為主。"
+    ],
+    "rules": [
+      {
+        "name": "The Phosphor Signal Rule",
+        "body": "Phosphor Mint 只代表三件事：主動作、目前位置、有效資料。不拿來當裝飾、插圖填色或大面積背景（Mint Wash 除外）。一個畫面上同時出現的 Phosphor Mint 主按鈕不超過一個。",
+        "section": "colors"
+      },
+      {
+        "name": "The Device Color Rule",
+        "body": "Camera 永遠是青色、Projector 永遠是淡紫、估計值永遠是琥珀、真值永遠是白色。同一個概念在 3D 場景、SVG 示意、圖例中都使用同一個顏色，真值與估計值絕不共用顏色。",
+        "section": "colors"
+      },
+      {
+        "name": "The Honest Source Rule",
+        "body": "每一筆跨站使用的產出都標示來源：薄荷＝你的結果、琥珀＝參考值、灰色虛線＝尚未產生。參考值絕不使用薄荷，也不省略標籤，避免把參考值偽裝成學習者自己的結果。",
+        "section": "colors"
+      },
+      {
+        "name": "The Readable Lesson Rule",
+        "body": "教學頁正文不小於 18px，圖表刻度不小於 14px；工具頁才可以降到 15px。",
+        "section": "typography"
+      },
+      {
+        "name": "The Instrument Digits Rule",
+        "body": "會變動的數字一律使用等寬字或 font-variant-numeric: tabular-nums，避免數值更新時文字跳動。",
+        "section": "typography"
+      },
+      {
+        "name": "The No-Shadow Bench Rule",
+        "body": "不使用 box-shadow 表達層級。需要區隔時，改用色階或 1px 邊框；需要強調時，改用 Phosphor Mint 邊框加 Mint Wash 底色。",
+        "section": "elevation"
+      },
+      {
+        "name": "The Stale Dimming Rule",
+        "body": "參數改變後、新結果算出之前，舊結果的透明度降到 0.45–0.55，並顯示 Stale Amber 提示；不讓過期結果看起來像目前的量測。",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do 讓 Phosphor Mint（#5ee4bd）只出現在主動作、目前位置與有效資料上（The Phosphor Signal Rule）。",
+      "Do 在 3D 場景、SVG、圖例中一致使用裝置色：Camera #69d9ff、Projector #b7a0fa、估計值 #ffd166、真值 #e7edf5、錯誤 #ff9b85。",
+      "Do 用色階（#0b1118 → #0c1017 → #141c26）加 1px 邊框分層。",
+      "Do 所有變動數值使用等寬字或 tabular-nums。",
+      "Do 教學正文維持 18px 以上、1.8 行高、段落寬度 860px 以內。",
+      "Do 結果過期時把透明度降到 0.45–0.55，並顯示 Stale Amber 提示。",
+      "Do 圖例使用小色塊（12×3px 線段或色點）加文字，不只靠顏色傳達意義。",
+      "Do 以 Control Mark 的五種狀態表示站點進度：空心＝未開始、薄荷空心＝進行中、薄荷實心＝已通過、虛線＝規劃中、雙圈＝目前這一站；並且一定附上文字狀態。",
+      "Do 跨站使用的每一筆產出都加上 Source Tag（The Honest Source Rule）。",
+      "Do 在工具頁 header 放入 Path Nav；header 已經很滿的工具頁使用 Compact 版。"
+    ],
+    "donts": [
+      "Don't 用 box-shadow 表達層級，也不要加裝飾性 glow。",
+      "Don't 使用紫藍漸層、卡片套卡片、標題上方的圓角圖示方塊等「AI SaaS 儀表板」樣式。",
+      "Don't 再引入新的強調色；資料語意色（青、淡紫、琥珀、鮭紅）不拿來當 UI 裝飾。",
+      "Don't 讓真值與估計值共用同一個顏色或線型。",
+      "Don't 在教學頁把正文縮到 18px 以下，或把圖表刻度縮到 14px 以下。",
+      "Don't 新工作區沿用沙盒的偏藍 --sb-* 中性色；以 Darkroom Black 系列為準。",
+      "Don't 用通過條件鎖住下一站或任何按鈕；檢核只提示。",
+      "Don't 在個別頁面再做一套路線圖；九站路線只存在於學習路徑首頁，其他頁面以 Path Nav 與 Ctrl K 切換。",
+      "Don't 用 Phosphor Mint 或省略標籤來呈現參考值。"
+    ]
+  }
+}

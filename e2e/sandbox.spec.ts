@@ -38,14 +38,23 @@ test("可切換專注 3D 空間，不讓圖表佔據沙盒畫面", async ({ page
   await expect(page.locator(".sandbox-tools")).toBeVisible();
 });
 
-test("首次開啟就進入 3D 空間，仍可返回教學", async ({ page }) => {
+test("首次開啟進入學習路徑，可從工作台進入 3D 沙盒再回到站點", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "3D 掃描沙盒" }),
+    page.getByRole("heading", { name: "從第 1 站開始：系統與相機模型" }),
   ).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "工作台" })
+    .getByRole("button", { name: "3D 沙盒", exact: true })
+    .click();
   await expect(page.getByTestId("sandbox-canvas")).toBeVisible();
-  await page.getByRole("button", { name: "一步一步學", exact: true }).click();
-  await expect(page.getByTestId("lesson-intro")).toBeVisible();
+  await page.getByRole("button", { name: "學習路徑", exact: true }).click();
+  await page.getByRole("button", { name: /Phase Shifting/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Phase Shifting", level: 1 }),
+  ).toBeVisible();
 });
 
 test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度", async ({
@@ -116,7 +125,9 @@ test("3D 沙盒真的可旋轉、移動物體並由三張 captures 重建深度"
   await page.keyboard.up("KeyD");
   await expect(page.getByTestId("sandbox-object-x")).toHaveValue("10.00");
   await expect(page.getByTestId("sandbox-status")).toContainText("掃描完成");
-  await page.getByRole("spinbutton", { name: "物體 Z 位置 數值" }).fill("-12.5");
+  await page
+    .getByRole("spinbutton", { name: "物體 Z 位置 數值" })
+    .fill("-12.5");
   await page.keyboard.press("Enter");
   await expect(
     page.getByRole("slider", { name: "物體 Z 位置", exact: true }),
@@ -369,6 +380,11 @@ test("3D 沙盒在預覽窄窗仍可讀、不水平溢出，並可匯出真實 C
   const csv = page.waitForEvent("download");
   await page.getByRole("button", { name: "匯出 3D CSV", exact: true }).click();
   expect((await csv).suggestedFilename()).toMatch(/sandbox.*\.csv$/);
-  await page.getByRole("button", { name: "一步一步學", exact: true }).click();
-  await expect(page.getByTestId("lesson-intro")).toBeVisible();
+  await page.getByRole("button", { name: "學習路徑", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "九站路線" })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

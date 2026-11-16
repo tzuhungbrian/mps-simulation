@@ -67,10 +67,8 @@ test("預設逐步教學：先知道目的，再從照片、亮度走到相位",
   await expect(
     page.getByText("接起來的是相對 Phase，還不能當作深度。", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "自由實驗", exact: true })
-    .first()
-    .click();
+  await page.getByText("工作台", { exact: true }).click();
+  await page.getByRole("button", { name: /^1D 自由實驗/ }).click();
   await expect(page.getByLabel("Fringe frequency")).toBeVisible();
   await expect(page.getByTestId("valid-ratio")).toHaveText("100.0%");
   expect(errors).toEqual([]);
@@ -106,10 +104,8 @@ for (const width of [390, 620, 1440]) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await page
-      .getByRole("button", { name: "自由實驗", exact: true })
-      .first()
-      .click();
+    await page.getByText("工作台", { exact: true }).click();
+    await page.getByRole("button", { name: /^1D 自由實驗/ }).click();
     expect(
       await page
         .getByLabel("Fringe frequency")
