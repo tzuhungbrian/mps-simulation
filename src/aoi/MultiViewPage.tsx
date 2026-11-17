@@ -23,6 +23,7 @@ import {
   defaultFusionOptions,
   runStrategies,
   scoreStrategy,
+  strategyLabel,
   SWEEP_VARIABLES,
   theoryForAll,
   type FusionOptions,
@@ -32,6 +33,7 @@ import {
 } from "./simulate";
 import { aoiCsv, aoiJson, sweepCsv } from "./export";
 import type { AoiRequest, AoiResponse } from "./aoi.worker";
+import { t } from "../i18n";
 import "./aoi.css";
 
 /** Inputs that change a multi-view run; the active pair, GI and analysis-only gates do not. */
@@ -187,7 +189,7 @@ function OptionalNumber({
       type="number"
       aria-label={label}
       className="aoi-number"
-      placeholder="未提供"
+      placeholder={t("未提供", "Not provided")}
       min={0}
       value={draft ?? (value === null ? "" : String(value))}
       onChange={(e) => setDraft(e.target.value)}
@@ -244,15 +246,22 @@ function Histogram({
         ))}
       </svg>
       <figcaption>
-        {label}：±{fmt(scale, 3)} mm，範圍外 {outside} 格
+        {t(
+          <>
+            {label}：±{fmt(scale, 3)} mm，範圍外 {outside} 格
+          </>,
+          <>
+            {label}: ±{fmt(scale, 3)} mm, {outside} cells out of range
+          </>,
+        )}
       </figcaption>
     </figure>
   );
 }
 
 const MAIN_TABS = [
-  ["range", "Pair 與量測範圍"],
-  ["maps", "有效量測圖"],
+  ["range", t("Pair 與量測範圍", "Pairs and measurement range")],
+  ["maps", t("有效量測圖", "Valid-measurement maps")],
   ["fusion", "Fusion"],
   ["bench", "Benchmark"],
 ] as const;
@@ -284,7 +293,10 @@ export default function MultiViewPage({
     [busy, setBusy] = useState(false),
     [progress, setProgress] = useState(0),
     [status, setStatus] = useState(
-      "尚未執行多視角模擬；理論值已依目前設定即時計算。",
+      t(
+        "尚未執行多視角模擬；理論值已依目前設定即時計算。",
+        "Multi-view simulation not run yet; theory values update live with the current settings.",
+      ),
     ),
     [message, setMessage] = useState(""),
     [mainTab, setMainTab] = useState<(typeof MAIN_TABS)[number][0]>("range"),
@@ -350,31 +362,50 @@ export default function MultiViewPage({
       const reply = event.data;
       if (reply.type === "progress") {
         setProgress(reply.fraction);
-        if (reply.label) setStatus(`多視角模擬中：${reply.label}`);
+        if (reply.label)
+          setStatus(
+            t(
+              `多視角模擬中：${reply.label}`,
+              `Running multi-view simulation: ${reply.label}`,
+            ),
+          );
         return;
       }
       next.terminate();
       worker.current = null;
       setBusy(false);
       if (reply.type === "error") {
-        setStatus("多視角模擬失敗，沒有用真值補出結果。");
+        setStatus(
+          t(
+            "多視角模擬失敗，沒有用真值補出結果。",
+            "Multi-view simulation failed; no results were filled in from ground truth.",
+          ),
+        );
         setMessage(reply.message);
       } else onDone(reply);
     };
     next.onerror = (event) => {
       if (token !== generation.current) return;
       setBusy(false);
-      setStatus("多視角模擬失敗。");
-      setMessage(event.message || "Worker 錯誤");
+      setStatus(t("多視角模擬失敗。", "Multi-view simulation failed."));
+      setMessage(event.message || t("Worker 錯誤", "Worker error"));
     };
     next.postMessage(request);
   };
 
   const runPairs = (ids: string[]) => {
-    if (!ids.length) return setMessage("請至少選擇一組 Pair。");
+    if (!ids.length)
+      return setMessage(
+        t("請至少選擇一組 Pair。", "Select at least one pair."),
+      );
     const snapshot = config,
       snapshotKey = key;
-    setStatus(`多視角模擬中：${ids.length} 組 Pair…`);
+    setStatus(
+      t(
+        `多視角模擬中：${ids.length} 組 Pair…`,
+        `Running multi-view simulation: ${ids.length} pairs…`,
+      ),
+    );
     startWorker({ type: "run", config: snapshot, pairIds: ids }, (reply) => {
       if (reply.type !== "run") return;
       const run = reply.run;
@@ -398,7 +429,10 @@ export default function MultiViewPage({
       });
       setFocus((f) => f ?? run.pairs[0]?.pair.id ?? null);
       setStatus(
-        `完成 ${run.pairs.length} 組 Pair（${(run.timing.totalMs / 1000).toFixed(1)} s，Worker 內模擬時間）。`,
+        t(
+          `完成 ${run.pairs.length} 組 Pair（${(run.timing.totalMs / 1000).toFixed(1)} s，Worker 內模擬時間）。`,
+          `Finished ${run.pairs.length} pairs (${(run.timing.totalMs / 1000).toFixed(1)} s of simulation time in the worker).`,
+        ),
       );
     });
   };
@@ -423,17 +457,25 @@ export default function MultiViewPage({
       .map(Number)
       .filter(Number.isFinite);
     if (!values.length || values.length > 24)
-      return setMessage("請輸入 1–24 個數值，以逗號分隔。");
+      return setMessage(
+        t(
+          "請輸入 1–24 個數值，以逗號分隔。",
+          "Enter 1–24 comma-separated values.",
+        ),
+      );
     for (const value of values)
       try {
         validateWorldConfig({ ...config, [sweepVariable]: value });
       } catch (error) {
         return setMessage(
-          `數值 ${value} 無效：${error instanceof Error ? error.message : error}`,
+          t(
+            `數值 ${value} 無效：${error instanceof Error ? error.message : error}`,
+            `Invalid value ${value}: ${error instanceof Error ? error.message : error}`,
+          ),
         );
       }
     const variable = sweepVariable;
-    setStatus("批次比較中…");
+    setStatus(t("批次比較中…", "Running batch comparison…"));
     startWorker(
       {
         type: "sweep",
@@ -447,7 +489,10 @@ export default function MultiViewPage({
         if (reply.type !== "sweep") return;
         setSweep({ variable, rows: reply.rows });
         setStatus(
-          `批次比較完成：${values.length} 個數值 × ${chosen.length} 組 Pair。`,
+          t(
+            `批次比較完成：${values.length} 個數值 × ${chosen.length} 組 Pair。`,
+            `Batch comparison done: ${values.length} values × ${chosen.length} pairs.`,
+          ),
         );
       },
     );
@@ -557,12 +602,20 @@ export default function MultiViewPage({
       "aoi-multiview-benchmark.json",
     );
     setMessage(
-      "已匯出 JSON：設定、理論值、模擬指標、Fusion 與批次比較；ground truth 只出現在評估指標。",
+      t(
+        "已匯出 JSON：設定、理論值、模擬指標、Fusion 與批次比較；ground truth 只出現在評估指標。",
+        "Exported JSON: settings, theory values, simulation metrics, fusion and batch comparison; ground truth appears only in the evaluation metrics.",
+      ),
     );
   };
   const exportCsv = () => {
     if (!results || stale || !fusion)
-      return setMessage("請先以目前設定執行模擬再匯出 CSV。");
+      return setMessage(
+        t(
+          "請先以目前設定執行模擬再匯出 CSV。",
+          "Run the simulation with the current settings before exporting CSV.",
+        ),
+      );
     downloadBlob(
       new Blob(
         [
@@ -577,7 +630,12 @@ export default function MultiViewPage({
       ),
       "aoi-multiview-cells.csv",
     );
-    setMessage("已匯出每格 CSV（統一世界座標，mm）；truth_* 欄位僅供評估。");
+    setMessage(
+      t(
+        "已匯出每格 CSV（統一世界座標，mm）；truth_* 欄位僅供評估。",
+        "Exported per-cell CSV (unified world coordinates, mm); truth_* columns are for evaluation only.",
+      ),
+    );
   };
   const exportSweep = () => {
     if (!sweep) return;
@@ -590,7 +648,12 @@ export default function MultiViewPage({
   };
   const pairLabel = (id: string) => {
     const p = pairs.find((x) => x.id === id);
-    return p ? `${id}（${PAIR_CLASS_NAMES[p.kind]}）` : id;
+    return p
+      ? t(
+          `${id}（${PAIR_CLASS_NAMES[p.kind]}）`,
+          `${id} (${PAIR_CLASS_NAMES[p.kind]})`,
+        )
+      : id;
   };
   const showPair = (run: PairRun) =>
     onShow(
@@ -607,7 +670,7 @@ export default function MultiViewPage({
       list.push(x, h, y);
     });
     onShow({
-      label: s.result.name,
+      label: strategyLabel(s.result.name),
       points: Float32Array.from(list),
       range: worldRange(),
     });
@@ -642,24 +705,55 @@ export default function MultiViewPage({
 
   return (
     <div className="aoi-workspace aoi-shell">
-      <aside className="sandbox-tools" aria-label="多視角分析設定">
+      <aside
+        className="sandbox-tools"
+        aria-label={t("多視角分析設定", "Multi-view analysis settings")}
+      >
         <div className="sandbox-panel-body">
-          <InfoHeading title="多視角分析">
-            <p>
-              分析的是 3D 沙盒<strong>同一個場景</strong>：所有 Camera ×
-              Projector 組合。設備、條紋、材質與物體請在「3D
-              沙盒」分頁調整（含「AOI
-              檢測擺位」預設）；這裡只放分析用設定。所有設定共用復原／重做與保存。
-            </p>
-            <p>
-              一般 <strong>N 步 Phase Shifting</strong>，不是 Micro Phase
-              Shifting；多視角模擬只計直接光（互反射在 3D
-              沙盒單組掃描中）。模擬結果不代表實機 AOI 性能。
-            </p>
+          <InfoHeading title={t("多視角分析", "Multi-view analysis")}>
+            {t(
+              <>
+                <p>
+                  分析的是 3D 沙盒<strong>同一個場景</strong>：所有 Camera ×
+                  Projector 組合。設備、條紋、材質與物體請在「3D
+                  沙盒」分頁調整（含「AOI
+                  檢測擺位」預設）；這裡只放分析用設定。所有設定共用復原／重做與保存。
+                </p>
+                <p>
+                  一般 <strong>N 步 Phase Shifting</strong>，不是 Micro Phase
+                  Shifting；多視角模擬只計直接光（互反射在 3D
+                  沙盒單組掃描中）。模擬結果不代表實機 AOI 性能。
+                </p>
+              </>,
+              <>
+                <p>
+                  This analyzes <strong>the same scene</strong> as the 3D
+                  sandbox: every camera × projector combination. Adjust devices,
+                  fringes, materials and objects in the “3D sandbox” tab
+                  (including the “AOI inspection layout” preset); only analysis
+                  settings live here. All settings share undo/redo and saving.
+                </p>
+                <p>
+                  Standard <strong>N-step phase shifting</strong>, not Micro
+                  Phase Shifting; the multi-view simulation counts direct light
+                  only (interreflection is in the single-pair scan of the 3D
+                  sandbox). Simulated results do not represent real AOI
+                  performance.
+                </p>
+              </>,
+            )}
           </InfoHeading>
           <p className="sandbox-note aoi-disclaimer">
-            一般 N 步 Phase Shifting（非 Micro Phase Shifting）· 理想模擬 ≠ 實機
-            AOI 性能
+            {t(
+              <>
+                一般 N 步 Phase Shifting（非 Micro Phase Shifting）· 理想模擬 ≠
+                實機 AOI 性能
+              </>,
+              <>
+                Standard N-step phase shifting (not Micro Phase Shifting) ·
+                ideal simulation ≠ real AOI performance
+              </>,
+            )}
           </p>
           <p
             className={`sandbox-note aoi-run-status ${busy ? "busy" : ""}`}
@@ -677,7 +771,10 @@ export default function MultiViewPage({
               data-testid="aoi-run-selected"
             >
               <Play size={15} />
-              執行選取（{chosen.length}）
+              {t(
+                <>執行選取（{chosen.length}）</>,
+                <>Run selected ({chosen.length})</>,
+              )}
             </button>
             <button onClick={exportJson} data-testid="aoi-export-json">
               <FileJson size={15} />
@@ -696,37 +793,78 @@ export default function MultiViewPage({
             <p className="sandbox-note aoi-warn" role="alert">
               {message}{" "}
               <button className="aoi-mini" onClick={() => setMessage("")}>
-                關閉
+                {t("關閉", "Close")}
               </button>
             </p>
           )}
-          <h3 className="sandbox-group">統一世界座標格網（中心＝瞄準點）</h3>
-          {field("roiWidth", "ROI 寬（x）", { step: 0.5, unit: "mm" })}
-          {field("roiHeight", "ROI 高（y）", { step: 0.5, unit: "mm" })}
-          {field("cellSize", "格寬", { step: 0.01, unit: "mm" })}
-          <h3 className="sandbox-group">分類、評估與 Fusion</h3>
-          {field("directTiltLimit", "直視門檻（Camera 傾角）", {
-            step: 1,
-            digits: 0,
-            unit: "°",
+          <h3 className="sandbox-group">
+            {t(
+              "統一世界座標格網（中心＝瞄準點）",
+              "Unified world grid (center = aim point)",
+            )}
+          </h3>
+          {field("roiWidth", t("ROI 寬（x）", "ROI width (x)"), {
+            step: 0.5,
+            unit: "mm",
           })}
-          {field("tolerance", "準確容許誤差", {
+          {field("roiHeight", t("ROI 高（y）", "ROI height (y)"), {
+            step: 0.5,
+            unit: "mm",
+          })}
+          {field("cellSize", t("格寬", "Cell size"), {
+            step: 0.01,
+            unit: "mm",
+          })}
+          <h3 className="sandbox-group">
+            {t("分類、評估與 Fusion", "Classification, evaluation and fusion")}
+          </h3>
+          {field(
+            "directTiltLimit",
+            t("直視門檻（Camera 傾角）", "Direct-view threshold (camera tilt)"),
+            {
+              step: 1,
+              digits: 0,
+              unit: "°",
+            },
+          )}
+          {field("tolerance", t("準確容許誤差", "Accuracy tolerance"), {
             step: 0.005,
             digits: 3,
             unit: "mm",
           })}
-          {field("consistencyTolerance", "一致性門檻", {
-            step: 0.005,
-            digits: 3,
-            unit: "mm",
-          })}
-          {field("targetRange", "需求量測範圍", { step: 0.1, unit: "mm" })}
-          <InfoHeading title="AOI 提供的參考數值">
-            <p>
-              輸入 AOI 廠商規格或實機量測的數值，<strong>只用於並列比較</strong>
-              ，不會進入任何模擬、重建或
-              Fusion，也不會讓模擬結果過期。空白表示未提供。
-            </p>
+          {field(
+            "consistencyTolerance",
+            t("一致性門檻", "Consistency threshold"),
+            {
+              step: 0.005,
+              digits: 3,
+              unit: "mm",
+            },
+          )}
+          {field(
+            "targetRange",
+            t("需求量測範圍", "Required measurement range"),
+            {
+              step: 0.1,
+              unit: "mm",
+            },
+          )}
+          <InfoHeading title={t("AOI 提供的參考數值", "AOI reference values")}>
+            {t(
+              <p>
+                輸入 AOI 廠商規格或實機量測的數值，
+                <strong>只用於並列比較</strong>
+                ，不會進入任何模擬、重建或
+                Fusion，也不會讓模擬結果過期。空白表示未提供。
+              </p>,
+              <p>
+                Enter values from AOI vendor specs or hardware measurements.
+                They are <strong>for side-by-side comparison only</strong>: they
+                never enter any simulation, reconstruction or fusion, and they
+                do not make simulation results stale. Leave blank if not
+                provided.
+              </p>,
+            )}
           </InfoHeading>
           {PAIR_CLASSES.map((kind) => (
             <div className="aoi-device" key={kind}>
@@ -735,25 +873,34 @@ export default function MultiViewPage({
               </div>
               <div className="aoi-device-grid">
                 <label>
-                  <span>每 2π 高度 mm</span>
+                  <span>{t("每 2π 高度 mm", "Height per 2π mm")}</span>
                   <OptionalNumber
-                    label={`${PAIR_CLASS_NAMES[kind]} 參考每 2π 高度`}
+                    label={t(
+                      `${PAIR_CLASS_NAMES[kind]} 參考每 2π 高度`,
+                      `${PAIR_CLASS_NAMES[kind]} reference height per 2π`,
+                    )}
                     value={config.references[kind].heightPer2Pi}
                     onChange={(v) => setReference(kind, { heightPer2Pi: v })}
                   />
                 </label>
                 <label>
-                  <span>量測範圍 mm</span>
+                  <span>{t("量測範圍 mm", "Measurement range mm")}</span>
                   <OptionalNumber
-                    label={`${PAIR_CLASS_NAMES[kind]} 參考量測範圍`}
+                    label={t(
+                      `${PAIR_CLASS_NAMES[kind]} 參考量測範圍`,
+                      `${PAIR_CLASS_NAMES[kind]} reference measurement range`,
+                    )}
                     value={config.references[kind].range}
                     onChange={(v) => setReference(kind, { range: v })}
                   />
                 </label>
                 <label>
-                  <span>感度（直視=1）</span>
+                  <span>{t("感度（直視=1）", "Sensitivity (direct = 1)")}</span>
                   <OptionalNumber
-                    label={`${PAIR_CLASS_NAMES[kind]} 參考感度比`}
+                    label={t(
+                      `${PAIR_CLASS_NAMES[kind]} 參考感度比`,
+                      `${PAIR_CLASS_NAMES[kind]} reference sensitivity ratio`,
+                    )}
                     value={config.references[kind].sensitivityRatio}
                     onChange={(v) =>
                       setReference(kind, { sensitivityRatio: v })
@@ -761,9 +908,14 @@ export default function MultiViewPage({
                   />
                 </label>
                 <label>
-                  <span>高度雜訊（直視=1）</span>
+                  <span>
+                    {t("高度雜訊（直視=1）", "Height noise (direct = 1)")}
+                  </span>
                   <OptionalNumber
-                    label={`${PAIR_CLASS_NAMES[kind]} 參考高度雜訊比`}
+                    label={t(
+                      `${PAIR_CLASS_NAMES[kind]} 參考高度雜訊比`,
+                      `${PAIR_CLASS_NAMES[kind]} reference height-noise ratio`,
+                    )}
                     value={config.references[kind].noiseRatio}
                     onChange={(v) => setReference(kind, { noiseRatio: v })}
                   />
@@ -771,8 +923,14 @@ export default function MultiViewPage({
               </div>
               <input
                 className="aoi-note-input"
-                aria-label={`${PAIR_CLASS_NAMES[kind]} 來源備註`}
-                placeholder="來源（規格書 / 實機量測 / 日期）"
+                aria-label={t(
+                  `${PAIR_CLASS_NAMES[kind]} 來源備註`,
+                  `${PAIR_CLASS_NAMES[kind]} source note`,
+                )}
+                placeholder={t(
+                  "來源（規格書 / 實機量測 / 日期）",
+                  "Source (datasheet / hardware measurement / date)",
+                )}
                 value={config.references[kind].note}
                 onChange={(e) => setReference(kind, { note: e.target.value })}
               />
@@ -783,7 +941,7 @@ export default function MultiViewPage({
 
       <main className="aoi-main">
         <Tabs
-          label="多視角結果分頁"
+          label={t("多視角結果分頁", "Multi-view result tabs")}
           tabs={MAIN_TABS}
           value={mainTab}
           onChange={setMainTab}
@@ -796,43 +954,100 @@ export default function MultiViewPage({
         <div className={`aoi-main-body ${stale ? "stale" : ""}`}>
           {stale && (
             <p className="aoi-stale" role="note">
-              設定已變更：模擬結果對應舊設定，請重新執行。理論值已即時更新。
+              {t(
+                "設定已變更：模擬結果對應舊設定，請重新執行。理論值已即時更新。",
+                "Settings changed: the simulation results match the old settings, so run again. Theory values are already updated.",
+              )}
             </p>
           )}
           {mainTab === "range" && (
             <>
-              <InfoHeading title="數值來源" level={2}>
-                <p>
-                  <strong>理論（平行近似）</strong>：|dφ/dh| = (2π/p)·|tanθp −
-                  tanθc·cosΔα|，p 為瞄準點基準面上的條紋週期。
-                  <strong>幾何模型</strong>：以 pinhole
-                  校正參數精確微分；在瞄準點與平行近似相等，離軸後因透視而變化（「幾何
-                  ROI 範圍」為 ROI
-                  四角與中心的最小–最大值）。兩者皆只用校正資訊。
-                </p>
-                <p>
-                  <strong>模擬</strong>：光線追蹤合成曝光 → 解相位 → 三角量測 →
-                  與真值比較。<strong>AOI 參考值</strong>
-                  ：使用者輸入的實機/規格數字，僅並列比較。理想模擬（直接光、完美校正）的精度不代表實際
-                  AOI 性能。高度皆相對於基準面（世界 Y = {fmt(
-                    reference,
-                    2,
-                  )}{" "}
-                  mm）。
-                </p>
+              <InfoHeading
+                title={t("數值來源", "Where the numbers come from")}
+                level={2}
+              >
+                {t(
+                  <>
+                    <p>
+                      <strong>理論（平行近似）</strong>：|dφ/dh| = (2π/p)·|tanθp
+                      − tanθc·cosΔα|，p 為瞄準點基準面上的條紋週期。
+                      <strong>幾何模型</strong>：以 pinhole
+                      校正參數精確微分；在瞄準點與平行近似相等，離軸後因透視而變化（「幾何
+                      ROI 範圍」為 ROI
+                      四角與中心的最小–最大值）。兩者皆只用校正資訊。
+                    </p>
+                    <p>
+                      <strong>模擬</strong>：光線追蹤合成曝光 → 解相位 →
+                      三角量測 → 與真值比較。<strong>AOI 參考值</strong>
+                      ：使用者輸入的實機/規格數字，僅並列比較。理想模擬（直接光、完美校正）的精度不代表實際
+                      AOI 性能。高度皆相對於基準面（世界 Y = {fmt(
+                        reference,
+                        2,
+                      )}{" "}
+                      mm）。
+                    </p>
+                  </>,
+                  <>
+                    <p>
+                      <strong>Theory (parallel approximation)</strong>: |dφ/dh|
+                      = (2π/p)·|tanθp − tanθc·cosΔα|, where p is the fringe
+                      period on the reference plane at the aim point.{" "}
+                      <strong>Geometric model</strong>: exact derivative from
+                      the pinhole calibration parameters; it equals the parallel
+                      approximation at the aim point and varies off-axis because
+                      of perspective (“geometric ROI range” is the min–max over
+                      the ROI corners and center). Both use calibration data
+                      only.
+                    </p>
+                    <p>
+                      <strong>Simulation</strong>: ray-traced synthetic exposure
+                      → phase decoding → triangulation → comparison with ground
+                      truth. <strong>AOI reference values</strong>: hardware or
+                      spec numbers you enter, for side-by-side comparison only.
+                      The accuracy of an ideal simulation (direct light, perfect
+                      calibration) does not represent real AOI performance. All
+                      heights are relative to the reference plane (world Y ={" "}
+                      {fmt(reference, 2)} mm).
+                    </p>
+                  </>,
+                )}
               </InfoHeading>
               <table className="aoi-table" data-testid="aoi-class-table">
                 <thead>
                   <tr>
-                    <th>類別</th>
-                    <th>Pair 數</th>
-                    <th>感度（直視=1）幾何 / 參考</th>
-                    <th>每 2π 高度 理論/幾何 mm</th>
-                    <th>編碼量測範圍 mm</th>
-                    <th>理論 σh µm</th>
-                    <th>模擬平坦區 RMSE µm</th>
-                    <th>高度雜訊（直視=1）1/感度 / 理論 σh / 模擬 / 參考</th>
-                    <th>AOI 參考 每 2π / 範圍 mm</th>
+                    <th>{t("類別", "Class")}</th>
+                    <th>{t("Pair 數", "Pairs")}</th>
+                    <th>
+                      {t(
+                        "感度（直視=1）幾何 / 參考",
+                        "Sensitivity (direct = 1) geometric / reference",
+                      )}
+                    </th>
+                    <th>
+                      {t(
+                        "每 2π 高度 理論/幾何 mm",
+                        "Height per 2π theory/geometric mm",
+                      )}
+                    </th>
+                    <th>
+                      {t("編碼量測範圍 mm", "Coded measurement range mm")}
+                    </th>
+                    <th>{t("理論 σh µm", "Theoretical σh µm")}</th>
+                    <th>
+                      {t("模擬平坦區 RMSE µm", "Simulated flat-area RMSE µm")}
+                    </th>
+                    <th>
+                      {t(
+                        "高度雜訊（直視=1）1/感度 / 理論 σh / 模擬 / 參考",
+                        "Height noise (direct = 1) 1/sensitivity / theoretical σh / simulated / reference",
+                      )}
+                    </th>
+                    <th>
+                      {t(
+                        "AOI 參考 每 2π / 範圍 mm",
+                        "AOI reference per 2π / range mm",
+                      )}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -849,7 +1064,7 @@ export default function MultiViewPage({
                       </td>
                       <td>{fmt(c.range, 2)}</td>
                       <td>{um(c.sigma)}</td>
-                      <td>{c.runs ? um(c.simRmse) : "未執行"}</td>
+                      <td>{c.runs ? um(c.simRmse) : t("未執行", "Not run")}</td>
                       <td>
                         {fmt(ratio(directClass.sensitivity, c.sensitivity), 2)}{" "}
                         / {fmt(ratio(c.sigma, directClass.sigma), 2)} /{" "}
@@ -865,13 +1080,13 @@ export default function MultiViewPage({
                           Number.isFinite(c.per2Pi) && (
                             <small>
                               {" "}
-                              （幾何/參考{" "}
+                              {t("（幾何/參考", "(geometric/reference")}{" "}
                               {fmt(
                                 c.per2Pi /
                                   config.references[c.kind].heightPer2Pi!,
                                 2,
                               )}
-                              ）
+                              {t("）", ")")}
                             </small>
                           )}
                       </td>
@@ -879,23 +1094,44 @@ export default function MultiViewPage({
                   ))}
                 </tbody>
               </table>
-              <InfoHeading title="各 Pair 靈敏度與量測範圍" level={2}>
-                <p>
-                  f₁,max：在「需求量測範圍」{config.targetRange} mm 下，單週期 /
-                  目前編碼（含 p₂/p₁）可用的最高條紋頻率；頻率越高 σh 越小（σh ∝
-                  1/f₁），這就是範圍與精度的取捨。P(級次錯)
-                  為高斯雜訊下兩組週期或 temporal 解纏的理論失敗機率。景深為
-                  Camera 模糊 ≤ 2 px 且 Projector MTF ≥ 0.5
-                  的高度區間（需設定光圈）。
-                </p>
+              <InfoHeading
+                title={t(
+                  "各 Pair 靈敏度與量測範圍",
+                  "Per-pair sensitivity and measurement range",
+                )}
+                level={2}
+              >
+                {t(
+                  <p>
+                    f₁,max：在「需求量測範圍」{config.targetRange} mm 下，單週期
+                    / 目前編碼（含 p₂/p₁）可用的最高條紋頻率；頻率越高 σh
+                    越小（σh ∝ 1/f₁），這就是範圍與精度的取捨。P(級次錯)
+                    為高斯雜訊下兩組週期或 temporal 解纏的理論失敗機率。景深為
+                    Camera 模糊 ≤ 2 px 且 Projector MTF ≥ 0.5
+                    的高度區間（需設定光圈）。
+                  </p>,
+                  <p>
+                    f₁,max: the highest fringe frequency usable for a single
+                    period / the current coding (including p₂/p₁) at the
+                    “required measurement range” of {config.targetRange} mm.
+                    Higher frequency means smaller σh (σh ∝ 1/f₁): this is the
+                    trade-off between range and accuracy. P(order error) is the
+                    theoretical failure probability of dual-period or temporal
+                    unwrapping under Gaussian noise. Depth of field is the
+                    height interval where camera blur ≤ 2 px and projector MTF ≥
+                    0.5 (requires an aperture setting).
+                  </p>,
+                )}
               </InfoHeading>
               <div className="aoi-table-actions">
                 <button
                   onClick={() => setSelected(new Set(pairs.map((p) => p.id)))}
                 >
-                  全選
+                  {t("全選", "Select all")}
                 </button>
-                <button onClick={() => setSelected(new Set())}>全不選</button>
+                <button onClick={() => setSelected(new Set())}>
+                  {t("全不選", "Select none")}
+                </button>
                 {PAIR_CLASSES.map((kind) => (
                   <button
                     key={kind}
@@ -907,7 +1143,10 @@ export default function MultiViewPage({
                       )
                     }
                   >
-                    只選{PAIR_CLASS_NAMES[kind]}
+                    {t(
+                      <>只選{PAIR_CLASS_NAMES[kind]}</>,
+                      <>Only {PAIR_CLASS_NAMES[kind]}</>,
+                    )}
                   </button>
                 ))}
               </div>
@@ -915,24 +1154,39 @@ export default function MultiViewPage({
                 <table className="aoi-table" data-testid="aoi-pair-table">
                   <thead>
                     <tr>
-                      <th>選</th>
+                      <th>{t("選", "Select")}</th>
                       <th>Pair</th>
-                      <th>類別</th>
+                      <th>{t("類別", "Class")}</th>
                       <th>θc / θp / Δα °</th>
-                      <th>板面週期 mm</th>
-                      <th>|dφ/dh| 平行近似 / 幾何 ROI 範圍 rad/mm</th>
-                      <th>每 2π mm</th>
-                      <th>量測範圍 mm</th>
+                      <th>{t("板面週期 mm", "Board period mm")}</th>
+                      <th>
+                        {t(
+                          "|dφ/dh| 平行近似 / 幾何 ROI 範圍 rad/mm",
+                          "|dφ/dh| parallel approx. / geometric ROI range rad/mm",
+                        )}
+                      </th>
+                      <th>{t("每 2π mm", "Per 2π mm")}</th>
+                      <th>{t("量測範圍 mm", "Measurement range mm")}</th>
                       <th>σh µm</th>
-                      <th>P(級次錯)</th>
-                      <th>景深 mm</th>
-                      <th>f₁,max 單週期/目前編碼</th>
-                      <th>模擬 RMSE µm / 覆蓋</th>
+                      <th>{t("P(級次錯)", "P(order error)")}</th>
+                      <th>{t("景深 mm", "Depth of field mm")}</th>
+                      <th>
+                        {t(
+                          "f₁,max 單週期/目前編碼",
+                          "f₁,max single period/current coding",
+                        )}
+                      </th>
+                      <th>
+                        {t(
+                          "模擬 RMSE µm / 覆蓋",
+                          "Simulated RMSE µm / coverage",
+                        )}
+                      </th>
                       <th></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {theory.map(({ pair, theory: t }) => {
+                    {theory.map(({ pair, theory: th }) => {
                       const run = runById.get(pair.id);
                       return (
                         <tr
@@ -944,7 +1198,10 @@ export default function MultiViewPage({
                           <td>
                             <input
                               type="checkbox"
-                              aria-label={`選取 ${pair.id}`}
+                              aria-label={t(
+                                `選取 ${pair.id}`,
+                                `Select ${pair.id}`,
+                              )}
                               checked={selected ? selected.has(pair.id) : true}
                               onChange={(e) => {
                                 const next = new Set(
@@ -970,33 +1227,35 @@ export default function MultiViewPage({
                             {pair.projectorTilt.toFixed(0)} /{" "}
                             {pair.deltaAzimuth.toFixed(0)}
                           </td>
-                          <td>{fmt(t.boardPeriod, 3)}</td>
+                          <td>{fmt(th.boardPeriod, 3)}</td>
                           <td>
-                            {fmt(t.parallelSensitivity, 2)} /{" "}
-                            {fmt(t.sensitivitySpan[0], 2)}–
-                            {fmt(t.sensitivitySpan[1], 2)}
+                            {fmt(th.parallelSensitivity, 2)} /{" "}
+                            {fmt(th.sensitivitySpan[0], 2)}–
+                            {fmt(th.sensitivitySpan[1], 2)}
                           </td>
-                          <td>{fmt(t.heightPer2Pi, 3)}</td>
+                          <td>{fmt(th.heightPer2Pi, 3)}</td>
                           <td>
-                            {fmt(t.codingRange, 2)}
-                            {t.effectiveRange[1] - t.effectiveRange[0] <
-                              t.codingRange - 1e-9 && (
-                              <small className="aoi-warn"> 景深限縮</small>
+                            {fmt(th.codingRange, 2)}
+                            {th.effectiveRange[1] - th.effectiveRange[0] <
+                              th.codingRange - 1e-9 && (
+                              <small className="aoi-warn">
+                                {t(" 景深限縮", " limited by depth of field")}
+                              </small>
                             )}
                           </td>
-                          <td>{um(t.sigmaHeight)}</td>
+                          <td>{um(th.sigmaHeight)}</td>
                           <td>
-                            {t.orderErrorProbability
-                              ? t.orderErrorProbability.toExponential(1)
+                            {th.orderErrorProbability
+                              ? th.orderErrorProbability.toExponential(1)
                               : "0"}
                           </td>
                           <td>
-                            {fmt(t.depthOfField[0], 1)}…
-                            {fmt(t.depthOfField[1], 1)}
+                            {fmt(th.depthOfField[0], 1)}…
+                            {fmt(th.depthOfField[1], 1)}
                           </td>
                           <td>
-                            {fmt(t.maxFrequencySingle, 1)} /{" "}
-                            {fmt(t.maxFrequencyCoded, 1)}
+                            {fmt(th.maxFrequencySingle, 1)} /{" "}
+                            {fmt(th.maxFrequencyCoded, 1)}
                           </td>
                           <td>
                             {run
@@ -1010,11 +1269,14 @@ export default function MultiViewPage({
                               onClick={() => runPairs([pair.id])}
                               data-testid={`aoi-run-${pair.id}`}
                             >
-                              執行
+                              {t("執行", "Run")}
                             </button>
                             <button
                               className="aoi-mini"
-                              title="在 3D 沙盒設為目前 Pair"
+                              title={t(
+                                "在 3D 沙盒設為目前 Pair",
+                                "Set as the active pair in the 3D sandbox",
+                              )}
                               onClick={() =>
                                 run
                                   ? showPair(run)
@@ -1037,9 +1299,18 @@ export default function MultiViewPage({
               {focusTheory && (
                 <>
                   <h3 className="sandbox-group">
-                    {pairLabel(focusTheory.pair.id)}
-                    ：兩組週期的週期比與量測範圍（f₁ = {config.fringeFrequency}
-                    ）
+                    {t(
+                      <>
+                        {pairLabel(focusTheory.pair.id)}
+                        ：兩組週期的週期比與量測範圍（f₁ ={" "}
+                        {config.fringeFrequency}）
+                      </>,
+                      <>
+                        {pairLabel(focusTheory.pair.id)}: period ratio and
+                        measurement range for two periods (f₁ ={" "}
+                        {config.fringeFrequency})
+                      </>,
+                    )}
                   </h3>
                   <table className="aoi-table compact">
                     <thead>
@@ -1053,14 +1324,20 @@ export default function MultiViewPage({
                     <tbody>
                       {(
                         [
-                          ["粗/細 範圍 mm", (r) => fmt(r.coarseRange, 2)],
                           [
-                            "粗/細 P(級次錯)",
+                            t("粗/細 範圍 mm", "Coarse/fine range mm"),
+                            (r) => fmt(r.coarseRange, 2),
+                          ],
+                          [
+                            t("粗/細 P(級次錯)", "Coarse/fine P(order error)"),
                             (r) => r.coarseOrderError.toExponential(1),
                           ],
-                          ["外差 範圍 mm", (r) => fmt(r.dualRange, 2)],
                           [
-                            "外差 P(級次錯)",
+                            t("外差 範圍 mm", "Heterodyne range mm"),
+                            (r) => fmt(r.dualRange, 2),
+                          ],
+                          [
+                            t("外差 P(級次錯)", "Heterodyne P(order error)"),
                             (r) => r.dualOrderError.toExponential(1),
                           ],
                         ] as const satisfies readonly (readonly [
@@ -1087,22 +1364,44 @@ export default function MultiViewPage({
           {mainTab === "maps" &&
             (!results ? (
               <p className="sandbox-no-result">
-                尚未執行模擬。請在「Pair 與量測範圍」勾選 Pair
-                後按「執行選取」。
+                {t(
+                  <>
+                    尚未執行模擬。請在「Pair 與量測範圍」勾選 Pair
+                    後按「執行選取」。
+                  </>,
+                  <>
+                    No simulation run yet. Check pairs in “Pairs and measurement
+                    range”, then press “Run selected”.
+                  </>,
+                )}
               </p>
             ) : (
               <>
                 <InfoHeading
-                  title="各 Pair 有效量測圖（統一世界座標，俯視）"
+                  title={t(
+                    "各 Pair 有效量測圖（統一世界座標，俯視）",
+                    "Valid-measurement map per pair (unified world coordinates, top view)",
+                  )}
                   level={2}
                 >
-                  <p>
-                    板面 {results.grid.nx}×{results.grid.ny} 格（
-                    {results.config.cellSize}{" "}
-                    mm），中心為瞄準點。失效原因由真值幾何判定（FOV、遮擋、陰影）或讀取該
-                    Pair 自身像素（飽和、調變不足）；此圖
-                    <strong>僅供評估</strong>，不回饋到重建。
-                  </p>
+                  {t(
+                    <p>
+                      板面 {results.grid.nx}×{results.grid.ny} 格（
+                      {results.config.cellSize}{" "}
+                      mm），中心為瞄準點。失效原因由真值幾何判定（FOV、遮擋、陰影）或讀取該
+                      Pair 自身像素（飽和、調變不足）；此圖
+                      <strong>僅供評估</strong>，不回饋到重建。
+                    </p>,
+                    <p>
+                      Board grid of {results.grid.nx}×{results.grid.ny} cells (
+                      {results.config.cellSize} mm), centered on the aim point.
+                      Failure reasons come from the ground-truth geometry (FOV,
+                      occlusion, shadow) or from the pair’s own pixels
+                      (saturation, low modulation); this map is{" "}
+                      <strong>for evaluation only</strong> and never feeds back
+                      into reconstruction.
+                    </p>,
+                  )}
                 </InfoHeading>
                 <div className="aoi-legend">
                   {REASONS.map(([k, name, color]) => (
@@ -1124,7 +1423,10 @@ export default function MultiViewPage({
                         values={p.evaluation.reasons}
                         mode="reason"
                         testId={`aoi-valid-map-${p.pair.id}`}
-                        label={`${p.pair.id} ${PAIR_CLASS_NAMES[p.pair.kind]} · 覆蓋 ${pct(p.evaluation.coverage)}`}
+                        label={t(
+                          `${p.pair.id} ${PAIR_CLASS_NAMES[p.pair.kind]} · 覆蓋 ${pct(p.evaluation.coverage)}`,
+                          `${p.pair.id} ${PAIR_CLASS_NAMES[p.pair.kind]} · coverage ${pct(p.evaluation.coverage)}`,
+                        )}
                       />
                     </button>
                   ))}
@@ -1132,12 +1434,13 @@ export default function MultiViewPage({
                 {focusRun && focusHeights && (
                   <>
                     <h3 className="sandbox-group">
-                      {pairLabel(focusRun.pair.id)} 詳細{" "}
+                      {pairLabel(focusRun.pair.id)} {t("詳細", "details")}{" "}
                       <button
                         className="aoi-mini"
                         onClick={() => showPair(focusRun)}
                       >
-                        <Box size={12} /> 在 3D 沙盒檢視
+                        <Box size={12} />{" "}
+                        {t("在 3D 沙盒檢視", "View in 3D sandbox")}
                       </button>
                     </h3>
                     <div className="aoi-detail">
@@ -1145,34 +1448,46 @@ export default function MultiViewPage({
                         grid={results.grid}
                         values={focusRun.evaluation.reasons}
                         mode="reason"
-                        label="有效量測圖"
+                        label={t("有效量測圖", "Valid-measurement map")}
                       />
                       <GridMap
                         grid={results.grid}
                         values={focusHeights}
                         mode="height"
                         range={heightRange}
-                        label={`重建高度（${fmt(heightRange[0], 2)}–${fmt(heightRange[1], 2)} mm）`}
+                        label={t(
+                          `重建高度（${fmt(heightRange[0], 2)}–${fmt(heightRange[1], 2)} mm）`,
+                          `Reconstructed height (${fmt(heightRange[0], 2)}–${fmt(heightRange[1], 2)} mm)`,
+                        )}
                       />
                       <GridMap
                         grid={results.grid}
                         values={focusRun.evaluation.errors}
                         mode="error"
                         range={errorScale}
-                        label={`高度誤差（±${fmt(errorScale[1], 3)} mm，評估）`}
+                        label={t(
+                          `高度誤差（±${fmt(errorScale[1], 3)} mm，評估）`,
+                          `Height error (±${fmt(errorScale[1], 3)} mm, evaluation)`,
+                        )}
                       />
                       <ImageCanvas
                         values={focusRun.image.frame}
                         width={focusRun.image.width}
                         height={focusRun.image.height}
-                        label="Camera 影像 I₁（合成曝光）"
+                        label={t(
+                          "Camera 影像 I₁（合成曝光）",
+                          "Camera image I₁ (synthetic exposure)",
+                        )}
                       />
                       <ImageCanvas
                         values={focusRun.image.modulation}
                         width={focusRun.image.width}
                         height={focusRun.image.height}
                         gain={2}
-                        label="調變 B（×2 顯示）"
+                        label={t(
+                          "調變 B（×2 顯示）",
+                          "Modulation B (shown ×2)",
+                        )}
                       />
                     </div>
                     <table
@@ -1181,9 +1496,11 @@ export default function MultiViewPage({
                     >
                       <thead>
                         <tr>
-                          <th>原因</th>
-                          <th>格數</th>
-                          <th>比例（含無表面）</th>
+                          <th>{t("原因", "Reason")}</th>
+                          <th>{t("格數", "Cells")}</th>
+                          <th>
+                            {t("比例（含無表面）", "Share (incl. no surface)")}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1217,31 +1534,62 @@ export default function MultiViewPage({
           {mainTab === "fusion" &&
             (!results || !fusion ? (
               <p className="sandbox-no-result">
-                尚未執行模擬。Fusion 需要至少一組 Pair 的結果。
+                {t(
+                  "尚未執行模擬。Fusion 需要至少一組 Pair 的結果。",
+                  "No simulation run yet. Fusion needs results from at least one pair.",
+                )}
               </p>
             ) : (
               <>
-                <InfoHeading title="Multi-view Fusion 策略" level={2}>
-                  <p>
-                    ① 直視 +
-                    斜視：保留直視結果，只在直視失效的格以斜視共識補洞。②
-                    單一斜視：特定局部特徵只信任一組斜視。③ 斜視 +
-                    斜視：取與最多 Pair 一致（|Δh| ≤ max(門檻,
-                    3σ)）的值，剔除離群後以 1/σ² 加權。
-                  </p>
-                  <p>
-                    σ 來自各 Pair 自身的調變 B、感測器雜訊規格與幾何 |dφ/dh|，
-                    <strong>完全不使用真值</strong>
-                    。下表的誤差欄才使用真值評估。
-                  </p>
+                <InfoHeading
+                  title={t(
+                    "Multi-view Fusion 策略",
+                    "Multi-view fusion strategies",
+                  )}
+                  level={2}
+                >
+                  {t(
+                    <>
+                      <p>
+                        ① 直視 +
+                        斜視：保留直視結果，只在直視失效的格以斜視共識補洞。②
+                        單一斜視：特定局部特徵只信任一組斜視。③ 斜視 +
+                        斜視：取與最多 Pair 一致（|Δh| ≤ max(門檻,
+                        3σ)）的值，剔除離群後以 1/σ² 加權。
+                      </p>
+                      <p>
+                        σ 來自各 Pair 自身的調變 B、感測器雜訊規格與幾何
+                        |dφ/dh|，
+                        <strong>完全不使用真值</strong>
+                        。下表的誤差欄才使用真值評估。
+                      </p>
+                    </>,
+                    <>
+                      <p>
+                        ① Direct + oblique: keep the direct-view result and fill
+                        only the cells where direct view fails with the oblique
+                        consensus. ② Single oblique: trust a single oblique pair
+                        for a specific local feature. ③ Oblique + oblique: take
+                        the value that agrees with the most pairs (|Δh| ≤
+                        max(threshold, 3σ)), drop outliers, then weight by 1/σ².
+                      </p>
+                      <p>
+                        σ comes from each pair’s own modulation B, the sensor
+                        noise spec and the geometric |dφ/dh|, and{" "}
+                        <strong>never uses ground truth</strong>. Only the error
+                        columns in the table below use ground truth for
+                        evaluation.
+                      </p>
+                    </>,
+                  )}
                 </InfoHeading>
                 <div className="aoi-fusion-options">
                   {(["direct", "oblique"] as const).map((group) => (
                     <fieldset key={group}>
                       <legend>
                         {group === "direct"
-                          ? "① 的直視 Pair"
-                          : "①③ 的斜視 Pair"}
+                          ? t("① 的直視 Pair", "Direct pairs for ①")
+                          : t("①③ 的斜視 Pair", "Oblique pairs for ①③")}
                       </legend>
                       {results.pairs
                         .filter((p) =>
@@ -1271,9 +1619,11 @@ export default function MultiViewPage({
                     </fieldset>
                   ))}
                   <fieldset>
-                    <legend>② 單一斜視 Pair</legend>
+                    <legend>
+                      {t("② 單一斜視 Pair", "② Single oblique pair")}
+                    </legend>
                     <select
-                      aria-label="單一斜視 Pair"
+                      aria-label={t("單一斜視 Pair", "Single oblique pair")}
                       value={fusionOptions.single ?? ""}
                       onChange={(e) =>
                         setFusionChoice({
@@ -1295,16 +1645,21 @@ export default function MultiViewPage({
                 <table className="aoi-table" data-testid="aoi-fusion-table">
                   <thead>
                     <tr>
-                      <th>策略</th>
-                      <th>Pair 數</th>
-                      <th>覆蓋</th>
+                      <th>{t("策略", "Strategy")}</th>
+                      <th>{t("Pair 數", "Pairs")}</th>
+                      <th>{t("覆蓋", "Coverage")}</th>
                       <th>RMSE µm</th>
                       <th>MAE µm</th>
                       <th>Bias µm</th>
-                      <th>平坦區 RMSE µm</th>
-                      <th>失效比例</th>
-                      <th>粗大誤差格</th>
-                      <th>一致 / 矛盾 / 單一 格 RMSE µm</th>
+                      <th>{t("平坦區 RMSE µm", "Flat-area RMSE µm")}</th>
+                      <th>{t("失效比例", "Failure ratio")}</th>
+                      <th>{t("粗大誤差格", "Gross-error cells")}</th>
+                      <th>
+                        {t(
+                          "一致 / 矛盾 / 單一 格 RMSE µm",
+                          "Consistent / conflict / single cell RMSE µm",
+                        )}
+                      </th>
                       <th>ms</th>
                       <th></th>
                     </tr>
@@ -1319,7 +1674,9 @@ export default function MultiViewPage({
                         onClick={() => setStrategyFocus(result.id)}
                       >
                         <td>
-                          <button className="aoi-link">{result.name}</button>
+                          <button className="aoi-link">
+                            {strategyLabel(result.name)}
+                          </button>
                         </td>
                         <td>{result.pairIds.length}</td>
                         <td>{pct(score.coverage)}</td>
@@ -1364,7 +1721,10 @@ export default function MultiViewPage({
                       values={strategyHeights}
                       mode="height"
                       range={heightRange}
-                      label={`${strategy.result.name}：融合高度`}
+                      label={t(
+                        `${strategyLabel(strategy.result.name)}：融合高度`,
+                        `${strategyLabel(strategy.result.name)}: fused height`,
+                      )}
                       testId="aoi-fusion-height"
                     />
                     <GridMap
@@ -1372,37 +1732,57 @@ export default function MultiViewPage({
                       values={strategy.score.errors}
                       mode="error"
                       range={errorScale}
-                      label="高度誤差（評估）"
+                      label={t("高度誤差（評估）", "Height error (evaluation)")}
                     />
                     <GridMap
                       grid={results.grid}
                       values={strategy.result.map.status}
                       mode="status"
-                      label="一致性：黃=單一 綠=一致 紅=矛盾"
+                      label={t(
+                        "一致性：黃=單一 綠=一致 紅=矛盾",
+                        "Consistency: yellow = single, green = consistent, red = conflict",
+                      )}
                     />
                     <GridMap
                       grid={results.grid}
                       values={strategy.result.map.spread}
                       mode="spread"
                       range={[0, config.consistencyTolerance * 3]}
-                      label={`Pair 間高度差 max−min（0–${fmt(config.consistencyTolerance * 3, 2)} mm）`}
+                      label={t(
+                        `Pair 間高度差 max−min（0–${fmt(config.consistencyTolerance * 3, 2)} mm）`,
+                        `Height spread between pairs, max−min (0–${fmt(config.consistencyTolerance * 3, 2)} mm)`,
+                      )}
                     />
                     {strategy.result.id === "directOblique" && (
                       <GridMap
                         grid={results.grid}
                         values={strategy.result.map.origin}
                         mode="origin"
-                        label="來源：藍=直視 橙=斜視補洞"
+                        label={t(
+                          "來源：藍=直視 橙=斜視補洞",
+                          "Source: blue = direct, orange = oblique hole filling",
+                        )}
                       />
                     )}
                   </div>
                 )}
                 <InfoHeading title="Cross-pair Consistency Check" level={2}>
-                  <p>
-                    兩兩比較 Pair 在共同有效格的高度差（不使用真值）。RMS
-                    大或矛盾比例高表示至少一方不可靠（級次錯誤、混疊、鏡面或遮擋邊緣）。上表「一致
-                    / 矛盾」格的實際 RMSE 可驗證這個檢查是否真的預測誤差。
-                  </p>
+                  {t(
+                    <p>
+                      兩兩比較 Pair 在共同有效格的高度差（不使用真值）。RMS
+                      大或矛盾比例高表示至少一方不可靠（級次錯誤、混疊、鏡面或遮擋邊緣）。上表「一致
+                      / 矛盾」格的實際 RMSE 可驗證這個檢查是否真的預測誤差。
+                    </p>,
+                    <p>
+                      Compares the height difference of every two pairs over
+                      their common valid cells (no ground truth). A large RMS or
+                      a high conflict ratio means at least one side is
+                      unreliable (wrong fringe order, aliasing, specular
+                      reflection or occlusion edges). The actual RMSE of the
+                      “consistent / conflict” cells in the table above verifies
+                      whether this check really predicts error.
+                    </p>,
+                  )}
                 </InfoHeading>
                 <div className="aoi-table-scroll">
                   <table
@@ -1413,10 +1793,12 @@ export default function MultiViewPage({
                       <tr>
                         <th>Pair A</th>
                         <th>Pair B</th>
-                        <th>共同格</th>
+                        <th>{t("共同格", "Common cells")}</th>
                         <th>RMS Δh µm</th>
-                        <th>中位 |Δh| µm</th>
-                        <th>&gt; 門檻比例</th>
+                        <th>{t("中位 |Δh| µm", "Median |Δh| µm")}</th>
+                        <th>
+                          {t(<>&gt; 門檻比例</>, <>Share &gt; threshold</>)}
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1446,34 +1828,59 @@ export default function MultiViewPage({
           {mainTab === "bench" && (
             <>
               {!results ? (
-                <p className="sandbox-no-result">尚未執行模擬。</p>
+                <p className="sandbox-no-result">
+                  {t("尚未執行模擬。", "No simulation run yet.")}
+                </p>
               ) : (
                 <>
-                  <InfoHeading title="Benchmark（統一世界座標，mm）" level={2}>
-                    <p>
-                      誤差 = 每格重建高度（像素點中位數）−
-                      真值格內平均高度。平坦區排除格內真值起伏 ≥
-                      2×容許誤差的邊緣格。失效比例 = 1 − 準確格 /
-                      有表面格。粗大誤差 = |e| ≥ 半個每 2π
-                      高度（級次錯或混疊）。時間為瀏覽器 Worker 內的模擬時間，
-                      <strong>不是 AOI 節拍</strong>。
-                    </p>
+                  <InfoHeading
+                    title={t(
+                      "Benchmark（統一世界座標，mm）",
+                      "Benchmark (unified world coordinates, mm)",
+                    )}
+                    level={2}
+                  >
+                    {t(
+                      <p>
+                        誤差 = 每格重建高度（像素點中位數）−
+                        真值格內平均高度。平坦區排除格內真值起伏 ≥
+                        2×容許誤差的邊緣格。失效比例 = 1 − 準確格 /
+                        有表面格。粗大誤差 = |e| ≥ 半個每 2π
+                        高度（級次錯或混疊）。時間為瀏覽器 Worker 內的模擬時間，
+                        <strong>不是 AOI 節拍</strong>。
+                      </p>,
+                      <p>
+                        Error = reconstructed height per cell (median of pixel
+                        points) − mean ground-truth height in the cell. Flat
+                        areas exclude edge cells whose ground truth varies by ≥
+                        2× tolerance. Failure ratio = 1 − accurate cells /
+                        surface cells. Gross error = |e| ≥ half the height per
+                        2π (wrong order or aliasing). Times are simulation times
+                        inside the browser worker,{" "}
+                        <strong>not AOI cycle time</strong>.
+                      </p>,
+                    )}
                   </InfoHeading>
                   <div className="aoi-table-scroll">
                     <table className="aoi-table" data-testid="aoi-benchmark">
                       <thead>
                         <tr>
-                          <th>項目</th>
-                          <th>類別</th>
-                          <th>覆蓋</th>
+                          <th>{t("項目", "Item")}</th>
+                          <th>{t("類別", "Class")}</th>
+                          <th>{t("覆蓋", "Coverage")}</th>
                           <th>RMSE µm</th>
                           <th>MAE µm</th>
                           <th>Bias µm</th>
-                          <th>平坦區 RMSE µm</th>
-                          <th>失效比例</th>
-                          <th>粗大誤差格</th>
-                          <th>各表面 RMSE µm（覆蓋）</th>
-                          <th>時間 ms</th>
+                          <th>{t("平坦區 RMSE µm", "Flat-area RMSE µm")}</th>
+                          <th>{t("失效比例", "Failure ratio")}</th>
+                          <th>{t("粗大誤差格", "Gross-error cells")}</th>
+                          <th>
+                            {t(
+                              "各表面 RMSE µm（覆蓋）",
+                              "RMSE per surface µm (coverage)",
+                            )}
+                          </th>
+                          <th>{t("時間 ms", "Time ms")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1482,11 +1889,14 @@ export default function MultiViewPage({
                             id: p.pair.id,
                             kind: PAIR_CLASS_NAMES[p.pair.kind],
                             score: p.evaluation,
-                            ms: `${(p.timing.renderMs + p.timing.reconstructMs).toFixed(0)} +${p.timing.traceMs.toFixed(0)} 共用`,
+                            ms: t(
+                              `${(p.timing.renderMs + p.timing.reconstructMs).toFixed(0)} +${p.timing.traceMs.toFixed(0)} 共用`,
+                              `${(p.timing.renderMs + p.timing.reconstructMs).toFixed(0)} +${p.timing.traceMs.toFixed(0)} shared`,
+                            ),
                             fusion: false,
                           })),
                           ...(fusion?.strategies.map(({ result, score }) => ({
-                            id: result.name,
+                            id: strategyLabel(result.name),
                             kind: "Fusion",
                             score,
                             ms: result.ms.toFixed(1),
@@ -1508,9 +1918,11 @@ export default function MultiViewPage({
                             <td>{row.score.grossCells}</td>
                             <td className="aoi-slots">
                               {row.score.bySlot
-                                .map(
-                                  (s) =>
+                                .map((s) =>
+                                  t(
                                     `${SURFACE_NAMES[s.slot]} ${um(s.stats?.rmse ?? NaN)}（${pct(s.cells ? s.measured / s.cells : NaN)}）`,
+                                    `${SURFACE_NAMES[s.slot]} ${um(s.stats?.rmse ?? NaN)} (${pct(s.cells ? s.measured / s.cells : NaN)})`,
+                                  ),
                                 )
                                 .join(" · ")}
                             </td>
@@ -1524,29 +1936,50 @@ export default function MultiViewPage({
                     <Histogram
                       errors={focusRun.evaluation.errors}
                       scale={errorScale[1]}
-                      label={`${focusRun.pair.id} 誤差分布`}
+                      label={t(
+                        `${focusRun.pair.id} 誤差分布`,
+                        `${focusRun.pair.id} error distribution`,
+                      )}
                     />
                   )}
                   {strategy && (
                     <Histogram
                       errors={strategy.score.errors}
                       scale={errorScale[1]}
-                      label={`${strategy.result.name} 誤差分布`}
+                      label={t(
+                        `${strategyLabel(strategy.result.name)} 誤差分布`,
+                        `${strategyLabel(strategy.result.name)} error distribution`,
+                      )}
                     />
                   )}
                 </>
               )}
-              <InfoHeading title="批次比較（固定 seed）" level={2}>
-                <p>
-                  對勾選的 Pair 逐一套用數值重跑完整流程與三種 Fusion。平面場景
-                  + 掃描「物體高度 Y」可看到每組 Pair
-                  超出量測範圍時的混疊鋸齒；掃描 f₁ 或 p₂/p₁
-                  可比較範圍與精度的取捨。
-                </p>
+              <InfoHeading
+                title={t(
+                  "批次比較（固定 seed）",
+                  "Batch comparison (fixed seed)",
+                )}
+                level={2}
+              >
+                {t(
+                  <p>
+                    對勾選的 Pair 逐一套用數值重跑完整流程與三種
+                    Fusion。平面場景 + 掃描「物體高度 Y」可看到每組 Pair
+                    超出量測範圍時的混疊鋸齒；掃描 f₁ 或 p₂/p₁
+                    可比較範圍與精度的取捨。
+                  </p>,
+                  <p>
+                    Reruns the full pipeline and all three fusion strategies for
+                    each value on the checked pairs. A plane scene + sweeping
+                    “object height Y” shows the aliasing sawtooth of each pair
+                    once it leaves its measurement range; sweeping f₁ or p₂/p₁
+                    compares the trade-off between range and accuracy.
+                  </p>,
+                )}
               </InfoHeading>
               <div className="aoi-sweep">
                 <select
-                  aria-label="批次變數"
+                  aria-label={t("批次變數", "Batch variable")}
                   value={sweepVariable}
                   onChange={(e) =>
                     setSweepVariable(e.target.value as SweepVariable)
@@ -1559,7 +1992,7 @@ export default function MultiViewPage({
                   ))}
                 </select>
                 <input
-                  aria-label="批次數值"
+                  aria-label={t("批次數值", "Batch values")}
                   value={sweepValues}
                   onChange={(e) => setSweepValues(e.target.value)}
                 />
@@ -1569,11 +2002,14 @@ export default function MultiViewPage({
                   data-testid="aoi-run-sweep"
                 >
                   <Play size={14} />
-                  執行批次（{chosen.length} Pair）
+                  {t(
+                    <>執行批次（{chosen.length} Pair）</>,
+                    <>Run batch ({chosen.length} pairs)</>,
+                  )}
                 </button>
                 <button onClick={exportSweep} disabled={!sweep}>
                   <Sheet size={14} />
-                  批次 CSV
+                  {t("批次 CSV", "Batch CSV")}
                 </button>
               </div>
               {sweep && (
@@ -1591,13 +2027,18 @@ export default function MultiViewPage({
                             )?.[1]
                           }
                         </th>
-                        <th>項目</th>
+                        <th>{t("項目", "Item")}</th>
                         <th>RMSE µm</th>
-                        <th>覆蓋</th>
-                        <th>粗大誤差比例</th>
-                        <th>中位高度 / 真值 mm</th>
-                        <th>理論範圍 mm</th>
-                        <th>理論 σh µm</th>
+                        <th>{t("覆蓋", "Coverage")}</th>
+                        <th>{t("粗大誤差比例", "Gross-error ratio")}</th>
+                        <th>
+                          {t(
+                            "中位高度 / 真值 mm",
+                            "Median height / ground truth mm",
+                          )}
+                        </th>
+                        <th>{t("理論範圍 mm", "Theoretical range mm")}</th>
+                        <th>{t("理論 σh µm", "Theoretical σh µm")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1608,7 +2049,9 @@ export default function MultiViewPage({
                         >
                           <td>{r.value}</td>
                           <td>
-                            {r.kind === "fusion" ? r.id : pairLabel(r.id)}
+                            {r.kind === "fusion"
+                              ? strategyLabel(r.id)
+                              : pairLabel(r.id)}
                           </td>
                           <td>{um(r.rmse)}</td>
                           <td>{pct(r.coverage)}</td>

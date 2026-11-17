@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { SHIFTS, TAU } from "../core/simulation";
+import { t } from "../i18n";
 
 export interface LessonSceneProps {
   step: number;
@@ -51,7 +52,12 @@ export default function LessonScene(props: LessonSceneProps) {
         preserveDrawingBuffer: true,
       });
     } catch {
-      setError("此裝置無法建立 WebGL，無法顯示 3D 示意。");
+      setError(
+        t(
+          "此裝置無法建立 WebGL，無法顯示 3D 示意。",
+          "This device can't create WebGL, so the 3D illustration can't be shown.",
+        ),
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -60,7 +66,10 @@ export default function LessonScene(props: LessonSceneProps) {
     canvas.dataset.testid = "lesson-scene-canvas";
     canvas.setAttribute(
       "aria-label",
-      "3D 示意：Projector 把條紋投到牆上、Camera 拍下；拖曳可旋轉",
+      t(
+        "3D 示意：Projector 把條紋投到牆上、Camera 拍下；拖曳可旋轉",
+        "3D illustration: the projector casts fringes on a wall and the camera captures them; drag to rotate",
+      ),
     );
     parent.append(canvas);
     const scene = new THREE.Scene();

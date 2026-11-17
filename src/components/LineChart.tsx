@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
+import { t } from "../i18n";
 
 export interface Series {
   values: ArrayLike<number>;
@@ -75,7 +76,11 @@ export default function LineChart({
       className={`line-chart ${onSelect ? "interactive" : ""}`}
       viewBox={`0 0 ${W} ${H}`}
       role={onSelect ? "slider" : "img"}
-      aria-label={onSelect ? "一維曲線探針位置" : "量測曲線"}
+      aria-label={
+        onSelect
+          ? t("一維曲線探針位置", "Probe position on the 1D curve")
+          : t("量測曲線", "Measured curve")
+      }
       aria-valuemin={onSelect ? 0 : undefined}
       aria-valuemax={onSelect ? 100 : undefined}
       aria-valuenow={onSelect ? Math.round((selected ?? 0) * 100) : undefined}

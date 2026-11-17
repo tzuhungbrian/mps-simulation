@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import {
   add3,
   cross3,
@@ -254,20 +255,30 @@ export function calibrateCamera(
   height: number,
   options: { estimateDistortion: boolean } = { estimateDistortion: true },
 ): CalibrationResult {
-  if (imagePoints.length < 2) return { ok: false, reason: "至少需要 2 個姿態" };
+  if (imagePoints.length < 2)
+    return {
+      ok: false,
+      reason: t("至少需要 2 個姿態", "At least 2 poses are required"),
+    };
   const plane = objectPoints.map((p): Point2 => [p[0], p[1]]);
   const Hs: Mat[] = [];
   for (const img of imagePoints) {
     const H = findHomography(plane, [...img]);
-    if (!H) return { ok: false, reason: "Homography 無法估計" };
+    if (!H)
+      return {
+        ok: false,
+        reason: t("Homography 無法估計", "Could not estimate the homography"),
+      };
     Hs.push(H);
   }
   const initial = zhangIntrinsics(Hs, width, height);
   if (!initial)
     return {
       ok: false,
-      reason:
+      reason: t(
         "Zhang 初始化無解：姿態太少，或所有校正板都幾乎正對相機（傾角不足時焦距與距離分不開）",
+        "Zhang initialization has no solution: too few poses, or every calibration board almost faces the camera (without enough tilt, focal length and distance can't be separated)",
+      ),
     };
   const K0: Intrinsics = {
     width,
@@ -278,7 +289,11 @@ export function calibrateCamera(
   const poses0: Pose[] = [];
   for (const H of Hs) {
     const p = poseFromHomography(K0, H);
-    if (!p) return { ok: false, reason: "外參初始化失敗" };
+    if (!p)
+      return {
+        ok: false,
+        reason: t("外參初始化失敗", "Extrinsics initialization failed"),
+      };
     poses0.push(p);
   }
   const nIntr = options.estimateDistortion ? 8 : 4;
@@ -340,7 +355,13 @@ export function calibrateCamera(
   const r = residuals(fit.params);
   const K = unpackK(fit.params);
   if (!(K.fx > 0 && K.fy > 0))
-    return { ok: false, reason: "最佳化發散：焦距變成非正值" };
+    return {
+      ok: false,
+      reason: t(
+        "最佳化發散：焦距變成非正值",
+        "Optimization diverged: the focal length became non-positive",
+      ),
+    };
   return {
     ok: true,
     K,
@@ -407,14 +428,26 @@ export function stereoCalibrate(
 ): StereoResult {
   const views = pointsA.length;
   if (views < 1 || views !== pointsB.length)
-    return { ok: false, reason: "兩台裝置的姿態數不同" };
+    return {
+      ok: false,
+      reason: t(
+        "兩台裝置的姿態數不同",
+        "The two devices have different numbers of poses",
+      ),
+    };
   const perView: Pose[] = [];
   const posesA: Pose[] = [];
   for (let v = 0; v < views; v++) {
     const a = solvePnP(objectPoints, pointsA[v], KA),
       b = solvePnP(objectPoints, pointsB[v], KB);
     if (!a || !b)
-      return { ok: false, reason: `第 ${v + 1} 個姿態 solvePnP 失敗` };
+      return {
+        ok: false,
+        reason: t(
+          `第 ${v + 1} 個姿態 solvePnP 失敗`,
+          `solvePnP failed for pose ${v + 1}`,
+        ),
+      };
     posesA.push(a.pose);
     perView.push(composePose(b.pose, invertPose(a.pose)));
   }

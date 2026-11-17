@@ -37,6 +37,7 @@ import {
   type FusedMap,
   type FusionSource,
 } from "./fusion";
+import { t } from "../i18n";
 
 const now = () => performance.now();
 
@@ -224,11 +225,17 @@ export function defaultFusionOptions(
 }
 
 export const STRATEGIES = [
-  ["directOblique", "① 直視 + 斜視補洞"],
-  ["single", "② 單一斜視"],
-  ["oblique", "③ 斜視 + 斜視融合"],
+  ["directOblique", "① 直視 + 斜視補洞", "① Direct + oblique hole filling"],
+  ["single", "② 單一斜視", "② Single oblique"],
+  ["oblique", "③ 斜視 + 斜視融合", "③ Oblique + oblique fusion"],
 ] as const;
 export type StrategyId = (typeof STRATEGIES)[number][0];
+
+/** Display name for a strategy name; the Chinese name stays canonical because exports and worker sweep rows carry it. */
+export function strategyLabel(name: string): string {
+  const s = STRATEGIES.find(([, zh]) => zh === name);
+  return s ? t<string>(s[1], s[2]) : name;
+}
 
 export interface StrategyResult {
   id: StrategyId;
@@ -325,11 +332,23 @@ export function scoreStrategy(
 }
 
 export const SWEEP_VARIABLES = [
-  ["fringeFrequency", "細條紋頻率 f₁（週期數）"],
-  ["periodRatio", "週期比 p₂/p₁（雙週期）"],
-  ["noiseSigma", "Camera 雜訊 σ"],
-  ["y", "物體高度 Y mm（平面場景即平面高度）"],
-  ["windowBottom", "相位視窗底部 mm"],
+  [
+    "fringeFrequency",
+    t("細條紋頻率 f₁（週期數）", "Fine fringe frequency f₁ (periods)"),
+  ],
+  [
+    "periodRatio",
+    t("週期比 p₂/p₁（雙週期）", "Period ratio p₂/p₁ (dual period)"),
+  ],
+  ["noiseSigma", t("Camera 雜訊 σ", "Camera noise σ")],
+  [
+    "y",
+    t(
+      "物體高度 Y mm（平面場景即平面高度）",
+      "Object height Y mm (plane height in the plane scene)",
+    ),
+  ],
+  ["windowBottom", t("相位視窗底部 mm", "Phase window bottom mm")],
 ] as const;
 export type SweepVariable = (typeof SWEEP_VARIABLES)[number][0];
 

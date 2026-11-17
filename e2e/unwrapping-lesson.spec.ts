@@ -5,10 +5,10 @@ async function openUnwrapping(page: Page) {
   await page
     .getByRole("button", { name: "開始：先看三張照片", exact: true })
     .click();
-  await page.getByRole("button", { name: "4 解開週期", exact: true }).click();
+  await page.getByRole("button", { name: "4 Spatial", exact: true }).click();
   await expect(
     page.getByRole("heading", {
-      name: "第 4 步：Phase Unwrapping，補回整圈。",
+      name: "第 4 步：Spatial Unwrapping，借鄰居補回整圈。",
     }),
   ).toBeVisible();
 }
@@ -86,7 +86,7 @@ test("teaching-only invalid gap breaks the curve and reanchors without bridging"
     "2 個獨立連續區段",
   );
   await expect(page.getByTestId("unwrap-gap-note")).toContainText(
-    "不是遮擋物理模擬",
+    "缺口後重新起算",
   );
   const path = await page
     .getByTestId("guide-unwrap-chart")
@@ -162,8 +162,68 @@ for (const width of [390, 620, 1440]) {
       .click();
     await expect(
       page.getByRole("heading", {
-        name: "第 4 步：Phase Unwrapping，補回整圈。",
+        name: "第 4 步：Spatial Unwrapping，借鄰居補回整圈。",
       }),
     ).toBeVisible();
   });
 }
+
+test("depth-step slider shows spatial unwrapping slipping a whole cycle past half a cycle", async ({
+  page,
+}) => {
+  await openUnwrapping(page);
+  const slider = page
+    .getByTestId("unwrap-step-demo")
+    .getByRole("slider", { name: /斷層高度/ });
+  await slider.fill("0.3");
+  await expect(page.getByTestId("unwrap-step-result")).toContainText(
+    "接得起來",
+  );
+  await slider.fill("0.7");
+  await expect(page.getByTestId("unwrap-step-result")).toContainText(
+    "少了 1 圈",
+  );
+});
+
+test("temporal step explains each level, survives the step and compares frequency sets", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await openUnwrapping(page);
+  await page
+    .getByRole("button", { name: "下一步：Temporal Unwrapping", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "第 5 步：Temporal Unwrapping，每個像素自己決定第幾圈。",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("temporal-table").locator("tbody tr"),
+  ).toHaveCount(3);
+  await expect(
+    page.getByRole("radio", { name: "3D 實驗室拍到的影像（之後開放）" }),
+  ).toBeDisabled();
+  await page.getByRole("slider", { name: /斷層高度/ }).fill("1.3");
+  await expect(page.getByTestId("temporal-spatial-slip")).toHaveText("差 1 圈");
+  await page.getByRole("slider", { name: /影像雜訊/ }).fill("0.06");
+  await expect(page.getByTestId("temporal-full-rate")).toHaveText("0.0%");
+  expect(
+    parseFloat((await page.getByTestId("temporal-skip-rate").textContent())!),
+  ).toBeGreaterThan(1);
+  const up = Number(
+    await page.getByTestId("temporal-projector").getAttribute("data-value"),
+  );
+  expect(up).toBeGreaterThan(0);
+  expect(up).toBeLessThan(1024);
+  for (const width of [390, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  expect(errors).toEqual([]);
+});

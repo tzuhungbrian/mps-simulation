@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { t } from "../i18n";
 
 /** Material slot carried per vertex; object and ground keep their mesh index. */
 export const SURFACE = {
@@ -10,11 +11,11 @@ export const SURFACE = {
   solder: 4,
 } as const;
 export const SURFACE_NAMES = [
-  "物體 / 板面",
-  "地面",
-  "元件本體",
-  "引腳 / 電極",
-  "焊錫",
+  t("物體 / 板面", "Object / board"),
+  t("地面", "Ground"),
+  t("元件本體", "Component body"),
+  t("引腳 / 電極", "Pin / electrode"),
+  t("焊錫", "Solder"),
 ] as const;
 export const NO_SURFACE = 255;
 

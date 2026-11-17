@@ -45,15 +45,16 @@ import type {
   ProjectorCalibrationResult,
 } from "./lab.worker";
 import { checkView } from "./validate";
+import { t } from "../../i18n";
 import "../calibration.css";
 import "./lab.css";
 
 type Step = "capture" | "camera" | "projector" | "verify";
 const STEPS: { id: Step; label: string }[] = [
-  { id: "capture", label: "擺板子・拍照" },
-  { id: "camera", label: "Camera 校正" },
-  { id: "projector", label: "Projector 校正" },
-  { id: "verify", label: "驗證" },
+  { id: "capture", label: t("擺板子・拍照", "Place board · capture") },
+  { id: "camera", label: t("Camera 校正", "Camera calibration") },
+  { id: "projector", label: t("Projector 校正", "Projector calibration") },
+  { id: "verify", label: t("驗證", "Verification") },
 ];
 
 interface Shot {
@@ -95,7 +96,18 @@ function useLabWorker() {
       new Promise((resolve, reject) => {
         const id = nextId.current++;
         pending.current.set(id, (r) =>
-          r.ok ? resolve(r as Payload<T>) : reject(new Error(r.error)),
+          r.ok
+            ? resolve(r as Payload<T>)
+            : reject(
+                new Error(
+                  r.cvCode === undefined
+                    ? r.error
+                    : t(
+                        `OpenCV 例外（代碼 ${r.cvCode}）`,
+                        `OpenCV exception (code ${r.cvCode})`,
+                      ),
+                ),
+              ),
         );
         worker.current!.postMessage({ ...body, id } as LabRequest);
       }),
@@ -189,7 +201,10 @@ function ProjectorCoverage({ placement }: { placement: BoardPlacement }) {
       className="lab-projector-view"
       viewBox={`-60 -60 ${W + 120} ${H + 120}`}
       role="img"
-      aria-label="Projector 影像中的板子位置"
+      aria-label={t(
+        "Projector 影像中的板子位置",
+        "Board position in the projector image",
+      )}
     >
       <rect
         x={0}
@@ -253,11 +268,11 @@ function IntrinsicsRows({
     <table className="calib-table">
       <thead>
         <tr>
-          <th>參數</th>
-          <th>估計值</th>
-          <th>± 標準差</th>
-          {showTruth && <th>真值</th>}
-          {showTruth && <th>誤差</th>}
+          <th>{t("參數", "Parameter")}</th>
+          <th>{t("估計值", "Estimate")}</th>
+          <th>{t("± 標準差", "± Std. dev.")}</th>
+          {showTruth && <th>{t("真值", "Ground truth")}</th>}
+          {showTruth && <th>{t("誤差", "Error")}</th>}
         </tr>
       </thead>
       <tbody>
@@ -312,7 +327,10 @@ export default function LabPage({
   const [shots, setShots] = useState<Shot[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [status, setStatus] = useState(
-    "正在載入 OpenCV.js（約 13 MB，只需一次）…",
+    t(
+      "正在載入 OpenCV.js（約 13 MB，只需一次）…",
+      "Loading OpenCV.js (about 13 MB, only once)…",
+    ),
   );
   const [busy, setBusy] = useState(true);
   const [flags, setFlags] = useState<CalibFlag[]>([]);
@@ -331,8 +349,15 @@ export default function LabPage({
 
   useEffect(() => {
     request({ type: "load" })
-      .then(() => setStatus("OpenCV.js 已就緒。"))
-      .catch((e: Error) => setError(`OpenCV.js 載入失敗：${e.message}`))
+      .then(() => setStatus(t("OpenCV.js 已就緒。", "OpenCV.js is ready.")))
+      .catch((e: Error) =>
+        setError(
+          t(
+            `OpenCV.js 載入失敗：${e.message}`,
+            `Failed to load OpenCV.js: ${e.message}`,
+          ),
+        ),
+      )
       .finally(() => setBusy(false));
   }, [request]);
 
@@ -356,7 +381,12 @@ export default function LabPage({
   const capture = async () => {
     setBusy(true);
     setError("");
-    setStatus("拍照中：白光照片 → 找角點 → 投 24 張條紋 → 解相位…");
+    setStatus(
+      t(
+        "拍照中：白光照片 → 找角點 → 投 24 張條紋 → 解相位…",
+        "Capturing: white-light image → find corners → project 24 fringe images → decode phase…",
+      ),
+    );
     try {
       const { capture } = await request({
         type: "capture",
@@ -372,8 +402,14 @@ export default function LabPage({
       setSelected(key);
       setStatus(
         capture.corners
-          ? `第 ${shots.length + 1} 張：找到 ${BOARD.cols}×${BOARD.rows} 個角點，${capture.projector?.filter(Boolean).length ?? 0} 個角點解出 Projector 座標（${fmt((capture.ms.render + capture.ms.detect + capture.ms.fringes) / 1000, 1)} s）。`
-          : `第 ${shots.length + 1} 張：找不到完整的棋盤格角點，這張不能用於校正。`,
+          ? t(
+              `第 ${shots.length + 1} 張：找到 ${BOARD.cols}×${BOARD.rows} 個角點，${capture.projector?.filter(Boolean).length ?? 0} 個角點解出 Projector 座標（${fmt((capture.ms.render + capture.ms.detect + capture.ms.fringes) / 1000, 1)} s）。`,
+              `Image ${shots.length + 1}: found ${BOARD.cols}×${BOARD.rows} corners; ${capture.projector?.filter(Boolean).length ?? 0} corners got projector coordinates (${fmt((capture.ms.render + capture.ms.detect + capture.ms.fringes) / 1000, 1)} s).`,
+            )
+          : t(
+              `第 ${shots.length + 1} 張：找不到完整的棋盤格角點，這張不能用於校正。`,
+              `Image ${shots.length + 1}: could not find the full set of chessboard corners, so this image cannot be used for calibration.`,
+            ),
       );
     } catch (e) {
       setError((e as Error).message);
@@ -411,7 +447,12 @@ export default function LabPage({
   const runCamera = async () => {
     setBusy(true);
     setError("");
-    setStatus("cv.calibrateCameraExtended 計算中…");
+    setStatus(
+      t(
+        "cv.calibrateCameraExtended 計算中…",
+        "Running cv.calibrateCameraExtended…",
+      ),
+    );
     try {
       const { result } = await request({
         type: "calibrate-camera",
@@ -425,10 +466,18 @@ export default function LabPage({
       });
       setProjResult(null);
       setStatus(
-        `Camera 校正完成：RMS = ${fmt(result.rms, 3)} px（${good.length} 張）。`,
+        t(
+          `Camera 校正完成：RMS = ${fmt(result.rms, 3)} px（${good.length} 張）。`,
+          `Camera calibration done: RMS = ${fmt(result.rms, 3)} px (${good.length} images).`,
+        ),
       );
     } catch (e) {
-      setError(`calibrateCamera 失敗：${(e as Error).message}`);
+      setError(
+        t(
+          `calibrateCamera 失敗：${(e as Error).message}`,
+          `calibrateCamera failed: ${(e as Error).message}`,
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -438,7 +487,12 @@ export default function LabPage({
     if (!camResult) return;
     setBusy(true);
     setError("");
-    setStatus("Projector：calibrateCameraExtended + stereoCalibrate 計算中…");
+    setStatus(
+      t(
+        "Projector：calibrateCameraExtended + stereoCalibrate 計算中…",
+        "Projector: running calibrateCameraExtended + stereoCalibrate…",
+      ),
+    );
     try {
       const { result } = await request({
         type: "calibrate-projector",
@@ -449,10 +503,18 @@ export default function LabPage({
       });
       setProjResult({ result, keys: projGood.map((s) => s.key) });
       setStatus(
-        `Projector 校正完成：Projector RMS = ${fmt(result.projector.rms, 3)} px，stereo RMS = ${result.stereo.ok ? fmt(result.stereo.rms, 3) : "—"} px。`,
+        t(
+          `Projector 校正完成：Projector RMS = ${fmt(result.projector.rms, 3)} px，stereo RMS = ${result.stereo.ok ? fmt(result.stereo.rms, 3) : "—"} px。`,
+          `Projector calibration done: projector RMS = ${fmt(result.projector.rms, 3)} px, stereo RMS = ${result.stereo.ok ? fmt(result.stereo.rms, 3) : "—"} px.`,
+        ),
       );
     } catch (e) {
-      setError(`Projector 校正失敗：${(e as Error).message}`);
+      setError(
+        t(
+          `Projector 校正失敗：${(e as Error).message}`,
+          `Projector calibration failed: ${(e as Error).message}`,
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -484,39 +546,67 @@ export default function LabPage({
   const tasks: { done: boolean; text: string }[] = [
     {
       done: good.length >= 3,
-      text: "至少 3 張成功偵測到角點（calibrateCamera 的最低需求）",
+      text: t(
+        "至少 3 張成功偵測到角點（calibrateCamera 的最低需求）",
+        "At least 3 images with detected corners (the minimum for calibrateCamera)",
+      ),
     },
     {
       done: good.length >= 3 && goodFocus.size === 1,
-      text: `納入的照片都用同一個對焦距離（拍照前先鎖定對焦環${goodFocus.size > 1 ? `；目前混用 ${goodFocus.size} 種` : ""}）`,
+      text: t(
+        `納入的照片都用同一個對焦距離（拍照前先鎖定對焦環${goodFocus.size > 1 ? `；目前混用 ${goodFocus.size} 種` : ""}）`,
+        `All included images use the same focus distance (lock the focus ring before capturing${goodFocus.size > 1 ? `; currently ${goodFocus.size} are mixed` : ""})`,
+      ),
     },
-    { done: good.length >= 10, text: "至少 10 張成功的照片" },
+    {
+      done: good.length >= 10,
+      text: t("至少 10 張成功的照片", "At least 10 successful images"),
+    },
     {
       done: cells.every(Boolean),
-      text: `角點涵蓋影像九宮格${
-        cells.every(Boolean)
-          ? ""
-          : `（缺：${cells
-              .map((c, i) => (c ? "" : CELL_NAMES[i]))
-              .filter(Boolean)
-              .join("、")}）`
-      }`,
+      text: t(
+        `角點涵蓋影像九宮格${
+          cells.every(Boolean)
+            ? ""
+            : `（缺：${cells
+                .map((c, i) => (c ? "" : CELL_NAMES[i]))
+                .filter(Boolean)
+                .join("、")}）`
+        }`,
+        `Corners cover the image's nine-cell grid${
+          cells.every(Boolean)
+            ? ""
+            : ` (missing: ${cells
+                .map((c, i) => (c ? "" : CELL_NAMES[i]))
+                .filter(Boolean)
+                .join(", ")})`
+        }`,
+      ),
     },
     {
       done: directions.size >= 3,
-      text: `往至少 3 個不同方向傾斜 > 15°（目前 ${directions.size} 個方向）`,
+      text: t(
+        `往至少 3 個不同方向傾斜 > 15°（目前 ${directions.size} 個方向）`,
+        `Tilt > 15° in at least 3 different directions (currently ${directions.size})`,
+      ),
     },
     {
       done: !!camResult && camResult.result.rms < 0.3,
-      text: "Camera 校正 RMS < 0.3 px",
+      text: t("Camera 校正 RMS < 0.3 px", "Camera calibration RMS < 0.3 px"),
     },
     {
       done: !!projResult?.result.stereo.ok,
-      text: "完成 Projector 校正（stereoCalibrate）",
+      text: t(
+        "完成 Projector 校正（stereoCalibrate）",
+        "Complete projector calibration (stereoCalibrate)",
+      ),
     },
     {
       done: spacingErr < 0.05,
-      text: "驗證：用估出的參數量格子，平均誤差 < 0.05 mm",
+      text: t(
+        "驗證：用估出的參數量格子，平均誤差 < 0.05 mm",
+        "Verification: measure the squares with the estimated parameters, mean error < 0.05 mm",
+      ),
     },
   ];
 
@@ -556,10 +646,19 @@ export default function LabPage({
         <div className="calib-brand">
           <Camera size={22} />
           <span>
-            Calibration 3D 實驗室<small>Camera + Projector 校正（模擬）</small>
+            {t(
+              <>
+                Calibration 3D 實驗室
+                <small>Camera + Projector 校正（模擬）</small>
+              </>,
+              <>
+                Calibration 3D lab
+                <small>Camera + projector calibration (simulated)</small>
+              </>,
+            )}
           </span>
         </div>
-        <nav className="lab-steps" aria-label="實驗步驟">
+        <nav className="lab-steps" aria-label={t("實驗步驟", "Lab steps")}>
           {STEPS.map((s) => (
             <button
               key={s.id}
@@ -588,33 +687,45 @@ export default function LabPage({
             estimatedProjector={estimatedProjector}
           />
           <div className="lab-scene-tools">
-            <span>拖曳板子上的控制器：</span>
+            <span>
+              {t("拖曳板子上的控制器：", "Drag the gizmo on the board:")}
+            </span>
             <button
               className={mode === "rotate" ? "is-active" : ""}
               onClick={() => setMode("rotate")}
             >
-              旋轉
+              {t("旋轉", "Rotate")}
             </button>
             <button
               className={mode === "translate" ? "is-active" : ""}
               onClick={() => setMode("translate")}
             >
-              移動
+              {t("移動", "Move")}
             </button>
             <span className="lab-legend">
               <i style={{ background: "#5ee4bd" }} /> Camera{" "}
               <i style={{ background: "#b7a0fa" }} /> Projector
-              <i style={{ background: "#8fa3b8" }} /> 已拍姿態{" "}
+              <i style={{ background: "#8fa3b8" }} />{" "}
+              {t("已拍姿態", "Captured poses")}{" "}
               {estimatedProjector && (
                 <>
-                  <i style={{ background: "#ffd166" }} /> 估計的 Projector
+                  <i style={{ background: "#ffd166" }} />{" "}
+                  {t("估計的 Projector", "Estimated projector")}
                 </>
               )}
             </span>
           </div>
-          <div className="lab-strip" aria-label="已拍照片">
+          <div
+            className="lab-strip"
+            aria-label={t("已拍照片", "Captured images")}
+          >
             {shots.length === 0 && (
-              <p className="calib-note">還沒有照片。擺好板子後按「拍照」。</p>
+              <p className="calib-note">
+                {t(
+                  "還沒有照片。擺好板子後按「拍照」。",
+                  "No images yet. Place the board, then press “Capture”.",
+                )}
+              </p>
             )}
             {shots.map((s, i) => (
               <div
@@ -623,13 +734,13 @@ export default function LabPage({
               >
                 <button
                   onClick={() => setSelected(s.key)}
-                  title={`第 ${i + 1} 張`}
+                  title={t(`第 ${i + 1} 張`, `Image ${i + 1}`)}
                 >
                   <GrayImage
                     data={s.capture.image}
                     width={s.capture.width}
                     height={s.capture.height}
-                    label={`第 ${i + 1} 張`}
+                    label={t(`第 ${i + 1} 張`, `Image ${i + 1}`)}
                   />
                   <span className={s.capture.corners ? "ok" : "bad"}>
                     {i + 1}{" "}
@@ -637,7 +748,7 @@ export default function LabPage({
                   </span>
                 </button>
                 <div className="lab-thumb-bar">
-                  <label title="納入校正">
+                  <label title={t("納入校正", "Include in calibration")}>
                     <input
                       type="checkbox"
                       checked={s.include}
@@ -651,12 +762,15 @@ export default function LabPage({
                         )
                       }
                     />
-                    納入
+                    {t("納入", "Include")}
                   </label>
                   <button
                     className="lab-thumb-delete"
-                    aria-label={`刪除第 ${i + 1} 張`}
-                    title="刪除"
+                    aria-label={t(
+                      `刪除第 ${i + 1} 張`,
+                      `Delete image ${i + 1}`,
+                    )}
+                    title={t("刪除", "Delete")}
                     onClick={() =>
                       setShots((all) => all.filter((x) => x.key !== s.key))
                     }
@@ -668,7 +782,7 @@ export default function LabPage({
             ))}
           </div>
           <div className="lab-tasks">
-            <strong>任務</strong>
+            <strong>{t("任務", "Tasks")}</strong>
             <ul>
               {tasks.map((t) => (
                 <li key={t.text} className={t.done ? "done" : ""}>
@@ -683,25 +797,43 @@ export default function LabPage({
         <section className="lab-right">
           {step === "capture" && (
             <>
-              <h3>相機取景器（即時預覽）</h3>
+              <h3>
+                {t(
+                  "相機取景器（即時預覽）",
+                  "Camera viewfinder (live preview)",
+                )}
+              </h3>
               <LivePreview
                 placement={placement}
                 settings={settings}
                 shots={shots}
               />
               <p className="calib-note">
-                綠點 = 已拍照片偵測到的角點；九宮格紅色 =
-                還沒有角點的區域；紅色像素 = 過曝。
+                {t(
+                  <>
+                    綠點 = 已拍照片偵測到的角點；九宮格紅色 =
+                    還沒有角點的區域；紅色像素 = 過曝。
+                  </>,
+                  <>
+                    Green dots = corners detected in captured images; red
+                    nine-cell grid areas = no corners yet; red pixels =
+                    overexposed.
+                  </>,
+                )}
               </p>
               <div className="lab-hints">
                 {hints.length === 0 ? (
                   <p className="lab-hint lab-hint-ok">
-                    助教：這個姿態看起來沒問題，可以拍。
+                    {t(
+                      "助教：這個姿態看起來沒問題，可以拍。",
+                      "Assistant: this pose looks fine, go ahead and capture.",
+                    )}
                   </p>
                 ) : (
                   hints.map((h: Hint) => (
                     <p key={h.text} className={`lab-hint lab-hint-${h.level}`}>
-                      助教：{h.text}
+                      {t("助教：", "Assistant: ")}
+                      {h.text}
                     </p>
                   ))
                 )}
@@ -712,20 +844,25 @@ export default function LabPage({
                   onClick={capture}
                   disabled={busy}
                 >
-                  <Camera size={16} /> 拍照
+                  <Camera size={16} /> {t("拍照", "Capture")}
                 </button>
                 <button onClick={randomPlacement}>
-                  <Shuffle size={16} /> 隨機擺放
+                  <Shuffle size={16} /> {t("隨機擺放", "Random pose")}
                 </button>
                 <button onClick={() => setPlacement(DEFAULT_PLACEMENT)}>
-                  <RotateCcw size={16} /> 板子歸位
+                  <RotateCcw size={16} /> {t("板子歸位", "Reset board")}
                 </button>
               </div>
               <div className="lab-columns">
                 <div>
-                  <h4>板子姿態（Camera 座標）</h4>
+                  <h4>
+                    {t(
+                      "板子姿態（Camera 座標）",
+                      "Board pose (camera coordinates)",
+                    )}
+                  </h4>
                   <Slider
-                    label="左右 x"
+                    label={t("左右 x", "Left/right x")}
                     value={placement.x}
                     min={-150}
                     max={150}
@@ -734,7 +871,7 @@ export default function LabPage({
                     onChange={(v) => setP({ x: v })}
                   />
                   <Slider
-                    label="上下 y"
+                    label={t("上下 y", "Up/down y")}
                     value={placement.y}
                     min={-120}
                     max={120}
@@ -743,7 +880,7 @@ export default function LabPage({
                     onChange={(v) => setP({ y: v })}
                   />
                   <Slider
-                    label="距離 z"
+                    label={t("距離 z", "Distance z")}
                     value={placement.z}
                     min={350}
                     max={800}
@@ -752,7 +889,7 @@ export default function LabPage({
                     onChange={(v) => setP({ z: v })}
                   />
                   <Slider
-                    label="繞 x 傾斜"
+                    label={t("繞 x 傾斜", "Tilt about x")}
                     value={placement.rx}
                     min={-60}
                     max={60}
@@ -761,7 +898,7 @@ export default function LabPage({
                     onChange={(v) => setP({ rx: v })}
                   />
                   <Slider
-                    label="繞 y 傾斜"
+                    label={t("繞 y 傾斜", "Tilt about y")}
                     value={placement.ry}
                     min={-60}
                     max={60}
@@ -770,7 +907,7 @@ export default function LabPage({
                     onChange={(v) => setP({ ry: v })}
                   />
                   <Slider
-                    label="板內旋轉"
+                    label={t("板內旋轉", "In-plane rotation")}
                     value={placement.rz}
                     min={-180}
                     max={180}
@@ -779,13 +916,13 @@ export default function LabPage({
                     onChange={(v) => setP({ rz: v })}
                   />
                   <p className="calib-note">
-                    傾角 {fmt(boardTilt(placement), 1)}°
+                    {t("傾角", "Tilt")} {fmt(boardTilt(placement), 1)}°
                   </p>
                 </div>
                 <div>
-                  <h4>相機設定</h4>
+                  <h4>{t("相機設定", "Camera settings")}</h4>
                   <Slider
-                    label="曝光時間"
+                    label={t("曝光時間", "Exposure time")}
                     value={settings.exposureMs}
                     min={2}
                     max={40}
@@ -794,7 +931,7 @@ export default function LabPage({
                     onChange={(v) => setS({ exposureMs: v })}
                   />
                   <Slider
-                    label="光圈 f/"
+                    label={t("光圈 f/", "Aperture f/")}
                     value={settings.fNumber}
                     min={1.4}
                     max={16}
@@ -802,7 +939,7 @@ export default function LabPage({
                     onChange={(v) => setS({ fNumber: v })}
                   />
                   <Slider
-                    label="對焦距離"
+                    label={t("對焦距離", "Focus distance")}
                     value={settings.focusMm}
                     min={300}
                     max={1000}
@@ -818,12 +955,20 @@ export default function LabPage({
                       onChange={(e) => setFocusLocked(e.target.checked)}
                     />
                     <span>
-                      鎖定對焦環（目前 <M>{"f_x"}</M> 真值 ≈{" "}
-                      {fmt(cameraAt(settings.focusMm).fx, 1)} px）
+                      {t(
+                        <>
+                          鎖定對焦環（目前 <M>{"f_x"}</M> 真值 ≈{" "}
+                          {fmt(cameraAt(settings.focusMm).fx, 1)} px）
+                        </>,
+                        <>
+                          Lock the focus ring (current <M>{"f_x"}</M> ground
+                          truth ≈ {fmt(cameraAt(settings.focusMm).fx, 1)} px)
+                        </>,
+                      )}
                     </span>
                   </label>
                   <Slider
-                    label="環境光"
+                    label={t("環境光", "Ambient light")}
                     value={settings.ambient}
                     min={0}
                     max={0.6}
@@ -831,7 +976,7 @@ export default function LabPage({
                     onChange={(v) => setS({ ambient: v })}
                   />
                   <Slider
-                    label="感測器讀出雜訊"
+                    label={t("感測器讀出雜訊", "Sensor read noise")}
                     value={settings.noiseDN}
                     min={0}
                     max={8}
@@ -839,22 +984,45 @@ export default function LabPage({
                     unit="DN"
                     onChange={(v) => setS({ noiseDN: v })}
                   />
-                  <h4>Projector 影像中的板子</h4>
+                  <h4>
+                    {t(
+                      "Projector 影像中的板子",
+                      "Board in the projector image",
+                    )}
+                  </h4>
                   <ProjectorCoverage placement={placement} />
                   <p className="calib-note">
-                    紫點 = 角點落在 Projector 影像的位置（助教視角）；紅點 =
-                    照不到。紫圈 = Projector 主點（offset 光學，靠近下緣）。
+                    {t(
+                      <>
+                        紫點 = 角點落在 Projector 影像的位置（助教視角）；紅點 =
+                        照不到。紫圈 = Projector 主點（offset 光學，靠近下緣）。
+                      </>,
+                      <>
+                        Purple dots = where the corners land in the projector
+                        image (assistant’s view); red dots = not lit. Purple
+                        circle = projector principal point (offset optics, near
+                        the bottom edge).
+                      </>,
+                    )}
                   </p>
                 </div>
               </div>
               {sel && (
                 <>
-                  <h4>選取的照片（第 {shots.indexOf(sel) + 1} 張）</h4>
+                  <h4>
+                    {t(
+                      <>選取的照片（第 {shots.indexOf(sel) + 1} 張）</>,
+                      <>Selected image (image {shots.indexOf(sel) + 1})</>,
+                    )}
+                  </h4>
                   <GrayImage
                     data={sel.capture.image}
                     width={sel.capture.width}
                     height={sel.capture.height}
-                    label="選取的照片與偵測到的角點"
+                    label={t(
+                      "選取的照片與偵測到的角點",
+                      "Selected image with detected corners",
+                    )}
                     overlay={
                       sel.capture.corners && (
                         <CornerMarks points={sel.capture.corners} />
@@ -863,21 +1031,36 @@ export default function LabPage({
                   />
                   <p className="calib-note">
                     {sel.capture.corners
-                      ? "綠圈 = 偵測到的角點（紅圈 = 第 1 個角點，也就是物體座標原點）。"
-                      : "沒有找到完整的 9×6 角點：檢查是否有角點出畫面、過曝或太模糊。"}
-                    {` 模糊 σ = ${fmt(sel.capture.blurSigma, 2)} px，過曝像素 ${fmt(sel.capture.saturated * 100, 2)}%。`}
+                      ? t(
+                          "綠圈 = 偵測到的角點（紅圈 = 第 1 個角點，也就是物體座標原點）。",
+                          "Green circles = detected corners (red circle = corner 1, the origin of object coordinates).",
+                        )
+                      : t(
+                          "沒有找到完整的 9×6 角點：檢查是否有角點出畫面、過曝或太模糊。",
+                          "Did not find all 9×6 corners: check whether some corners are outside the image, overexposed or too blurry.",
+                        )}
+                    {t(
+                      ` 模糊 σ = ${fmt(sel.capture.blurSigma, 2)} px，過曝像素 ${fmt(sel.capture.saturated * 100, 2)}%。`,
+                      ` Blur σ = ${fmt(sel.capture.blurSigma, 2)} px, overexposed pixels ${fmt(sel.capture.saturated * 100, 2)}%.`,
+                    )}
                   </p>
                 </>
               )}
               <details className="lab-code">
-                <summary>對應的 OpenCV 程式</summary>
+                <summary>
+                  {t("對應的 OpenCV 程式", "Equivalent OpenCV code")}
+                </summary>
                 <pre className="calib-code">
                   <code>{`gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 ok, corners = cv.findChessboardCorners(gray, (9, 6), None)
 if ok:
     corners = cv.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-# 本頁：opencv.js 沒有這兩個函式，用同概念的 JS 實作
-# （鞍點偵測 + 格線重建 + cornerSubPix 同演算法）`}</code>
+${t(
+  `# 本頁：opencv.js 沒有這兩個函式，用同概念的 JS 實作
+# （鞍點偵測 + 格線重建 + cornerSubPix 同演算法）`,
+  `# This page: opencv.js lacks these two functions, so a JS implementation of the same idea is used
+# (saddle-point detection + grid reconstruction + the same cornerSubPix algorithm)`,
+)}`}</code>
                 </pre>
               </details>
             </>
@@ -886,13 +1069,30 @@ if ok:
           {step === "camera" && (
             <>
               <h3>
-                Camera 校正：<code>cv.calibrateCameraExtended</code>（真
-                OpenCV）
+                {t(
+                  <>
+                    Camera 校正：<code>cv.calibrateCameraExtended</code>（真
+                    OpenCV）
+                  </>,
+                  <>
+                    Camera calibration: <code>cv.calibrateCameraExtended</code>{" "}
+                    (real OpenCV)
+                  </>,
+                )}
               </h3>
               <p>
-                使用 {good.length}{" "}
-                張成功偵測的照片（左下方縮圖可勾選要不要納入）。物體座標：9×6
-                個角點，間距 {BOARD.square} mm。
+                {t(
+                  <>
+                    使用 {good.length}{" "}
+                    張成功偵測的照片（左下方縮圖可勾選要不要納入）。物體座標：9×6
+                    個角點，間距 {BOARD.square} mm。
+                  </>,
+                  <>
+                    Uses {good.length} images with detected corners (check or
+                    uncheck thumbnails at the bottom left to include them).
+                    Object coordinates: 9×6 corners, spaced {BOARD.square} mm.
+                  </>,
+                )}
               </p>
               <fieldset className="lab-flags">
                 <legend>flags</legend>
@@ -919,7 +1119,7 @@ if ok:
                   onClick={runCamera}
                   disabled={busy || good.length < 3}
                 >
-                  執行 calibrateCamera
+                  {t("執行 calibrateCamera", "Run calibrateCamera")}
                 </button>
                 <label className="calib-check">
                   <input
@@ -927,31 +1127,59 @@ if ok:
                     checked={showTruth}
                     onChange={(e) => setShowTruth(e.target.checked)}
                   />
-                  <span>對答案（顯示真值）</span>
+                  <span>
+                    {t(
+                      "對答案（顯示真值）",
+                      "Check answers (show ground truth)",
+                    )}
+                  </span>
                 </label>
               </div>
               {camResult && (
                 <>
                   <div className="calib-metrics">
                     <div>
-                      <span>RMS 重投影誤差</span>
+                      <span>
+                        {t("RMS 重投影誤差", "RMS reprojection error")}
+                      </span>
                       <b>{fmt(camResult.result.rms, 3)} px</b>
                     </div>
                     <div>
-                      <span>使用張數</span>
+                      <span>{t("使用張數", "Images used")}</span>
                       <b>{camResult.keys.length}</b>
                     </div>
                   </div>
                   {camFocus.length > 1 && (
                     <p className="lab-hint lab-hint-error">
-                      這組照片混用了 {camFocus.length} 種對焦距離（
-                      {camFocus
-                        .map((f) => `${f} mm → fx ${fmt(cameraAt(f).fx, 1)} px`)
-                        .join("、")}
-                      ）。每種對焦其實是不同的 K，calibrateCamera
-                      只能找一個折衷值：RMS
-                      變大，參數也不對應任何一張。真值欄以第 1 張的對焦（
-                      {camFocus[0]} mm）為準。
+                      {t(
+                        <>
+                          這組照片混用了 {camFocus.length} 種對焦距離（
+                          {camFocus
+                            .map(
+                              (f) =>
+                                `${f} mm → fx ${fmt(cameraAt(f).fx, 1)} px`,
+                            )
+                            .join("、")}
+                          ）。每種對焦其實是不同的 K，calibrateCamera
+                          只能找一個折衷值：RMS
+                          變大，參數也不對應任何一張。真值欄以第 1 張的對焦（
+                          {camFocus[0]} mm）為準。
+                        </>,
+                        <>
+                          These images mix {camFocus.length} focus distances (
+                          {camFocus
+                            .map(
+                              (f) =>
+                                `${f} mm → fx ${fmt(cameraAt(f).fx, 1)} px`,
+                            )
+                            .join(", ")}
+                          ). Each focus setting is really a different K, so
+                          calibrateCamera can only find a compromise: the RMS
+                          grows and the parameters match none of the images. The
+                          ground-truth column uses the focus of image 1 (
+                          {camFocus[0]} mm).
+                        </>,
+                      )}
                     </p>
                   )}
                   <IntrinsicsRows
@@ -960,7 +1188,12 @@ if ok:
                     truth={camTruth}
                     showTruth={showTruth}
                   />
-                  <h4>每張照片的重投影誤差（點選查看）</h4>
+                  <h4>
+                    {t(
+                      "每張照片的重投影誤差（點選查看）",
+                      "Reprojection error per image (click to view)",
+                    )}
+                  </h4>
                   <div className="lab-bars">
                     {camResult.keys.map((k, i) => {
                       const e = camResult.result.perViewErrors[i];
@@ -988,7 +1221,10 @@ if ok:
                         data={sel.capture.image}
                         width={sel.capture.width}
                         height={sel.capture.height}
-                        label="偵測角點與 projectPoints 重投影"
+                        label={t(
+                          "偵測角點與 projectPoints 重投影",
+                          "Detected corners and projectPoints reprojection",
+                        )}
                         overlay={
                           <>
                             <CornerMarks points={sel.capture.corners!} />
@@ -1001,9 +1237,20 @@ if ok:
                         }
                       />
                       <p className="calib-note">
-                        綠圈 = 偵測到的角點；紅線 ={" "}
-                        <code>cv.projectPoints</code> 重投影位置的偏差
-                        ×100。誤差線若呈系統性方向（例如全部往外），代表模型沒解釋到某種效應。
+                        {t(
+                          <>
+                            綠圈 = 偵測到的角點；紅線 ={" "}
+                            <code>cv.projectPoints</code> 重投影位置的偏差
+                            ×100。誤差線若呈系統性方向（例如全部往外），代表模型沒解釋到某種效應。
+                          </>,
+                          <>
+                            Green circles = detected corners; red lines = offset
+                            to the <code>cv.projectPoints</code> reprojection
+                            ×100. If the error lines point in a systematic
+                            direction (e.g. all outward), the model is missing
+                            some effect.
+                          </>,
+                        )}
                       </p>
                       <PoseCompare
                         shot={sel}
@@ -1012,9 +1259,21 @@ if ok:
                       />
                       {showTruth && (
                         <p className="calib-note">
-                          若估計與真值差了約 180°
-                          的板內旋轉，是因為棋盤格的角點排序有歧義（第 1
-                          個角點可能落在對角），OpenCV 也一樣；內參不受影響。
+                          {t(
+                            <>
+                              若估計與真值差了約 180°
+                              的板內旋轉，是因為棋盤格的角點排序有歧義（第 1
+                              個角點可能落在對角），OpenCV
+                              也一樣；內參不受影響。
+                            </>,
+                            <>
+                              If the estimate differs from ground truth by about
+                              180° of in-plane rotation, it is because the
+                              chessboard corner order is ambiguous (corner 1 may
+                              land on the opposite corner). OpenCV behaves the
+                              same; the intrinsics are not affected.
+                            </>,
+                          )}
                         </p>
                       )}
                     </>
@@ -1022,7 +1281,9 @@ if ok:
                 </>
               )}
               <details className="lab-code" open>
-                <summary>對應的 OpenCV 程式</summary>
+                <summary>
+                  {t("對應的 OpenCV 程式", "Equivalent OpenCV code")}
+                </summary>
                 <pre className="calib-code">
                   <code>{`rms, K, dist, rvecs, tvecs, std_int, std_ext, per_view = \\
     cv.calibrateCameraExtended(objpoints, imgpoints, (1024, 768), None, None,
@@ -1030,26 +1291,60 @@ if ok:
                 </pre>
               </details>
               <ul className="lab-tips">
-                <li>
-                  試試勾選 <code>CALIB_FIX_K3</code>：k2、k3
-                  在視角不大的鏡頭上高度相關，自由估計時常互相抵消、數值看起來很怪。
-                </li>
-                <li>
-                  取消勾選某張誤差最大的照片再算一次，看 RMS 與參數怎麼變。
-                </li>
-                <li>只用 3 張、或只用正對的照片校正，再打開「對答案」比較。</li>
+                {t(
+                  <>
+                    <li>
+                      試試勾選 <code>CALIB_FIX_K3</code>：k2、k3
+                      在視角不大的鏡頭上高度相關，自由估計時常互相抵消、數值看起來很怪。
+                    </li>
+                    <li>
+                      取消勾選某張誤差最大的照片再算一次，看 RMS 與參數怎麼變。
+                    </li>
+                    <li>
+                      只用 3 張、或只用正對的照片校正，再打開「對答案」比較。
+                    </li>
+                  </>,
+                  <>
+                    <li>
+                      Try checking <code>CALIB_FIX_K3</code>: on a lens with a
+                      narrow field of view, k2 and k3 are highly correlated, so
+                      when estimated freely they often cancel each other out and
+                      look strange.
+                    </li>
+                    <li>
+                      Uncheck the image with the largest error and run again to
+                      see how the RMS and parameters change.
+                    </li>
+                    <li>
+                      Calibrate with only 3 images, or only frontal ones, then
+                      turn on “Check answers” to compare.
+                    </li>
+                  </>,
+                )}
               </ul>
             </>
           )}
 
           {step === "projector" && (
             <>
-              <h3>Projector 校正</h3>
+              <h3>{t("Projector 校正", "Projector calibration")}</h3>
               <p>
-                拍照時已投了 2 方向 × 3 頻率（1、4、16 週期）× 4 步相移 = 24
-                張條紋，解出每個 Camera 像素對應的 Projector 座標{" "}
-                <M>{String.raw`(u_p, v_p)`}</M>，再用 <code>cv.remap</code>（真
-                OpenCV）在角點的次像素位置取值。
+                {t(
+                  <>
+                    拍照時已投了 2 方向 × 3 頻率（1、4、16 週期）× 4 步相移 = 24
+                    張條紋，解出每個 Camera 像素對應的 Projector 座標{" "}
+                    <M>{String.raw`(u_p, v_p)`}</M>，再用 <code>cv.remap</code>
+                    （真 OpenCV）在角點的次像素位置取值。
+                  </>,
+                  <>
+                    Each capture already projected 2 directions × 3 frequencies
+                    (1, 4, 16 periods) × 4 phase steps = 24 fringe images,
+                    decoding the projector coordinates{" "}
+                    <M>{String.raw`(u_p, v_p)`}</M> for every camera pixel; then{" "}
+                    <code>cv.remap</code> (real OpenCV) samples them at the
+                    sub-pixel corner positions.
+                  </>,
+                )}
               </p>
               {sel?.capture.phase && sel.capture.corners ? (
                 <div className="lab-phase-grid">
@@ -1059,10 +1354,15 @@ if ok:
                         data={sel.capture.fringe}
                         width={sel.capture.width}
                         height={sel.capture.height}
-                        label="條紋影像"
+                        label={t("條紋影像", "Fringe image")}
                       />
                     )}
-                    <figcaption>垂直條紋（16 週期、δ = 0）</figcaption>
+                    <figcaption>
+                      {t(
+                        "垂直條紋（16 週期、δ = 0）",
+                        "Vertical fringes (16 periods, δ = 0)",
+                      )}
+                    </figcaption>
                   </figure>
                   <figure>
                     <PhaseMap
@@ -1070,7 +1370,7 @@ if ok:
                       width={sel.capture.phase.width}
                       height={sel.capture.phase.height}
                       range={LAB_PROJECTOR.width}
-                      label="u_p 圖"
+                      label={t("u_p 圖", "u_p map")}
                       overlay={
                         <CornerMarks
                           points={sel.capture.corners.map(
@@ -1082,7 +1382,10 @@ if ok:
                       }
                     />
                     <figcaption>
-                      解出的 <M>{"u_p"}</M>（0 → {LAB_PROJECTOR.width}）
+                      {t("解出的 ", "Decoded ")}
+                      <M>{"u_p"}</M>
+                      {t("（", " (")}0 → {LAB_PROJECTOR.width}
+                      {t("）", ")")}
                     </figcaption>
                   </figure>
                   <figure>
@@ -1091,7 +1394,7 @@ if ok:
                       width={sel.capture.phase.width}
                       height={sel.capture.phase.height}
                       range={LAB_PROJECTOR.height}
-                      label="v_p 圖"
+                      label={t("v_p 圖", "v_p map")}
                       overlay={
                         <CornerMarks
                           points={sel.capture.corners.map(
@@ -1103,7 +1406,10 @@ if ok:
                       }
                     />
                     <figcaption>
-                      解出的 <M>{"v_p"}</M>（0 → {LAB_PROJECTOR.height}）
+                      {t("解出的 ", "Decoded ")}
+                      <M>{"v_p"}</M>
+                      {t("（", " (")}0 → {LAB_PROJECTOR.height}
+                      {t("）", ")")}
                     </figcaption>
                   </figure>
                   <figure>
@@ -1126,12 +1432,20 @@ if ok:
                         r={8}
                       />
                     </svg>
-                    <figcaption>這張的「Projector 看到的角點」</figcaption>
+                    <figcaption>
+                      {t(
+                        "這張的「Projector 看到的角點」",
+                        "Corners as the projector sees them in this image",
+                      )}
+                    </figcaption>
                   </figure>
                 </div>
               ) : (
                 <p className="calib-note">
-                  在左下方選一張成功偵測角點的照片，就能看到它的條紋與相位圖。
+                  {t(
+                    "在左下方選一張成功偵測角點的照片，就能看到它的條紋與相位圖。",
+                    "Pick an image with detected corners at the lower left to see its fringes and phase maps.",
+                  )}
                 </p>
               )}
               <div className="lab-actions">
@@ -1140,7 +1454,10 @@ if ok:
                   onClick={runProjector}
                   disabled={busy || !camResult || projGood.length < 3}
                 >
-                  執行 Projector 校正 + stereoCalibrate
+                  {t(
+                    "執行 Projector 校正 + stereoCalibrate",
+                    "Run projector calibration + stereoCalibrate",
+                  )}
                 </button>
                 <label className="calib-check">
                   <input
@@ -1148,23 +1465,34 @@ if ok:
                     checked={showTruth}
                     onChange={(e) => setShowTruth(e.target.checked)}
                   />
-                  <span>對答案（顯示真值）</span>
+                  <span>
+                    {t(
+                      "對答案（顯示真值）",
+                      "Check answers (show ground truth)",
+                    )}
+                  </span>
                 </label>
               </div>
               {!camResult && (
                 <p className="calib-note">
-                  需要先完成「Camera 校正」：stereoCalibrate 會固定 Camera
-                  內參。
+                  {t(
+                    "需要先完成「Camera 校正」：stereoCalibrate 會固定 Camera 內參。",
+                    'Finish "Camera calibration" first: stereoCalibrate keeps the camera intrinsics fixed.',
+                  )}
                 </p>
               )}
               <p className="calib-note">
-                可用張數：{projGood.length}（全部 54 個角點都有 Projector
-                座標的照片）。
+                {t(
+                  `可用張數：${projGood.length}（全部 54 個角點都有 Projector 座標的照片）。`,
+                  `Usable images: ${projGood.length} (images where all 54 corners have projector coordinates).`,
+                )}
               </p>
               {projResult && (
                 <>
                   <h4>
-                    Projector 內參（<code>cv.calibrateCameraExtended</code>）
+                    {t("Projector 內參（", "Projector intrinsics (")}
+                    <code>cv.calibrateCameraExtended</code>
+                    {t("）", ")")}
                   </h4>
                   <div className="calib-metrics">
                     <div>
@@ -1179,8 +1507,10 @@ if ok:
                     showTruth={showTruth}
                   />
                   <h4>
-                    Camera → Projector 外參（stereoCalibrate，JS
-                    實作，CALIB_FIX_INTRINSIC）
+                    {t(
+                      "Camera → Projector 外參（stereoCalibrate，JS 實作，CALIB_FIX_INTRINSIC）",
+                      "Camera → projector extrinsics (stereoCalibrate, JS implementation, CALIB_FIX_INTRINSIC)",
+                    )}
                   </h4>
                   {projResult.result.stereo.ok ? (
                     <StereoTable
@@ -1195,14 +1525,26 @@ if ok:
                 </>
               )}
               <details className="lab-code" open>
-                <summary>對應的 OpenCV 程式</summary>
+                <summary>
+                  {t("對應的 OpenCV 程式", "Equivalent OpenCV code")}
+                </summary>
                 <pre className="calib-code">
-                  <code>{`up = cv.remap(Up, mx, my, cv.INTER_LINEAR)   # Up: 解出的 u_p 圖
+                  <code>
+                    {t(
+                      `up = cv.remap(Up, mx, my, cv.INTER_LINEAR)   # Up: 解出的 u_p 圖
 vp = cv.remap(Vp, mx, my, cv.INTER_LINEAR)
 rms_p, Kp, dist_p, *_ = cv.calibrateCameraExtended(objpoints, projpoints, (1024, 768), None, None)
 rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
     objpoints, imgpoints, projpoints, K, dist, Kp, dist_p, (1024, 768),
-    flags=cv.CALIB_FIX_INTRINSIC)   # opencv.js 沒有 stereoCalibrate → 本頁用 JS 實作`}</code>
+    flags=cv.CALIB_FIX_INTRINSIC)   # opencv.js 沒有 stereoCalibrate → 本頁用 JS 實作`,
+                      `up = cv.remap(Up, mx, my, cv.INTER_LINEAR)   # Up: decoded u_p map
+vp = cv.remap(Vp, mx, my, cv.INTER_LINEAR)
+rms_p, Kp, dist_p, *_ = cv.calibrateCameraExtended(objpoints, projpoints, (1024, 768), None, None)
+rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
+    objpoints, imgpoints, projpoints, K, dist, Kp, dist_p, (1024, 768),
+    flags=cv.CALIB_FIX_INTRINSIC)   # opencv.js lacks stereoCalibrate → this page uses a JS implementation`,
+                    )}
+                  </code>
                 </pre>
               </details>
             </>
@@ -1210,21 +1552,41 @@ rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
 
           {step === "verify" && (
             <>
-              <h3>驗證：把校正板當量規</h3>
+              <h3>
+                {t(
+                  "驗證：把校正板當量規",
+                  "Verification: use the board as a gauge",
+                )}
+              </h3>
               <p>
-                用估出的 Camera、Projector 內參與 <M>{"R, T"}</M>，對每張照片的
-                54 個角點做三角量測（Camera 角點 ↔ 解相位得到的 Projector
-                座標），量相鄰角點的距離。格子真實大小是 {BOARD.square} mm。
+                {t(
+                  <>
+                    用估出的 Camera、Projector 內參與 <M>{"R, T"}</M>
+                    ，對每張照片的 54 個角點做三角量測（Camera 角點 ↔
+                    解相位得到的 Projector
+                    座標），量相鄰角點的距離。格子真實大小是 {BOARD.square} mm。
+                  </>,
+                  <>
+                    With the estimated camera and projector intrinsics and{" "}
+                    <M>{"R, T"}</M>, triangulate the 54 corners of every image
+                    (camera corner ↔ projector coordinate from the decoded
+                    phase) and measure the distance between neighboring corners.
+                    The real square size is {BOARD.square} mm.
+                  </>,
+                )}
               </p>
               {checks.length === 0 ? (
                 <p className="calib-note">
-                  先完成「Camera 校正」與「Projector 校正」。
+                  {t(
+                    "先完成「Camera 校正」與「Projector 校正」。",
+                    'Finish "Camera calibration" and "Projector calibration" first.',
+                  )}
                 </p>
               ) : (
                 <>
                   <div className="calib-metrics">
                     <div>
-                      <span>平均格距誤差</span>
+                      <span>{t("平均格距誤差", "Mean spacing error")}</span>
                       <b className={spacingErr > 0.05 ? "bad" : ""}>
                         {fmt(spacingErr, 4)} mm
                       </b>
@@ -1233,10 +1595,10 @@ rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
                   <table className="calib-table">
                     <thead>
                       <tr>
-                        <th>照片</th>
-                        <th>格距平均 (mm)</th>
-                        <th>格距標準差</th>
-                        <th>平面度 RMS (mm)</th>
+                        <th>{t("照片", "Image")}</th>
+                        <th>{t("格距平均 (mm)", "Mean spacing (mm)")}</th>
+                        <th>{t("格距標準差", "Spacing std")}</th>
+                        <th>{t("平面度 RMS (mm)", "Flatness RMS (mm)")}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1251,7 +1613,10 @@ rms_s, _, _, _, _, R, T, E, F = cv.stereoCalibrate(
                     </tbody>
                   </table>
                   <p className="calib-note">
-                    注意：這些是校正用過的照片（in-sample）。更嚴格的做法是另外拍幾張「不參與校正」的照片來驗證：拍完後在縮圖取消勾選再重新校正即可。
+                    {t(
+                      "注意：這些是校正用過的照片（in-sample）。更嚴格的做法是另外拍幾張「不參與校正」的照片來驗證：拍完後在縮圖取消勾選再重新校正即可。",
+                      "Note: these are the images used for calibration (in-sample). A stricter check uses a few extra images that are left out of calibration: capture them, untick them in the thumbnails, and recalibrate.",
+                    )}
                   </p>
                 </>
               )}
@@ -1278,20 +1643,25 @@ function PoseCompare({
     <table className="calib-table">
       <thead>
         <tr>
-          <th>這張的外參（板子 → Camera）</th>
-          <th>rvec（角度表示）</th>
+          <th>
+            {t(
+              "這張的外參（板子 → Camera）",
+              "This image's extrinsics (board → camera)",
+            )}
+          </th>
+          <th>{t("rvec（角度表示）", "rvec (as angles)")}</th>
           <th>tvec (mm)</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>估計</td>
+          <td>{t("估計", "Estimated")}</td>
           <td>[{r.map((v) => fmt(v, 2)).join(", ")}]°</td>
           <td>[{est.t.map((v) => fmt(v, 2)).join(", ")}]</td>
         </tr>
         {showTruth && (
           <tr>
-            <td>真值</td>
+            <td>{t("真值", "Ground truth")}</td>
             <td>
               [
               {rotationToVector(truth.R)
@@ -1328,7 +1698,9 @@ function StereoTable({
           <b>{fmt(norm3(stereo.T), 2)} mm</b>
         </div>
         <div>
-          <span>各張單獨估的分散</span>
+          <span>
+            {t("各張單獨估的分散", "Spread across per-image estimates")}
+          </span>
           <b>
             {fmt(stereo.spreadDeg, 3)}° / {fmt(stereo.spreadMm, 2)} mm
           </b>
@@ -1336,11 +1708,11 @@ function StereoTable({
         {showTruth && (
           <>
             <div>
-              <span>R 誤差</span>
+              <span>{t("R 誤差", "R error")}</span>
               <b>{fmt(rotationAngleDeg(stereo.R, LAB_STEREO.R), 3)}°</b>
             </div>
             <div>
-              <span>T 誤差</span>
+              <span>{t("T 誤差", "T error")}</span>
               <b>{fmt(norm3(sub3(stereo.T, LAB_STEREO.t)), 3)} mm</b>
             </div>
           </>
@@ -1349,17 +1721,17 @@ function StereoTable({
       <table className="calib-table">
         <tbody>
           <tr>
-            <td>rvec（估計）</td>
+            <td>{t("rvec（估計）", "rvec (estimated)")}</td>
             <td>[{r.map((v) => fmt(v, 3)).join(", ")}]°</td>
           </tr>
           <tr>
-            <td>T（估計）</td>
+            <td>{t("T（估計）", "T (estimated)")}</td>
             <td>[{stereo.T.map((v) => fmt(v, 2)).join(", ")}] mm</td>
           </tr>
           {showTruth && (
             <>
               <tr>
-                <td>rvec（真值）</td>
+                <td>{t("rvec（真值）", "rvec (ground truth)")}</td>
                 <td>
                   [
                   {rotationToVector(LAB_STEREO.R)
@@ -1370,7 +1742,7 @@ function StereoTable({
                 </td>
               </tr>
               <tr>
-                <td>T（真值）</td>
+                <td>{t("T（真值）", "T (ground truth)")}</td>
                 <td>[{LAB_STEREO.t.map((v) => fmt(v, 2)).join(", ")}] mm</td>
               </tr>
             </>

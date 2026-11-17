@@ -8,7 +8,7 @@ test("phase curves, selected values and live formula stay in one view and update
   await page
     .getByRole("button", { name: "開始：先看三張照片", exact: true })
     .click();
-  await page.getByRole("button", { name: "4 解開週期", exact: true }).click();
+  await page.getByRole("button", { name: "4 Spatial", exact: true }).click();
   const chart = page.getByTestId("guide-unwrap-chart");
   await expect(chart.locator("path")).toHaveCount(2);
   const formula = page.getByTestId("unwrap-live-formula");
@@ -54,7 +54,7 @@ test("coincident phases share one graph label instead of covering each other", a
   await page
     .getByRole("button", { name: "開始：先看三張照片", exact: true })
     .click();
-  await page.getByRole("button", { name: "4 解開週期", exact: true }).click();
+  await page.getByRole("button", { name: "4 Spatial", exact: true }).click();
   const chart = page.getByTestId("guide-unwrap-chart");
   await expect(page.getByTestId("phase-unwrapped-label")).toBeVisible();
   await chart.focus();
@@ -71,7 +71,7 @@ test("selecting a masked pixel clears annotations and does not show a fabricated
   await page
     .getByRole("button", { name: "開始：先看三張照片", exact: true })
     .click();
-  await page.getByRole("button", { name: "4 解開週期", exact: true }).click();
+  await page.getByRole("button", { name: "4 Spatial", exact: true }).click();
   await page
     .getByRole("checkbox", { name: "加入無效區段（教學遮罩）", exact: true })
     .check();

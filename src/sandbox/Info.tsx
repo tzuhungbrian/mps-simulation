@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
+import { t } from "../i18n";
 
 export function InfoButton({
   label,
@@ -42,7 +43,7 @@ export function InfoHeading({
         <Tag className={level === 3 ? "sandbox-group" : undefined}>{title}</Tag>
         {children && (
           <InfoButton
-            label={`${title}說明`}
+            label={t(`${title}說明`, `${title} info`)}
             open={open}
             onToggle={() => setOpen((v) => !v)}
           />

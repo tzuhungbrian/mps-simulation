@@ -57,6 +57,7 @@ import WorldView, { type OverlayCloud, type WorldViewApi } from "./WorldView";
 import MultiViewPage from "../aoi/MultiViewPage";
 import { downloadBlob, rasterize } from "../lib/images";
 import { TAU } from "../core/simulation";
+import { t } from "../i18n";
 import "./sandbox.css";
 
 type Scan = WorldScan;
@@ -83,7 +84,9 @@ function readEnvelope(e: unknown): WorldConfig {
       envelope.model === "calibrated-one-cycle-sandbox")
   )
     return migrateLegacyConfig(envelope.config);
-  throw new Error("不是此沙盒的參數格式");
+  throw new Error(
+    t("不是此沙盒的參數格式", "Not a parameter file for this sandbox"),
+  );
 }
 function loadWorld(): WorldConfig {
   for (const key of [KEY, ...LEGACY_KEYS]) {
@@ -217,10 +220,16 @@ function Image({
         aria-label={
           label ??
           (kind === "intensity"
-            ? "Camera 實際合成量測；點擊查看像素深度"
+            ? t(
+                "Camera 實際合成量測；點擊查看像素深度",
+                "Synthetic camera capture; click to inspect pixel depth",
+              )
             : kind === "depth"
-              ? "由條紋解碼與三角量測得到的 Camera Z depth"
-              : "解碼所得 Wrapped Phase")
+              ? t(
+                  "由條紋解碼與三角量測得到的 Camera Z depth",
+                  "Camera Z depth from fringe decoding and triangulation",
+                )
+              : t("解碼所得 Wrapped Phase", "Decoded wrapped phase"))
         }
       />
       <span
@@ -235,32 +244,32 @@ function Image({
 }
 
 const TOOL_TABS = [
-  ["object", "物體"],
-  ["rig", "裝置"],
-  ["projector", "投影"],
-  ["material", "材質"],
-  ["more", "其他"],
+  ["object", t("物體", "Object")],
+  ["rig", t("裝置", "Devices")],
+  ["projector", t("投影", "Projection")],
+  ["material", t("材質", "Material")],
+  ["more", t("其他", "More")],
 ] as const;
 const RESULT_TABS = [
-  ["captures", "曝光影像"],
-  ["depth", "相位與深度"],
-  ["transport", "光傳輸"],
+  ["captures", t("曝光影像", "Captures")],
+  ["depth", t("相位與深度", "Phase and depth")],
+  ["transport", t("光傳輸", "Light transport")],
 ] as const;
 export type SandboxView = "sandbox" | "analysis" | "multiview";
 const VIEWS = [
-  ["sandbox", "3D 沙盒"],
-  ["analysis", "點雲分析"],
-  ["multiview", "多視角分析"],
+  ["sandbox", t("3D 沙盒", "3D sandbox")],
+  ["analysis", t("點雲分析", "Point-cloud analysis")],
+  ["multiview", t("多視角分析", "Multi-view analysis")],
 ] as const;
 const SHAPES: readonly (readonly [WorldShape, string])[] = [
-  ["sphere", "球體"],
-  ["box", "方塊"],
-  ["ramp", "斜板"],
-  ["vgroove", "V 型槽"],
-  ["pcb", "PCB 板"],
-  ["step", "階梯量規"],
+  ["sphere", t("球體", "Sphere")],
+  ["box", t("方塊", "Box")],
+  ["ramp", t("斜板", "Ramp")],
+  ["vgroove", t("V 型槽", "V-groove")],
+  ["pcb", t("PCB 板", "PCB")],
+  ["step", t("階梯量規", "Step gauge")],
   ["chip", "Chip + Fillet"],
-  ["plane", "平面"],
+  ["plane", t("平面", "Plane")],
 ];
 const MATTE_BOARD: Partial<WorldConfig> = {
   objectAlbedo: 0.5,
@@ -296,9 +305,9 @@ const boardSetup = (shape: WorldShape): Partial<WorldConfig> => ({
   ...(shape === "chip" ? ASSEMBLY_BOARD : MATTE_BOARD),
 });
 const DEVICE_FIELDS = [
-  ["tilt", "傾角°", [0, 150]],
-  ["azimuth", "方位°", [-360, 360]],
-  ["distance", "距離 mm", [12.5, 600]],
+  ["tilt", t("傾角°", "Tilt°"), [0, 150]],
+  ["azimuth", t("方位°", "Azimuth°"), [-360, 360]],
+  ["distance", t("距離 mm", "Distance mm"), [12.5, 600]],
 ] as const;
 
 function NumberCell({
@@ -350,7 +359,9 @@ export default function Sandbox({
     [scan, setScan] = useState<Scan | null>(null),
     [stale, setStale] = useState(true),
     [busy, setBusy] = useState(false),
-    [status, setStatus] = useState("正在準備第一組三步曝光…"),
+    [status, setStatus] = useState(() =>
+      t("正在準備第一組三步曝光…", "Preparing the first three-step captures…"),
+    ),
     [message, setMessage] = useState(""),
     [probe, setProbe] = useState(0),
     [frame, setFrame] = useState(0),
@@ -402,7 +413,12 @@ export default function Sandbox({
     stopWorker();
     setBusy(false);
     setStale(true);
-    setStatus("場景已改，稍後自動重新掃描…");
+    setStatus(
+      t(
+        "場景已改，稍後自動重新掃描…",
+        "The scene changed; rescanning automatically in a moment…",
+      ),
+    );
   }, []);
   const update = useCallback(
     (patch: Partial<WorldConfig>) => {
@@ -411,8 +427,12 @@ export default function Sandbox({
       try {
         validateWorldConfig(next);
       } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
         setMessage(
-          `此設定未套用：${error instanceof Error ? error.message : String(error)}`,
+          t(
+            `此設定未套用：${reason}`,
+            `This setting wasn't applied: ${reason}`,
+          ),
         );
         return;
       }
@@ -490,7 +510,12 @@ export default function Sandbox({
       setProbe(chosen < 0 ? 0 : chosen);
     }
     setBusy(false);
-    setStatus(`掃描完成：${width}×${height} Camera Captures 已解算深度。`);
+    setStatus(
+      t(
+        `掃描完成：${width}×${height} Camera Captures 已解算深度。`,
+        `Scan complete: depth solved from ${width}×${height} camera captures.`,
+      ),
+    );
   }, []);
   const performScan = useCallback(() => {
     const token = ++generation.current,
@@ -499,15 +524,26 @@ export default function Sandbox({
     const fail = (text: string) => {
       stopWorker();
       setBusy(false);
-      setStatus("掃描失敗，沒有以真值補出結果。");
+      setStatus(
+        t(
+          "掃描失敗，沒有以真值補出結果。",
+          "Scan failed; no result was filled in from ground truth.",
+        ),
+      );
       setMessage(text);
     };
     setBusy(true);
     setProgress(0);
     setStatus(
       snapshot.interreflection
-        ? "掃描中：追蹤 Camera 射線與互反射路徑…"
-        : "掃描中：追蹤 Camera 射線與 Projector 遮擋…",
+        ? t(
+            "掃描中：追蹤 Camera 射線與互反射路徑…",
+            "Scanning: tracing camera rays and interreflection paths…",
+          )
+        : t(
+            "掃描中：追蹤 Camera 射線與 Projector 遮擋…",
+            "Scanning: tracing camera rays and projector occlusion…",
+          ),
     );
     const next = new Worker(new URL("./scan.worker.ts", import.meta.url), {
       type: "module",
@@ -524,7 +560,8 @@ export default function Sandbox({
       }
     };
     next.onerror = (event) => {
-      if (token === generation.current) fail(event.message || "Worker 錯誤");
+      if (token === generation.current)
+        fail(event.message || t("Worker 錯誤", "Worker error"));
     };
     next.postMessage({ config: snapshot } satisfies ScanRequest);
   }, [finishScan]);
@@ -572,7 +609,7 @@ export default function Sandbox({
     steps = coding.phaseSteps,
     patterns = fringePatterns(coding),
     frameLabel = (k: number) =>
-      `${k >= steps ? (coding.coding === "dual" ? "粗週期 " : "低頻 ") : ""}I${(k % steps) + 1} · ${Math.round((patterns[k].shift * 180) / Math.PI)}°`;
+      `${k >= steps ? (coding.coding === "dual" ? t("粗週期 ", "Coarse ") : t("低頻 ", "Low-freq ")) : ""}I${(k % steps) + 1} · ${Math.round((patterns[k].shift * 180) / Math.PI)}°`;
   const depth = scan?.reconstruction.depth[probe] ?? NaN,
     valid = !!scan?.reconstruction.valid[probe],
     phase = scan?.reconstruction.phase.wrapped[probe] ?? NaN,
@@ -650,7 +687,7 @@ export default function Sandbox({
           ...source,
           ...fromSpherical(aim, s.tilt, (s.azimuth + 90) % 360, s.distance),
           id: `${prefix}${n}`,
-          name: `${source.name} 副本`,
+          name: t(`${source.name} 副本`, `${source.name} copy`),
         },
       ],
     });
@@ -688,9 +725,19 @@ export default function Sandbox({
       const readback = JSON.parse(localStorage.getItem(KEY) ?? "null");
       if (JSON.stringify(readback?.config) !== JSON.stringify(config))
         throw new Error("讀回不一致");
-      setMessage("已保存沙盒參數；與一維數學實驗的設定分開保存。");
+      setMessage(
+        t(
+          "已保存沙盒參數；與一維數學實驗的設定分開保存。",
+          "Sandbox parameters saved, separately from the 1D math lab settings.",
+        ),
+      );
     } catch {
-      setMessage("保存失敗，請改用 JSON 匯出。");
+      setMessage(
+        t(
+          "保存失敗，請改用 JSON 匯出。",
+          "Save failed; use JSON export instead.",
+        ),
+      );
     }
   };
   const csv = () => {
@@ -732,7 +779,10 @@ export default function Sandbox({
       "sandbox-3d-reconstruction.csv",
     );
     setMessage(
-      "已匯出所有像素（mm）。reference_depth_mm 僅為評估真值，不是重建輸入。",
+      t(
+        "已匯出所有像素（mm）。reference_depth_mm 僅為評估真值，不是重建輸入。",
+        "Exported all pixels (mm). reference_depth_mm is evaluation-only ground truth, not a reconstruction input.",
+      ),
     );
   };
   return (
@@ -741,14 +791,19 @@ export default function Sandbox({
         <div className="sandbox-brand">
           <ScanLine size={22} />
           <div>
-            <h1>3D 掃描沙盒</h1>
-            <small>結構光實驗室 · N 步 Phase Shifting · 單位 mm</small>
+            <h1>{t("3D 掃描沙盒", "3D scanning sandbox")}</h1>
+            <small>
+              {t(
+                "結構光實驗室 · N 步 Phase Shifting · 單位 mm",
+                "N-step phase shifting · units: mm",
+              )}
+            </small>
           </div>
         </div>
         <div
           className="sandbox-view-switch"
           role="tablist"
-          aria-label="沙盒頁面"
+          aria-label={t("沙盒頁面", "Sandbox pages")}
         >
           {VIEWS.map(([id, title]) => (
             <button
@@ -767,23 +822,26 @@ export default function Sandbox({
           role="status"
         >
           {busy ? <ScanLine size={16} /> : <Check size={16} />}
-          <span>
+          <span title={status}>
             {status}
             {busy && ` ${Math.round(progress * 100)}%`}
           </span>
         </p>
         <div className="sandbox-header-actions">
           <button
-            aria-label="復原"
-            title="復原（Ctrl+Z）"
+            aria-label={t("復原", "Undo")}
+            title={t("復原（Ctrl+Z）", "Undo (Ctrl+Z)")}
             onClick={() => travel("undo")}
             disabled={!historySize.undo}
           >
             <Undo2 size={16} />
           </button>
           <button
-            aria-label="重做"
-            title="重做（Ctrl+Y 或 Ctrl+Shift+Z）"
+            aria-label={t("重做", "Redo")}
+            title={t(
+              "重做（Ctrl+Y 或 Ctrl+Shift+Z）",
+              "Redo (Ctrl+Y or Ctrl+Shift+Z)",
+            )}
             onClick={() => travel("redo")}
             disabled={!historySize.redo}
           >
@@ -795,7 +853,7 @@ export default function Sandbox({
             disabled={busy}
           >
             <RotateCcw size={16} />
-            重新掃描
+            {t("重新掃描", "Rescan")}
           </button>
         </div>
         {nav}
@@ -829,9 +887,12 @@ export default function Sandbox({
         />
       )}
       <div className="sandbox-workspace" hidden={view !== "sandbox"}>
-        <aside className="sandbox-tools" aria-label="場景參數">
+        <aside
+          className="sandbox-tools"
+          aria-label={t("場景參數", "Scene parameters")}
+        >
           <Tabs
-            label="場景參數分頁"
+            label={t("場景參數分頁", "Scene parameter tabs")}
             tabs={TOOL_TABS}
             value={toolTab}
             onChange={setToolTab}
@@ -839,19 +900,44 @@ export default function Sandbox({
           <div className="sandbox-panel-body">
             {toolTab === "object" && (
               <>
-                <InfoHeading title="形狀">
+                <InfoHeading title={t("形狀", "Shape")}>
                   {config.shape === "pcb" ? (
                     <p>
-                      真實尺寸 PCB：板子 40×30 mm、引腳寬約 0.55 mm。U1 QFP、U2
-                      SOIC、J1 排針、R1/C1/C2 被動元件共 48
-                      支引腳。板子用物體材質，晶片與引腳材質在「材質」分頁；逐引腳結果在「點雲分析」。
+                      {t(
+                        <>
+                          真實尺寸 PCB：板子 40×30 mm、引腳寬約 0.55 mm。U1
+                          QFP、U2 SOIC、J1 排針、R1/C1/C2 被動元件共 48
+                          支引腳。板子用物體材質，晶片與引腳材質在「材質」分頁；逐引腳結果在「點雲分析」。
+                        </>,
+                        <>
+                          Real-size PCB: a 40×30 mm board with pins about 0.55
+                          mm wide. U1 QFP, U2 SOIC, J1 header and R1/C1/C2
+                          passives have 48 pins in total. The board uses the
+                          object material; chip and pin materials are on the
+                          Material tab. Per-pin results are in Point-cloud
+                          analysis.
+                        </>,
+                      )}
                     </p>
                   ) : BOARD_SHAPES.includes(config.shape) ? (
                     <p>
-                      AOI 測試件（mm）：板面即基準面。階梯量規 0.1–2.4 mm
-                      六階，適合看量測範圍與混疊；Chip + Fillet 含兩顆 2012
-                      元件、金屬電極、凹形焊錫與 3 mm 高元件（遮擋 /
-                      陰影）；平面可在批次比較中掃描高度。
+                      {t(
+                        <>
+                          AOI 測試件（mm）：板面即基準面。階梯量規 0.1–2.4 mm
+                          六階，適合看量測範圍與混疊；Chip + Fillet 含兩顆 2012
+                          元件、金屬電極、凹形焊錫與 3 mm 高元件（遮擋 /
+                          陰影）；平面可在批次比較中掃描高度。
+                        </>,
+                        <>
+                          AOI test pieces (mm): the board top is the reference
+                          plane. The step gauge has six steps from 0.1 to 2.4
+                          mm, good for seeing measurement range and aliasing;
+                          Chip + Fillet has two 2012 components, metal
+                          electrodes, concave solder fillets and a 3 mm tall
+                          component (occlusion / shadows); the plane can be
+                          swept in height in batch comparisons.
+                        </>,
+                      )}
                     </p>
                   ) : undefined}
                 </InfoHeading>
@@ -864,12 +950,18 @@ export default function Sandbox({
                         if (shape === "pcb") {
                           update(PCB_SETUP);
                           setMessage(
-                            "已套用 PCB 檢測擺位：俯拍 Camera 256×192、斜上方 Projector、像素面積積分；可自行調整。",
+                            t(
+                              "已套用 PCB 檢測擺位：俯拍 Camera 256×192、斜上方 Projector、像素面積積分；可自行調整。",
+                              "Applied the PCB inspection layout: top-down camera at 256×192, projector above at an angle, pixel area integration. Adjust as you like.",
+                            ),
                           );
                         } else if (BOARD_SHAPES.includes(shape)) {
                           update(boardSetup(shape));
                           setMessage(
-                            "已放置 AOI 測試件（板面＝基準面）。要比較多組 Camera／Projector，可在「裝置」分頁套用 AOI 擺位後到「多視角分析」。",
+                            t(
+                              "已放置 AOI 測試件（板面＝基準面）。要比較多組 Camera／Projector，可在「裝置」分頁套用 AOI 擺位後到「多視角分析」。",
+                              "Placed an AOI test piece (board top = reference plane). To compare several camera/projector pairs, apply an AOI layout on the Devices tab, then open Multi-view analysis.",
+                            ),
                           );
                         } else update({ shape, referenceHeight: 0 });
                       }}
@@ -879,16 +971,16 @@ export default function Sandbox({
                   ))}
                 </div>
                 {config.shape === "vgroove" &&
-                  field("grooveAngle", "V 型槽夾角", {
+                  field("grooveAngle", t("V 型槽夾角", "V-groove angle"), {
                     step: 1,
                     unit: "°",
                     digits: 0,
                   })}
                 {config.shape === "pcb" && (
                   <label className="sandbox-preset">
-                    <span>瞄準區域</span>
+                    <span>{t("瞄準區域", "Aim region")}</span>
                     <select
-                      aria-label="PCB 瞄準區域"
+                      aria-label={t("PCB 瞄準區域", "PCB aim region")}
                       value={
                         PCB_REGIONS.find(
                           ([, , ax, az]) =>
@@ -904,7 +996,7 @@ export default function Sandbox({
                       }}
                     >
                       <option value="" disabled>
-                        自訂
+                        {t("自訂", "Custom")}
                       </option>
                       {PCB_REGIONS.map(([id, title]) => (
                         <option key={id} value={id}>
@@ -914,37 +1006,73 @@ export default function Sandbox({
                     </select>
                   </label>
                 )}
-                <InfoHeading title="位置">
-                  <p>也可以在 3D 視窗左鍵點物體，拖曳彩色箭頭移動。</p>
+                <InfoHeading title={t("位置", "Position")}>
+                  <p>
+                    {t(
+                      "也可以在 3D 視窗左鍵點物體，拖曳彩色箭頭移動。",
+                      "You can also left-click the object in the 3D view and drag the colored arrows.",
+                    )}
+                  </p>
                 </InfoHeading>
-                {field("x", "物體 X 位置", {
+                {field("x", t("物體 X 位置", "Object X position"), {
                   step: 0.5,
                   unit: "mm",
                   testId: "sandbox-object-x",
                 })}
-                {field("y", "物體高度 Y", { step: 0.25, unit: "mm" })}
-                {field("z", "物體 Z 位置", { step: 0.5, unit: "mm" })}
-                <InfoHeading title="瞄準點與基準面">
-                  <p>
-                    所有裝置對準「物體位置 + 瞄準偏移」；多視角分析的 ROI
-                    也以它為中心。基準面是 AOI 校正的高度零點（世界 Y），單週期
-                    / 雙週期的相位視窗從它往上算，多視角高度也都相對於它。
-                  </p>
-                </InfoHeading>
-                {field("aimX", "瞄準偏移 X", { step: 0.25, unit: "mm" })}
-                {field("aimZ", "瞄準偏移 Z", { step: 0.25, unit: "mm" })}
-                {field("referenceHeight", "基準面高度", {
+                {field("y", t("物體高度 Y", "Object height Y"), {
                   step: 0.25,
                   unit: "mm",
                 })}
+                {field("z", t("物體 Z 位置", "Object Z position"), {
+                  step: 0.5,
+                  unit: "mm",
+                })}
+                <InfoHeading
+                  title={t("瞄準點與基準面", "Aim point and reference plane")}
+                >
+                  <p>
+                    {t(
+                      <>
+                        所有裝置對準「物體位置 + 瞄準偏移」；多視角分析的 ROI
+                        也以它為中心。基準面是 AOI 校正的高度零點（世界
+                        Y），單週期 /
+                        雙週期的相位視窗從它往上算，多視角高度也都相對於它。
+                      </>,
+                      <>
+                        Every device points at “object position + aim offset”;
+                        the multi-view analysis ROI is centered there too. The
+                        reference plane is the height zero of the AOI
+                        calibration (world Y): single-period / dual-period phase
+                        windows start from it, and multi-view heights are all
+                        relative to it.
+                      </>,
+                    )}
+                  </p>
+                </InfoHeading>
+                {field("aimX", t("瞄準偏移 X", "Aim offset X"), {
+                  step: 0.25,
+                  unit: "mm",
+                })}
+                {field("aimZ", t("瞄準偏移 Z", "Aim offset Z"), {
+                  step: 0.25,
+                  unit: "mm",
+                })}
+                {field(
+                  "referenceHeight",
+                  t("基準面高度", "Reference plane height"),
+                  {
+                    step: 0.25,
+                    unit: "mm",
+                  },
+                )}
               </>
             )}
             {toolTab === "rig" && (
               <>
                 <label className="sandbox-preset">
-                  <span>裝置擺位</span>
+                  <span>{t("裝置擺位", "Device layout")}</span>
                   <select
-                    aria-label="裝置擺位預設"
+                    aria-label={t("裝置擺位預設", "Device layout preset")}
                     value=""
                     onChange={(e) => {
                       if (e.target.value === "single") {
@@ -968,7 +1096,10 @@ export default function Sandbox({
                           return; // update() already reported why
                         }
                         setMessage(
-                          `已套用本機預設「${local.name}」（src/local，不會進 Git）；到「多視角分析」比較所有 Pair。`,
+                          t(
+                            `已套用本機預設「${local.name}」（src/local，不會進 Git）；到「多視角分析」比較所有 Pair。`,
+                            `Applied local preset “${local.name}” (src/local, not in Git). Compare all pairs in Multi-view analysis.`,
+                          ),
                         );
                         return;
                       }
@@ -984,13 +1115,19 @@ export default function Sandbox({
                         cameraWidth: Math.max(config.cameraWidth, 192),
                       });
                       setMessage(
-                        `已套用「${preset.name}」：${placed.cameras.length} 台 Camera × ${placed.projectors.length} 台 Projector；到「多視角分析」比較所有 Pair。`,
+                        t(
+                          `已套用「${preset.name}」：${placed.cameras.length} 台 Camera × ${placed.projectors.length} 台 Projector；到「多視角分析」比較所有 Pair。`,
+                          `Applied “${preset.name}”: ${placed.cameras.length} cameras × ${placed.projectors.length} projectors. Compare all pairs in Multi-view analysis.`,
+                        ),
                       );
                     }}
                   >
-                    <option value="">選擇…</option>
+                    <option value="">{t("選擇…", "Choose…")}</option>
                     <option value="single">
-                      沙盒單組（1 Camera + 1 Projector）
+                      {t(
+                        "沙盒單組（1 Camera + 1 Projector）",
+                        "Sandbox single pair (1 camera + 1 projector)",
+                      )}
                     </option>
                     {RIG_PRESETS.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -1003,7 +1140,7 @@ export default function Sandbox({
                         value={`local:${p.id}`}
                         title={p.description}
                       >
-                        本機：{p.name}
+                        {t(<>本機：{p.name}</>, <>Local: {p.name}</>)}
                       </option>
                     ))}
                   </select>
@@ -1015,11 +1152,27 @@ export default function Sandbox({
                   ] as const
                 ).map(([title, kind]) => (
                   <section key={kind}>
-                    <InfoHeading title={`使用中 ${title} 位置`}>
+                    <InfoHeading
+                      title={t(
+                        `使用中 ${title} 位置`,
+                        `Active ${title.toLowerCase()} position`,
+                      )}
+                    >
                       <p>
-                        3D 沙盒掃描的是「使用中」的一組 Camera +
-                        Projector。也可以在 3D
-                        視窗左鍵點機身拖曳；點其他（半透明）機身會把它設為使用中。所有裝置永遠對準瞄準點。
+                        {t(
+                          <>
+                            3D 沙盒掃描的是「使用中」的一組 Camera +
+                            Projector。也可以在 3D
+                            視窗左鍵點機身拖曳；點其他（半透明）機身會把它設為使用中。所有裝置永遠對準瞄準點。
+                          </>,
+                          <>
+                            The 3D sandbox scans the active camera + projector
+                            pair. You can also left-click a device body in the
+                            3D view and drag it; clicking another
+                            (semi-transparent) body makes it active. Every
+                            device always points at the aim point.
+                          </>,
+                        )}
                       </p>
                     </InfoHeading>
                     {(["x", "y", "z"] as const).map((axis) =>
@@ -1046,11 +1199,26 @@ export default function Sandbox({
                     />
                   </section>
                 ))}
-                <InfoHeading title="全部裝置（多視角）">
+                <InfoHeading
+                  title={t("全部裝置（多視角）", "All devices (multi-view)")}
+                >
                   <p>
-                    傾角 / 方位 / 距離是相對瞄準點的球座標（方位從 +X 轉向
-                    +Z）。光圈直徑供薄透鏡失焦模型使用，0 為針孔（無失焦）。Pair
-                    類別（直視 / 反対側 / 直交 / 同じ側）由這些幾何即時判定。
+                    {t(
+                      <>
+                        傾角 / 方位 / 距離是相對瞄準點的球座標（方位從 +X 轉向
+                        +Z）。光圈直徑供薄透鏡失焦模型使用，0
+                        為針孔（無失焦）。Pair 類別（直視 / 反対側 / 直交 /
+                        同じ側）由這些幾何即時判定。
+                      </>,
+                      <>
+                        Tilt / azimuth / distance are spherical coordinates
+                        around the aim point (azimuth turns from +X toward +Z).
+                        The aperture diameter feeds the thin-lens defocus model;
+                        0 means a pinhole (no defocus). Pair classes (direct /
+                        opposite / orthogonal / same side) are derived live from
+                        this geometry.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
                 {(["camera", "projector"] as const).map((kind) => {
@@ -1062,8 +1230,16 @@ export default function Sandbox({
                   return (
                     <section key={kind}>
                       <h3 className="sandbox-group">
-                        {kind === "camera" ? "Camera" : "Projector"}（
-                        {list.length}）
+                        {t(
+                          <>
+                            {kind === "camera" ? "Camera" : "Projector"}（
+                            {list.length}）
+                          </>,
+                          <>
+                            {kind === "camera" ? "Cameras" : "Projectors"} (
+                            {list.length})
+                          </>,
+                        )}
                       </h3>
                       {list.map((device) => {
                         const s = spherical(device, aim);
@@ -1076,7 +1252,10 @@ export default function Sandbox({
                             <div className="aoi-device-head">
                               <input
                                 type="radio"
-                                aria-label={`使用 ${device.id}`}
+                                aria-label={t(
+                                  `使用 ${device.id}`,
+                                  `Use ${device.id}`,
+                                )}
                                 checked={device.id === active}
                                 onChange={() =>
                                   update(
@@ -1088,7 +1267,10 @@ export default function Sandbox({
                               />
                               <strong>{device.id}</strong>
                               <input
-                                aria-label={`${device.id} 名稱`}
+                                aria-label={t(
+                                  `${device.id} 名稱`,
+                                  `${device.id} name`,
+                                )}
                                 value={device.name}
                                 onChange={(e) =>
                                   setDevice(kind, device.id, {
@@ -1097,8 +1279,11 @@ export default function Sandbox({
                                 }
                               />
                               <button
-                                aria-label={`移除 ${device.id}`}
-                                title="移除"
+                                aria-label={t(
+                                  `移除 ${device.id}`,
+                                  `Remove ${device.id}`,
+                                )}
+                                title={t("移除", "Remove")}
                                 disabled={list.length <= 1}
                                 onClick={() => removeDevice(kind, device.id)}
                               >
@@ -1141,9 +1326,12 @@ export default function Sandbox({
                                 />
                               </label>
                               <label>
-                                <span>光圈 mm</span>
+                                <span>{t("光圈 mm", "Aperture mm")}</span>
                                 <NumberCell
-                                  label={`${device.id} 光圈 mm`}
+                                  label={t(
+                                    `${device.id} 光圈 mm`,
+                                    `${device.id} aperture mm`,
+                                  )}
                                   value={device.aperture}
                                   limits={DEVICE_LIMITS.aperture}
                                   onChange={(aperture) =>
@@ -1161,20 +1349,28 @@ export default function Sandbox({
                         disabled={list.length >= MAX_DEVICES}
                       >
                         <Plus size={14} />
-                        新增 {kind === "camera" ? "Camera" : "Projector"}
+                        {t(
+                          <>
+                            新增 {kind === "camera" ? "Camera" : "Projector"}
+                          </>,
+                          <>Add {kind === "camera" ? "camera" : "projector"}</>,
+                        )}
                       </button>
                     </section>
                   );
                 })}
-                <InfoHeading title="Camera 鏡頭">
+                <InfoHeading title={t("Camera 鏡頭", "Camera lens")}>
                   <p>
-                    開啟面積積分後，跨在邊緣上的像素會混合兩個表面的條紋（混合像素），小細節在低解析度時會重建錯誤或消失。解析度越高掃描越久。
+                    {t(
+                      "開啟面積積分後，跨在邊緣上的像素會混合兩個表面的條紋（混合像素），小細節在低解析度時會重建錯誤或消失。解析度越高掃描越久。",
+                      "With area integration on, pixels straddling an edge mix the fringes of two surfaces (mixed pixels), so small details are reconstructed wrongly or vanish at low resolution. Higher resolution scans take longer.",
+                    )}
                   </p>
                 </InfoHeading>
                 <label className="sandbox-preset">
-                  <span>解析度</span>
+                  <span>{t("解析度", "Resolution")}</span>
                   <select
-                    aria-label="Camera 解析度"
+                    aria-label={t("Camera 解析度", "Camera resolution")}
                     value={config.cameraWidth}
                     onChange={(e) =>
                       update({ cameraWidth: Number(e.target.value) })
@@ -1188,31 +1384,46 @@ export default function Sandbox({
                   </select>
                 </label>
                 <label className="sandbox-preset">
-                  <span>像素面積積分</span>
+                  <span>{t("像素面積積分", "Pixel area integration")}</span>
                   <select
-                    aria-label="像素面積積分"
+                    aria-label={t("像素面積積分", "Pixel area integration")}
                     value={config.pixelGrid}
                     onChange={(e) =>
                       update({ pixelGrid: Number(e.target.value) })
                     }
                   >
-                    <option value={1}>關閉（像素中心取樣）</option>
-                    <option value={2}>2×2 子像素</option>
-                    <option value={3}>3×3 子像素</option>
+                    <option value={1}>
+                      {t("關閉（像素中心取樣）", "Off (sample pixel centers)")}
+                    </option>
+                    <option value={2}>
+                      {t("2×2 子像素", "2×2 subpixels")}
+                    </option>
+                    <option value={3}>
+                      {t("3×3 子像素", "3×3 subpixels")}
+                    </option>
                   </select>
                 </label>
-                {field("projectorWidth", "Projector 寬度", {
-                  step: 16,
-                  digits: 0,
-                  unit: "px",
-                  onChange: (v) =>
-                    update({ projectorWidth: Math.round(v / 4) * 4 }),
-                })}
+                {field(
+                  "projectorWidth",
+                  t("Projector 寬度", "Projector width"),
+                  {
+                    step: 16,
+                    digits: 0,
+                    unit: "px",
+                    onChange: (v) =>
+                      update({ projectorWidth: Math.round(v / 4) * 4 }),
+                  },
+                )}
                 <InfoHeading title="Baseline">
-                  <p>使用中 Camera 與 Projector 兩光心的距離。</p>
+                  <p>
+                    {t(
+                      "使用中 Camera 與 Projector 兩光心的距離。",
+                      "Distance between the optical centers of the active camera and projector.",
+                    )}
+                  </p>
                 </InfoHeading>
                 <p className="sandbox-note" data-testid="sandbox-baseline">
-                  兩光心距離{" "}
+                  {t("兩光心距離", "Optical center distance")}{" "}
                   {Math.hypot(
                     activeCamera.x - activeProjector.x,
                     activeCamera.y - activeProjector.y,
@@ -1224,57 +1435,133 @@ export default function Sandbox({
             )}
             {toolTab === "projector" && (
               <>
-                <InfoHeading title="條紋編碼">
+                <InfoHeading title={t("條紋編碼", "Fringe coding")}>
                   <p>
-                    投影圖樣 = offset + amplitude·cos(2πf·u/W − π + 2πk/N)。頻率
-                    f 是整個投影寬度內的週期數；f 越高，同樣的相位誤差對應的
-                    column 誤差越小（約 ∝ 1/f），但 φ̂ 只在一個週期內唯一。
+                    {t(
+                      <>
+                        投影圖樣 = offset + amplitude·cos(2πf·u/W − π +
+                        2πk/N)。頻率 f 是整個投影寬度內的週期數；f
+                        越高，同樣的相位誤差對應的 column 誤差越小（約 ∝
+                        1/f），但 φ̂ 只在一個週期內唯一。
+                      </>,
+                      <>
+                        Projected pattern = offset + amplitude·cos(2πf·u/W − π +
+                        2πk/N). Frequency f is the number of periods across the
+                        projector width; the higher f, the smaller the column
+                        error for the same phase error (roughly ∝ 1/f), but φ̂ is
+                        unique only within one period.
+                      </>,
+                    )}
                   </p>
-                  <p>N 步相移：N 越多對雜訊越不敏感，但要拍更多張。</p>
+                  <p>
+                    {t(
+                      "N 步相移：N 越多對雜訊越不敏感，但要拍更多張。",
+                      "N-step phase shifting: a larger N is less sensitive to noise but needs more captures.",
+                    )}
+                  </p>
                 </InfoHeading>
-                {field("fringeFrequency", "條紋頻率 f", {
+                {field(
+                  "fringeFrequency",
+                  t("條紋頻率 f", "Fringe frequency f"),
+                  {
+                    step: 1,
+                    unit: t("週期", "periods"),
+                    digits: 0,
+                  },
+                )}
+                {field("phaseSteps", t("相移步數 N", "Phase-shift steps N"), {
                   step: 1,
-                  unit: "週期",
+                  unit: t("步", "steps"),
                   digits: 0,
                 })}
-                {field("phaseSteps", "相移步數 N", {
-                  step: 1,
-                  unit: "步",
-                  digits: 0,
-                })}
-                <InfoHeading title="相位解包 / 量測範圍">
+                <InfoHeading
+                  title={t(
+                    "相位解包 / 量測範圍",
+                    "Phase unwrapping / measurement range",
+                  )}
+                >
                   <p>
-                    <strong>時間解包</strong>：f &gt; 1 時加投 N 張 f = 1
-                    條紋，用其相位推算條紋序 k；f 很高時雜訊被放大 f 倍，可能讓
-                    k 算錯。
+                    {t(
+                      <>
+                        <strong>時間解包</strong>：f &gt; 1 時加投 N 張 f = 1
+                        條紋，用其相位推算條紋序 k；f 很高時雜訊被放大 f
+                        倍，可能讓 k 算錯。
+                      </>,
+                      <>
+                        <strong>Temporal unwrapping</strong>: when f &gt; 1, N
+                        extra f = 1 fringe images are projected and their phase
+                        gives the fringe order k; at high f the noise is
+                        amplified f times and can make k wrong.
+                      </>,
+                    )}
                   </p>
                   <p>
-                    <strong>單週期 + 基準面</strong>（AOI
-                    常用）：以校正基準面上的相位決定 k，只在「視窗底部」往上
-                    一個 2π 對應的高度內正確；超出的高度會混疊（量測範圍）。
+                    {t(
+                      <>
+                        <strong>單週期 + 基準面</strong>（AOI
+                        常用）：以校正基準面上的相位決定 k，只在「視窗底部」往上
+                        一個 2π 對應的高度內正確；超出的高度會混疊（量測範圍）。
+                      </>,
+                      <>
+                        <strong>Single period + reference plane</strong> (common
+                        in AOI): k is set from the phase on the calibrated
+                        reference plane, so heights are correct only within one
+                        2π above the window bottom; anything taller aliases (the
+                        measurement range).
+                      </>,
+                    )}
                   </p>
                   <p>
-                    <strong>粗 / 細雙週期</strong>：加投週期 p₂ = R·p₁
-                    的粗條紋，粗相位放在基準面視窗上再決定細條紋的 k，範圍 = R ×
-                    每 2π 高度；R 越大範圍越大，但粗相位雜訊被放大 R 倍。
+                    {t(
+                      <>
+                        <strong>粗 / 細雙週期</strong>：加投週期 p₂ = R·p₁
+                        的粗條紋，粗相位放在基準面視窗上再決定細條紋的 k，範圍 =
+                        R × 每 2π 高度；R 越大範圍越大，但粗相位雜訊被放大 R
+                        倍。
+                      </>,
+                      <>
+                        <strong>Coarse / fine dual period</strong>: coarse
+                        fringes with period p₂ = R·p₁ are added; the coarse
+                        phase is placed on the reference-plane window and then
+                        sets the fine fringe order k. Range = R × height per 2π;
+                        a larger R gives more range but amplifies coarse-phase
+                        noise R times.
+                      </>,
+                    )}
                   </p>
                   <p>
-                    <strong>雙週期（外差）</strong>：加投週期 p₂ = p₁·比值
-                    的條紋，拍頻把範圍擴大 r/(r−1)
-                    倍，代價是雜訊放大、級次錯誤風險上升。
+                    {t(
+                      <>
+                        <strong>雙週期（外差）</strong>：加投週期 p₂ = p₁·比值
+                        的條紋，拍頻把範圍擴大 r/(r−1)
+                        倍，代價是雜訊放大、級次錯誤風險上升。
+                      </>,
+                      <>
+                        <strong>Dual period (heterodyne)</strong>: fringes with
+                        period p₂ = p₁·ratio are added; the beat extends the
+                        range r/(r−1) times, at the cost of more noise and a
+                        higher risk of fringe order errors.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
                 <div
                   className="sandbox-palette"
                   role="radiogroup"
-                  aria-label="相位解包方式"
+                  aria-label={t("相位解包方式", "Phase unwrapping method")}
                 >
                   {(
                     [
-                      ["temporal", "時間解包"],
-                      ["single", "單週期 + 基準面"],
-                      ["coarse", "粗 / 細雙週期"],
-                      ["dual", "雙週期（外差）"],
+                      ["temporal", t("時間解包", "Temporal")],
+                      [
+                        "single",
+                        t("單週期 + 基準面", "Single period + reference"),
+                      ],
+                      [
+                        "coarse",
+                        t("粗 / 細雙週期", "Coarse / fine dual period"),
+                      ],
+                      ["dual", t("雙週期（外差）", "Dual period (heterodyne)")],
                     ] as const
                   ).map(([id, title]) => (
                     <button
@@ -1297,24 +1584,54 @@ export default function Sandbox({
                   ))}
                 </div>
                 {(config.coding === "dual" || config.coding === "coarse") &&
-                  field("periodRatio", "週期比 p₂/p₁", { step: 0.01 })}
+                  field(
+                    "periodRatio",
+                    t("週期比 p₂/p₁", "Period ratio p₂/p₁"),
+                    {
+                      step: 0.01,
+                    },
+                  )}
                 {config.coding !== "temporal" &&
-                  field("windowBottom", "相位視窗底部（相對基準面）", {
-                    step: 0.05,
-                    unit: "mm",
-                  })}
+                  field(
+                    "windowBottom",
+                    t(
+                      "相位視窗底部（相對基準面）",
+                      "Phase window bottom (relative to reference plane)",
+                    ),
+                    {
+                      step: 0.05,
+                      unit: "mm",
+                    },
+                  )}
                 <p className="sandbox-note" data-testid="sandbox-frame-count">
-                  每次掃描投影 {fringePatterns(config).length} 張
+                  {t(
+                    <>每次掃描投影 {fringePatterns(config).length} 張</>,
+                    <>
+                      {fringePatterns(config).length} patterns projected per
+                      scan
+                    </>,
+                  )}
                 </p>
-                <InfoHeading title="亮度與對比">
+                <InfoHeading title={t("亮度與對比", "Brightness and contrast")}>
                   <p>
-                    圖樣要留在 [0, 1] 內，所以 amplitude ≤ min(offset, 1 −
-                    offset)。amplitude
-                    越小調變越弱、越容易被雜訊或調變門檻吃掉；offset
-                    太高則亮面容易 clipping。
+                    {t(
+                      <>
+                        圖樣要留在 [0, 1] 內，所以 amplitude ≤ min(offset, 1 −
+                        offset)。amplitude
+                        越小調變越弱、越容易被雜訊或調變門檻吃掉；offset
+                        太高則亮面容易 clipping。
+                      </>,
+                      <>
+                        The pattern must stay within [0, 1], so amplitude ≤
+                        min(offset, 1 − offset). A smaller amplitude means
+                        weaker modulation that noise or the modulation threshold
+                        can swallow; too high an offset makes bright surfaces
+                        clip.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
-                {field("fringeOffset", "條紋 offset", {
+                {field("fringeOffset", t("條紋 offset", "Fringe offset"), {
                   step: 0.01,
                   onChange: (fringeOffset) =>
                     update({
@@ -1326,27 +1643,50 @@ export default function Sandbox({
                       ),
                     }),
                 })}
-                {field("fringeAmplitude", "條紋 amplitude", {
-                  step: 0.01,
-                  max: Math.min(
-                    WORLD_LIMITS.fringeAmplitude[1],
-                    config.fringeOffset,
-                    1 - config.fringeOffset,
-                  ),
+                {field(
+                  "fringeAmplitude",
+                  t("條紋 amplitude", "Fringe amplitude"),
+                  {
+                    step: 0.01,
+                    max: Math.min(
+                      WORLD_LIMITS.fringeAmplitude[1],
+                      config.fringeOffset,
+                      1 - config.fringeOffset,
+                    ),
+                  },
+                )}
+                {field("exposure", t("曝光增益", "Exposure gain"), {
+                  step: 0.05,
                 })}
-                {field("exposure", "曝光增益", { step: 0.05 })}
-                {field("minModulation", "最低調變 B", {
-                  step: 0.001,
-                  digits: 3,
-                })}
-                <InfoHeading title="失焦（薄透鏡）">
+                {field(
+                  "minModulation",
+                  t("最低調變 B", "Minimum modulation B"),
+                  {
+                    step: 0.001,
+                    digits: 3,
+                  },
+                )}
+                <InfoHeading title={t("失焦（薄透鏡）", "Defocus (thin lens)")}>
                   <p>
-                    模糊圓 c = f·A·|1/s −
-                    1/s_f|（像素，A＝光圈直徑，在「裝置」分頁設定）；以等二階矩高斯
-                    σ = c/4 近似。Projector 失焦降低條紋對比（MTF =
-                    exp(−2π²σ²/P²)），Camera
-                    失焦以逐像素散佈模糊混合鄰近相位。所有裝置對焦在瞄準點正下方「基準面
-                    + 對焦高度」。
+                    {t(
+                      <>
+                        模糊圓 c = f·A·|1/s −
+                        1/s_f|（像素，A＝光圈直徑，在「裝置」分頁設定）；以等二階矩高斯
+                        σ = c/4 近似。Projector 失焦降低條紋對比（MTF =
+                        exp(−2π²σ²/P²)），Camera
+                        失焦以逐像素散佈模糊混合鄰近相位。所有裝置對焦在瞄準點正下方「基準面
+                        + 對焦高度」。
+                      </>,
+                      <>
+                        Blur circle c = f·A·|1/s − 1/s_f| (pixels; A = aperture
+                        diameter, set on the Devices tab), approximated by a
+                        Gaussian with matching second moment, σ = c/4. Projector
+                        defocus lowers fringe contrast (MTF = exp(−2π²σ²/P²));
+                        camera defocus blends neighboring phases with a
+                        per-pixel spread blur. Every device is focused directly
+                        below the aim point at “reference plane + focus height”.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
                 <label className="sandbox-toggle">
@@ -1355,12 +1695,19 @@ export default function Sandbox({
                     checked={config.defocus}
                     onChange={(e) => update({ defocus: e.target.checked })}
                   />
-                  啟用失焦模型
+                  {t("啟用失焦模型", "Enable defocus model")}
                 </label>
-                {field("focusHeight", "對焦高度（相對基準面）", {
-                  step: 0.1,
-                  unit: "mm",
-                })}
+                {field(
+                  "focusHeight",
+                  t(
+                    "對焦高度（相對基準面）",
+                    "Focus height (relative to reference plane)",
+                  ),
+                  {
+                    step: 0.1,
+                    unit: "mm",
+                  },
+                )}
                 <button
                   className="sandbox-reset"
                   onClick={() =>
@@ -1378,7 +1725,7 @@ export default function Sandbox({
                   }
                 >
                   <RotateCcw size={16} />
-                  重設投影參數
+                  {t("重設投影參數", "Reset projection parameters")}
                 </button>
               </>
             )}
@@ -1388,10 +1735,10 @@ export default function Sandbox({
                   [
                     [
                       config.shape === "pcb"
-                        ? "PCB 板"
+                        ? t("PCB 板", "PCB board")
                         : BOARD_SHAPES.includes(config.shape)
-                          ? "板面"
-                          : "物體",
+                          ? t("板面", "Board surface")
+                          : t("物體", "Object"),
                       "objectAlbedo",
                       "objectSpecular",
                       "objectRoughness",
@@ -1401,7 +1748,9 @@ export default function Sandbox({
                     config.shape === "chip"
                       ? ([
                           [
-                            config.shape === "step" ? "量規" : "晶片",
+                            config.shape === "step"
+                              ? t("量規", "Gauge")
+                              : t("晶片", "Chip"),
                             "chipAlbedo",
                             "chipSpecular",
                             "chipRoughness",
@@ -1411,7 +1760,9 @@ export default function Sandbox({
                     ...(config.shape === "pcb" || config.shape === "chip"
                       ? ([
                           [
-                            config.shape === "chip" ? "電極" : "引腳",
+                            config.shape === "chip"
+                              ? t("電極", "Electrode")
+                              : t("引腳", "Pin"),
                             "pinAlbedo",
                             "pinSpecular",
                             "pinRoughness",
@@ -1421,7 +1772,7 @@ export default function Sandbox({
                     ...(config.shape === "chip"
                       ? ([
                           [
-                            "焊錫",
+                            t("焊錫", "Solder"),
                             "solderAlbedo",
                             "solderSpecular",
                             "solderRoughness",
@@ -1429,7 +1780,7 @@ export default function Sandbox({
                         ] as const)
                       : []),
                     [
-                      "地面",
+                      t("地面", "Ground"),
                       "groundAlbedo",
                       "groundSpecular",
                       "groundRoughness",
@@ -1439,9 +1790,12 @@ export default function Sandbox({
                   <section key={title}>
                     <h3 className="sandbox-group">{title}</h3>
                     <label className="sandbox-preset">
-                      <span>材質預設</span>
+                      <span>{t("材質預設", "Material preset")}</span>
                       <select
-                        aria-label={`${title}材質預設`}
+                        aria-label={t(
+                          `${title}材質預設`,
+                          `${title} material preset`,
+                        )}
                         value={
                           MATERIAL_PRESETS.find(
                             (p) =>
@@ -1463,7 +1817,7 @@ export default function Sandbox({
                         }}
                       >
                         <option value="" disabled>
-                          自訂
+                          {t("自訂", "Custom")}
                         </option>
                         {MATERIAL_PRESETS.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -1472,9 +1826,15 @@ export default function Sandbox({
                         ))}
                       </select>
                     </label>
-                    {field(albedo, `${title}反射率 ρ`)}
-                    {field(specular, `${title}鏡面強度`)}
-                    {field(roughness, `${title}粗糙度`)}
+                    {field(albedo, t(`${title}反射率 ρ`, `${title} albedo ρ`))}
+                    {field(
+                      specular,
+                      t(`${title}鏡面強度`, `${title} specular strength`),
+                    )}
+                    {field(
+                      roughness,
+                      t(`${title}粗糙度`, `${title} roughness`),
+                    )}
                   </section>
                 ))}
                 <button
@@ -1508,14 +1868,28 @@ export default function Sandbox({
                   }}
                 >
                   <RotateCcw size={16} />
-                  重設材質參數
+                  {t("重設材質參數", "Reset material parameters")}
                 </button>
-                <InfoHeading title="間接光">
+                <InfoHeading title={t("間接光", "Indirect light")}>
                   <p>
-                    亮度 = 0.12 環境 + 直接光 + 間接光。鏡面為
-                    GGX，低粗糙度會產生飽和高光而被 clipping；互反射以 Monte
-                    Carlo
-                    路徑追蹤，取樣越多雜訊越少。金屬沒有漫射，只有鏡射方向附近的像素看得到條紋，其餘無法解碼——這正是實機掃描金屬的困難。
+                    {t(
+                      <>
+                        亮度 = 0.12 環境 + 直接光 + 間接光。鏡面為
+                        GGX，低粗糙度會產生飽和高光而被 clipping；互反射以 Monte
+                        Carlo
+                        路徑追蹤，取樣越多雜訊越少。金屬沒有漫射，只有鏡射方向附近的像素看得到條紋，其餘無法解碼——這正是實機掃描金屬的困難。
+                      </>,
+                      <>
+                        Brightness = 0.12 ambient + direct light + indirect
+                        light. Specular reflection is GGX; low roughness gives
+                        saturated highlights that clip. Interreflection uses
+                        Monte Carlo path tracing; more samples mean less noise.
+                        Metals have no diffuse term, so only pixels near the
+                        mirror direction see fringes and the rest can&apos;t be
+                        decoded — exactly why scanning metal is hard on real
+                        hardware.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
                 <label className="sandbox-toggle">
@@ -1526,28 +1900,39 @@ export default function Sandbox({
                       update({ interreflection: e.target.checked })
                     }
                   />
-                  互反射（間接光）
+                  {t("互反射（間接光）", "Interreflection (indirect light)")}
                 </label>
                 {config.interreflection && (
                   <>
-                    {field("bounces", "反射次數", {
+                    {field("bounces", t("反射次數", "Bounces"), {
                       step: 1,
-                      unit: "次",
+                      unit: t("次", "×"),
                       digits: 0,
                     })}
-                    {field("giSamples", "每像素取樣路徑", {
-                      step: 8,
-                      unit: "條",
-                      digits: 0,
-                    })}
+                    {field(
+                      "giSamples",
+                      t("每像素取樣路徑", "Paths per pixel"),
+                      {
+                        step: 8,
+                        unit: t("條", "paths"),
+                        digits: 0,
+                      },
+                    )}
                   </>
                 )}
               </>
             )}
             {toolTab === "more" && (
               <>
-                <InfoHeading title="雜訊與可重現">
-                  <p>僅加性 Gaussian；不含完整 sensor noise。</p>
+                <InfoHeading
+                  title={t("雜訊與可重現", "Noise and reproducibility")}
+                >
+                  <p>
+                    {t(
+                      "僅加性 Gaussian；不含完整 sensor noise。",
+                      "Additive Gaussian noise only; no full sensor noise model.",
+                    )}
+                  </p>
                 </InfoHeading>
                 {field("noiseSigma", "Gaussian Noise σ", {
                   step: 0.001,
@@ -1556,7 +1941,7 @@ export default function Sandbox({
                 <label className="sandbox-inline-field">
                   Seed
                   <input
-                    aria-label="沙盒 Seed"
+                    aria-label={t("沙盒 Seed", "Sandbox seed")}
                     type="number"
                     min={0}
                     max={4294967295}
@@ -1577,38 +1962,89 @@ export default function Sandbox({
                   onClick={() => update(structuredClone(DEFAULT_WORLD))}
                 >
                   <RotateCcw size={16} />
-                  重設場景參數
+                  {t("重設場景參數", "Reset scene parameters")}
                 </button>
-                <InfoHeading title="模型與簡化">
+                <InfoHeading
+                  title={t("模型與簡化", "Model and simplifications")}
+                >
                   <p>
-                    <strong>已實作：</strong>已知 Pinhole Camera–Projector
-                    內外參（可多台，一次掃描一組）、Camera ray–mesh 交點（BVH
-                    加速）、Projector 視野與遮擋、Lambert + GGX 材質、Monte
-                    Carlo 互反射（1–3 次）、薄透鏡失焦、N 步 Phase
-                    Shifting、時間 / 單週期基準面 / 雙週期解包、ray–plane
-                    Triangulation、重建點雲與深度誤差。單位為 mm。
+                    {t(
+                      <>
+                        <strong>已實作：</strong>已知 Pinhole Camera–Projector
+                        內外參（可多台，一次掃描一組）、Camera ray–mesh
+                        交點（BVH 加速）、Projector 視野與遮擋、Lambert + GGX
+                        材質、Monte Carlo 互反射（1–3 次）、薄透鏡失焦、N 步
+                        Phase Shifting、時間 / 單週期基準面 /
+                        雙週期解包、ray–plane
+                        Triangulation、重建點雲與深度誤差。單位為 mm。
+                      </>,
+                      <>
+                        <strong>Implemented:</strong> known pinhole
+                        camera–projector intrinsics and extrinsics (several
+                        devices, one pair per scan), camera ray–mesh
+                        intersection (BVH accelerated), projector field of view
+                        and occlusion, Lambert + GGX materials, Monte Carlo
+                        interreflection (1–3 bounces), thin-lens defocus, N-step
+                        phase shifting, temporal / single-period reference /
+                        dual-period unwrapping, ray–plane triangulation,
+                        reconstructed point cloud and depth error. Units are mm.
+                      </>,
+                    )}
                   </p>
                   <p>
-                    <strong>重要假設：</strong>
-                    校正完美已知；各種解包都是一般的多頻 / 基準面方法，不是
-                    Micro PS。
+                    {t(
+                      <>
+                        <strong>重要假設：</strong>
+                        校正完美已知；各種解包都是一般的多頻 / 基準面方法，不是
+                        Micro PS。
+                      </>,
+                      <>
+                        <strong>Key assumptions:</strong> calibration is
+                        perfectly known; every unwrapping option is a standard
+                        multi-frequency / reference-plane method, not Micro PS.
+                      </>,
+                    )}
                   </p>
                   <p>
-                    <strong>仍未支援：</strong>由棋盤格估計
-                    Calibration、鏡頭失真、次表面散射、Gamma、量化。Projector
-                    為點光源且未建模距離衰減，材質為無色、Fresnel 為常數。
+                    {t(
+                      <>
+                        <strong>仍未支援：</strong>由棋盤格估計
+                        Calibration、鏡頭失真、次表面散射、Gamma、量化。Projector
+                        為點光源且未建模距離衰減，材質為無色、Fresnel 為常數。
+                      </>,
+                      <>
+                        <strong>Not yet supported:</strong> calibration
+                        estimated from a chessboard, lens distortion, subsurface
+                        scattering, gamma, quantization. The projector is a
+                        point light with no distance falloff; materials are
+                        achromatic and Fresnel is constant.
+                      </>,
+                    )}
                   </p>
                   <p>
-                    主視窗由 WebGL 畫投影與陰影；量測使用相同幾何的 CPU
-                    光線追蹤與 Float64 intensity，並非螢幕截圖。深度定義為
-                    Camera optical-axis Z。
+                    {t(
+                      <>
+                        主視窗由 WebGL 畫投影與陰影；量測使用相同幾何的 CPU
+                        光線追蹤與 Float64 intensity，並非螢幕截圖。深度定義為
+                        Camera optical-axis Z。
+                      </>,
+                      <>
+                        The main view draws projection and shadows with WebGL;
+                        measurements use CPU ray tracing of the same geometry
+                        with Float64 intensity, not screenshots. Depth is the
+                        camera optical-axis Z.
+                      </>,
+                    )}
                   </p>
                 </InfoHeading>
               </>
             )}
           </div>
         </aside>
-        <section className="sandbox-viewport" aria-label="3D 觀察視角">
+        <section
+          className="sandbox-viewport"
+          aria-label={t("3D 觀察視角", "3D observation view")}
+        >
           <WorldView
             ref={world}
             config={config}
@@ -1629,12 +2065,23 @@ export default function Sandbox({
             }
           />
           <div className="sandbox-overlay sandbox-overlay-top">
-            <span className="sandbox-chip">觀察視角 · 每格 12.5 mm</span>
+            <span className="sandbox-chip">
+              {t(
+                "觀察視角 · 每格 12.5 mm",
+                "Observation view · 12.5 mm per grid cell",
+              )}
+            </span>
             {overlay && (
               <span className="sandbox-chip" data-testid="sandbox-overlay-chip">
-                多視角點雲：{overlay.label}
+                {t(
+                  <>多視角點雲：{overlay.label}</>,
+                  <>Multi-view point cloud: {overlay.label}</>,
+                )}
                 <button
-                  aria-label="移除多視角點雲"
+                  aria-label={t(
+                    "移除多視角點雲",
+                    "Remove multi-view point cloud",
+                  )}
                   onClick={() => setOverlay(null)}
                 >
                   <X size={13} />
@@ -1645,31 +2092,39 @@ export default function Sandbox({
               <label>
                 <input
                   type="checkbox"
-                  aria-label="顯示選中像素的射線與光平面"
+                  aria-label={t(
+                    "顯示選中像素的射線與光平面",
+                    "Show the ray and light plane of the selected pixel",
+                  )}
                   checked={showRays}
                   onChange={(e) => setShowRays(e.target.checked)}
                 />
-                射線
+                {t("射線", "Rays")}
               </label>
               <label>
                 <input
                   type="checkbox"
-                  aria-label="顯示重建點雲"
+                  aria-label={t(
+                    "顯示重建點雲",
+                    "Show reconstructed point cloud",
+                  )}
                   checked={showCloud}
                   onChange={(e) => setShowCloud(e.target.checked)}
                 />
-                點雲
+                {t("點雲", "Point cloud")}
               </label>
               <button onClick={() => world.current?.resetView()}>
                 <RotateCcw size={15} />
-                重設視角
+                {t("重設視角", "Reset view")}
               </button>
               <button onClick={() => setFocusSpace((v) => !v)}>
                 {focusSpace ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                {focusSpace ? "返回完整工作區" : "專注 3D 空間"}
+                {focusSpace
+                  ? t("返回完整工作區", "Back to full workspace")
+                  : t("專注 3D 空間", "Focus on 3D space")}
               </button>
               <InfoButton
-                label="操作說明"
+                label={t("操作說明", "Controls")}
                 open={showHelp}
                 onToggle={() => setShowHelp((v) => !v)}
               />
@@ -1677,27 +2132,40 @@ export default function Sandbox({
           </div>
           {showHelp && (
             <div className="sandbox-overlay sandbox-overlay-bottom sandbox-play-help">
-              <span>左鍵：選取並拖曳物體／Camera／Projector</span>
-              <span>中鍵：旋轉</span>
-              <span>右鍵：平移</span>
-              <span>滾輪：縮放</span>
-              <span>WASD／Q E：移動、轉向</span>
-              <span>R：重設視角</span>
+              <span>
+                {t(
+                  "左鍵：選取並拖曳物體／Camera／Projector",
+                  "Left button: select and drag the object / camera / projector",
+                )}
+              </span>
+              <span>{t("中鍵：旋轉", "Middle button: orbit")}</span>
+              <span>{t("右鍵：平移", "Right button: pan")}</span>
+              <span>{t("滾輪：縮放", "Scroll: zoom")}</span>
+              <span>
+                {t("WASD／Q E：移動、轉向", "WASD / Q E: move, turn")}
+              </span>
+              <span>{t("R：重設視角", "R: reset view")}</span>
             </div>
           )}
           {message && (
             <div className="sandbox-message" role="status">
               <span>{message}</span>
-              <button aria-label="關閉訊息" onClick={() => setMessage("")}>
+              <button
+                aria-label={t("關閉訊息", "Close message")}
+                onClick={() => setMessage("")}
+              >
                 <X size={16} />
               </button>
             </div>
           )}
         </section>
-        <aside className="sandbox-results" aria-label="量測結果">
+        <aside
+          className="sandbox-results"
+          aria-label={t("量測結果", "Measurement results")}
+        >
           <section className={`sandbox-result-strip ${stale ? "stale" : ""}`}>
             <div>
-              <span>有效像素</span>
+              <span>{t("有效像素", "Valid pixels")}</span>
               <strong>
                 <b data-testid="sandbox-valid-count">
                   {scan?.metrics.validCount ?? 0}
@@ -1706,8 +2174,11 @@ export default function Sandbox({
               </strong>
               <p>
                 {scan
-                  ? `${(scan.metrics.validRatio * 100).toFixed(1)}% · 未照明 ${scan.metrics.occludedCount} px`
-                  : "尚未掃描"}
+                  ? t(
+                      `${(scan.metrics.validRatio * 100).toFixed(1)}% · 未照明 ${scan.metrics.occludedCount} px`,
+                      `${(scan.metrics.validRatio * 100).toFixed(1)}% · unlit ${scan.metrics.occludedCount} px`,
+                    )
+                  : t("尚未掃描", "Not scanned yet")}
               </p>
             </div>
             <div>
@@ -1720,16 +2191,27 @@ export default function Sandbox({
               </strong>
               {scan?.metrics.directRmseDepth != null ? (
                 <p data-testid="sandbox-direct-rmse">
-                  無互反射：{mm(scan.metrics.directRmseDepth)} mm
+                  {t(
+                    <>無互反射：{mm(scan.metrics.directRmseDepth)} mm</>,
+                    <>
+                      Without interreflection:{" "}
+                      {mm(scan.metrics.directRmseDepth)} mm
+                    </>,
+                  )}
                 </p>
               ) : (
-                <p>Camera Z；真值僅供評估</p>
+                <p>
+                  {t(
+                    "Camera Z；真值僅供評估",
+                    "Camera Z; ground truth for evaluation only",
+                  )}
+                </p>
               )}
             </div>
             <div>
               <span>
                 <Crosshair size={13} />
-                選中像素
+                {t("選中像素", "Selected pixel")}
               </span>
               <strong data-testid="sandbox-probe-depth">
                 {valid ? `${depth.toFixed(2)} mm` : "N/A"}
@@ -1737,18 +2219,18 @@ export default function Sandbox({
               <p>
                 {scan
                   ? `pixel (${probe % scan.capture.width}, ${Math.floor(probe / scan.capture.width)})`
-                  : "點影像選像素"}
+                  : t("點影像選像素", "Click an image to pick a pixel")}
               </p>
             </div>
           </section>
           <Tabs
-            label="結果分頁"
+            label={t("結果分頁", "Result tabs")}
             tabs={RESULT_TABS}
             value={resultTab}
             onChange={setResultTab}
           >
             <InfoButton
-              label="結果分頁說明"
+              label={t("結果分頁說明", "About the result tabs")}
               open={resultInfo}
               onToggle={() => setResultInfo((v) => !v)}
             />
@@ -1758,23 +2240,38 @@ export default function Sandbox({
               <div className="sandbox-info-panel">
                 <p>
                   {resultTab === "captures"
-                    ? `前 ${steps} 張只差投影相移 2πk/${steps}，φ̂ 由它們解出，不讀取表面座標${patterns.length > steps ? "；「低頻」影像是用來解包的單週期條紋" : ""}。點影像可選像素。`
+                    ? t(
+                        `前 ${steps} 張只差投影相移 2πk/${steps}，φ̂ 由它們解出，不讀取表面座標${patterns.length > steps ? "；「低頻」影像是用來解包的單週期條紋" : ""}。點影像可選像素。`,
+                        `The first ${steps} images differ only by the projected phase shift 2πk/${steps}; φ̂ is solved from them without reading surface coordinates${patterns.length > steps ? "; the extra images are single-period fringes used for unwrapping" : ""}. Click an image to pick a pixel.`,
+                      )
                     : resultTab === "depth"
-                      ? "3D 視窗中藍線＝Camera 射線；黃平面＝Projector 光平面；紅點＝三角量測結果。點影像可選像素。"
-                      : "直接光與間接光是正向模型內部的評估資料，重建時不會讀取。互反射在「材質」分頁開關。"}
+                      ? t(
+                          "3D 視窗中藍線＝Camera 射線；黃平面＝Projector 光平面；紅點＝三角量測結果。點影像可選像素。",
+                          "In the 3D view, blue line = camera ray; yellow plane = projector light plane; red dot = triangulation result. Click an image to pick a pixel.",
+                        )
+                      : t(
+                          "直接光與間接光是正向模型內部的評估資料，重建時不會讀取。互反射在「材質」分頁開關。",
+                          "Direct and indirect light are internal evaluation data of the forward model and are never read during reconstruction. Toggle interreflection on the Material tab.",
+                        )}
                 </p>
               </div>
             )}
             {!scan || !imageProps ? (
               <div className="sandbox-no-result">
-                正在產生第一組 Camera Captures…
+                {t(
+                  "正在產生第一組 Camera Captures…",
+                  "Generating the first camera captures…",
+                )}
               </div>
             ) : resultTab === "captures" ? (
               <>
                 <div
                   className="sandbox-frame-picker"
                   role="group"
-                  aria-label="3D 場景顯示的曝光"
+                  aria-label={t(
+                    "3D 場景顯示的曝光",
+                    "Capture shown in the 3D scene",
+                  )}
                 >
                   {scan.capture.frames.map((_, k) => (
                     <button
@@ -1799,7 +2296,9 @@ export default function Sandbox({
                       />
                       <figcaption>
                         {frameLabel(k)}
-                        {scanFrame === k ? " · 場景顯示中" : ""}
+                        {scanFrame === k
+                          ? t(" · 場景顯示中", " · shown in scene")
+                          : ""}
                       </figcaption>
                     </figure>
                   ))}
@@ -1819,9 +2318,11 @@ export default function Sandbox({
                         values={scan.reconstruction.lowPhase.wrapped}
                         kind="phase"
                         testId="sandbox-low-phase"
-                        label="單週期相位"
+                        label={t("單週期相位", "Single-period phase")}
                       />
-                      <figcaption>單週期相位 φ₁</figcaption>
+                      <figcaption>
+                        {t("單週期相位 φ₁", "Single-period phase φ₁")}
+                      </figcaption>
                     </figure>
                   )}
                   {scaledAbsolute && (
@@ -1831,12 +2332,12 @@ export default function Sandbox({
                         values={scaledAbsolute}
                         kind="phase"
                         testId="sandbox-absolute-phase"
-                        label="解包後相位"
+                        label={t("解包後相位", "Unwrapped phase")}
                       />
                       <figcaption>
                         {scan.reconstruction.lowPhase
-                          ? "解包後 Φ/f"
-                          : "未解包：φ̂/f"}
+                          ? t("解包後 Φ/f", "Unwrapped Φ/f")
+                          : t("未解包：φ̂/f", "Not unwrapped: φ̂/f")}
                       </figcaption>
                     </figure>
                   )}
@@ -1852,7 +2353,12 @@ export default function Sandbox({
                       kind="depth"
                       testId="sandbox-depth"
                     />
-                    <figcaption>重建 Depth（色階 25–250 mm）</figcaption>
+                    <figcaption>
+                      {t(
+                        "重建 Depth（色階 25–250 mm）",
+                        "Reconstructed depth (color scale 25–250 mm)",
+                      )}
+                    </figcaption>
                   </figure>
                   <figure>
                     <Image
@@ -1861,50 +2367,99 @@ export default function Sandbox({
                       kind="error"
                       scale={errorScale}
                       testId="sandbox-depth-error"
-                      label="深度誤差圖"
+                      label={t("深度誤差圖", "Depth error map")}
                     />
                     <figcaption>
-                      誤差（紅遠藍近，±{mm(errorScale)} mm）
+                      {t(
+                        <>誤差（紅遠藍近，±{mm(errorScale)} mm）</>,
+                        <>Error (red far, blue near, ±{mm(errorScale)} mm)</>,
+                      )}
                     </figcaption>
                   </figure>
                 </div>
                 <ol className="sandbox-explanation">
                   <li>
-                    {steps} 次亮度解出 φ̂ = <b>{f(phase)} rad</b>
+                    {t(
+                      <>
+                        {steps} 次亮度解出 φ̂ = <b>{f(phase)} rad</b>
+                      </>,
+                      <>
+                        {steps} intensities give φ̂ = <b>{f(phase)} rad</b>
+                      </>,
+                    )}
                   </li>
                   {coding.fringeFrequency > 1 && (
                     <li>
-                      {coding.coding === "temporal" ? (
-                        <>
-                          單週期 φ₁ = <b>{f(lowPhase)} rad</b> → 條紋序 k ={" "}
-                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
-                        </>
-                      ) : coding.coding === "dual" ||
-                        coding.coding === "coarse" ? (
-                        <>
-                          粗週期 φ₂ = <b>{f(lowPhase)} rad</b>，
-                          {coding.coding === "dual" ? "拍頻相位" : "粗相位"}
-                          放在基準面視窗 → k ={" "}
-                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
-                        </>
-                      ) : (
-                        <>
-                          以基準面視窗（{coding.windowBottom} mm 起）決定 k ={" "}
-                          <b>{Number.isFinite(order) ? order : "N/A"}</b>
-                          ；超出量測範圍會混疊
-                        </>
-                      )}
+                      {coding.coding === "temporal"
+                        ? t(
+                            <>
+                              單週期 φ₁ = <b>{f(lowPhase)} rad</b> → 條紋序 k ={" "}
+                              <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                            </>,
+                            <>
+                              Single-period φ₁ = <b>{f(lowPhase)} rad</b> →
+                              fringe order k ={" "}
+                              <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                            </>,
+                          )
+                        : coding.coding === "dual" || coding.coding === "coarse"
+                          ? t(
+                              <>
+                                粗週期 φ₂ = <b>{f(lowPhase)} rad</b>，
+                                {coding.coding === "dual"
+                                  ? "拍頻相位"
+                                  : "粗相位"}
+                                放在基準面視窗 → k ={" "}
+                                <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                              </>,
+                              <>
+                                Coarse period φ₂ = <b>{f(lowPhase)} rad</b>;{" "}
+                                {coding.coding === "dual"
+                                  ? "beat phase"
+                                  : "coarse phase"}{" "}
+                                placed on the reference-plane window → k ={" "}
+                                <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                              </>,
+                            )
+                          : t(
+                              <>
+                                以基準面視窗（{coding.windowBottom} mm 起）決定
+                                k ={" "}
+                                <b>{Number.isFinite(order) ? order : "N/A"}</b>
+                                ；超出量測範圍會混疊
+                              </>,
+                              <>
+                                Reference-plane window (from{" "}
+                                {coding.windowBottom} mm) sets k ={" "}
+                                <b>{Number.isFinite(order) ? order : "N/A"}</b>;
+                                beyond the measurement range it aliases
+                              </>,
+                            )}
                     </li>
                   )}
                   <li>
-                    對應 Projector column <b>{f(projectorU, 2)} px</b>
+                    {t(
+                      <>
+                        對應 Projector column <b>{f(projectorU, 2)} px</b>
+                      </>,
+                      <>
+                        Matching projector column <b>{f(projectorU, 2)} px</b>
+                      </>,
+                    )}
                   </li>
                   <li>
-                    Camera 射線 ∩ 該 column 光平面 →{" "}
-                    <b>{valid ? `${depth.toFixed(2)} mm` : "無有效交點"}</b>
+                    {t(
+                      "Camera 射線 ∩ 該 column 光平面 →",
+                      "Camera ray ∩ that column's light plane →",
+                    )}{" "}
+                    <b>
+                      {valid
+                        ? `${depth.toFixed(2)} mm`
+                        : t("無有效交點", "No valid intersection")}
+                    </b>
                   </li>
                   <li>
-                    與真值差{" "}
+                    {t("與真值差", "Difference from ground truth")}{" "}
                     <b>
                       {valid ? `${mm(Math.abs(depthError![probe]))} mm` : "N/A"}
                     </b>
@@ -1919,9 +2474,14 @@ export default function Sandbox({
                       {...imageProps}
                       values={scan.capture.direct[scanFrame]}
                       testId="sandbox-direct"
-                      label="直接光分量"
+                      label={t("直接光分量", "Direct light component")}
                     />
-                    <figcaption>直接光 · {frameLabel(scanFrame)}</figcaption>
+                    <figcaption>
+                      {t(
+                        <>直接光 · {frameLabel(scanFrame)}</>,
+                        <>Direct light · {frameLabel(scanFrame)}</>,
+                      )}
+                    </figcaption>
                   </figure>
                   <figure>
                     <Image
@@ -1929,17 +2489,26 @@ export default function Sandbox({
                       values={scan.capture.indirect[scanFrame]}
                       gain={indirectGain}
                       testId="sandbox-indirect"
-                      label="間接光分量"
+                      label={t("間接光分量", "Indirect light component")}
                     />
                     <figcaption>
-                      間接光 · ×{indirectGain.toFixed(1)} 顯示
+                      {t(
+                        <>間接光 · ×{indirectGain.toFixed(1)} 顯示</>,
+                        <>Indirect light · shown ×{indirectGain.toFixed(1)}</>,
+                      )}
                     </figcaption>
                   </figure>
                 </div>
                 <p className="sandbox-note">
                   {scan.capture.directOnly
-                    ? `此像素間接光 ${f(scan.capture.indirect[scanFrame][probe])}。`
-                    : "互反射關閉：間接光為 0。"}
+                    ? t(
+                        `此像素間接光 ${f(scan.capture.indirect[scanFrame][probe])}。`,
+                        `Indirect light at this pixel: ${f(scan.capture.indirect[scanFrame][probe])}.`,
+                      )
+                    : t(
+                        "互反射關閉：間接光為 0。",
+                        "Interreflection is off: indirect light is 0.",
+                      )}
                 </p>
               </>
             )}
@@ -1947,7 +2516,7 @@ export default function Sandbox({
           <div className="sandbox-export">
             <button onClick={save}>
               <Save size={14} />
-              保存參數
+              {t("保存參數", "Save parameters")}
             </button>
             <button
               onClick={() =>
@@ -1958,15 +2527,15 @@ export default function Sandbox({
               }
             >
               <ArrowDownToLine size={14} />
-              匯出 JSON
+              {t("匯出 JSON", "Export JSON")}
             </button>
             <button onClick={() => file.current?.click()}>
               <Upload size={14} />
-              匯入 JSON
+              {t("匯入 JSON", "Import JSON")}
             </button>
             <button onClick={csv} disabled={!scan || stale}>
               <ArrowDownToLine size={14} />
-              匯出 3D CSV
+              {t("匯出 3D CSV", "Export 3D CSV")}
             </button>
             <button
               onClick={() =>
@@ -1977,11 +2546,11 @@ export default function Sandbox({
               }
             >
               <ArrowDownToLine size={14} />
-              PNG 場景
+              {t("PNG 場景", "Scene PNG")}
             </button>
             <button onClick={() => setView("analysis")}>
               <ScanLine size={14} />
-              點雲分析
+              {t("點雲分析", "Point-cloud analysis")}
             </button>
           </div>
         </aside>
@@ -1997,15 +2566,28 @@ export default function Sandbox({
           if (!chosen) return;
           const token = ++importGeneration.current;
           try {
-            if (chosen.size > 1_048_576) throw new Error("參數檔超過 1 MB");
+            if (chosen.size > 1_048_576)
+              throw new Error(
+                t("參數檔超過 1 MB", "Parameter file exceeds 1 MB"),
+              );
             const envelope = JSON.parse(await chosen.text());
             if (token !== importGeneration.current) return;
             update(readEnvelope(envelope));
-            setMessage("已匯入沙盒設定並自動重新掃描；保存記錄尚未覆寫。");
+            setMessage(
+              t(
+                "已匯入沙盒設定並自動重新掃描；保存記錄尚未覆寫。",
+                "Imported sandbox settings and rescanning automatically; the saved copy hasn't been overwritten.",
+              ),
+            );
           } catch (error) {
             if (token !== importGeneration.current) return;
+            const reason =
+              error instanceof Error ? error.message : String(error);
             setMessage(
-              `匯入失敗，原設定未變更：${error instanceof Error ? error.message : String(error)}`,
+              t(
+                `匯入失敗，原設定未變更：${reason}`,
+                `Import failed; the current settings are unchanged: ${reason}`,
+              ),
             );
           }
         }}

@@ -16,6 +16,7 @@ import {
   type Vec3,
 } from "./linalg";
 import { M } from "./Tex";
+import { t } from "../i18n";
 import {
   BOARD_COLS,
   BOARD_ROWS,
@@ -100,7 +101,7 @@ export function Slider({
 function Tasks({ children }: { children: ReactNode }) {
   return (
     <div className="calib-tasks">
-      <strong>試試看</strong>
+      <strong>{t("試試看", "Try it")}</strong>
       <ol>{children}</ol>
     </div>
   );
@@ -136,7 +137,10 @@ function ImagePlot({
       className="calib-image"
       viewBox={`-10 -10 ${K.width + 20} ${K.height + 20}`}
       role="img"
-      aria-label="影像上的角點與重投影"
+      aria-label={t(
+        "影像上的角點與重投影",
+        "Corners and reprojections in the image",
+      )}
     >
       <rect
         x={0}
@@ -283,11 +287,11 @@ function IntrinsicsTable({
     <table className="calib-table">
       <thead>
         <tr>
-          <th>參數</th>
-          <th>真值</th>
-          <th>Zhang 初值</th>
-          <th>最佳化後</th>
-          <th>誤差</th>
+          <th>{t("參數", "Parameter")}</th>
+          <th>{t("真值", "Ground truth")}</th>
+          <th>{t("Zhang 初值", "Zhang initial")}</th>
+          <th>{t("最佳化後", "Optimized")}</th>
+          <th>{t("誤差", "Error")}</th>
         </tr>
       </thead>
       <tbody>
@@ -421,7 +425,7 @@ export function CalibrationLabView() {
     <div className={`calib-lab ${stale ? "is-stale" : ""}`}>
       <div className="calib-controls">
         <Slider
-          label="姿態數（張數）"
+          label={t("姿態數（張數）", "Poses (images)")}
           value={config.views}
           min={2}
           max={25}
@@ -429,7 +433,7 @@ export function CalibrationLabView() {
           onChange={(x) => set({ views: x })}
         />
         <Slider
-          label="最大傾角"
+          label={t("最大傾角", "Max tilt")}
           value={config.maxTilt}
           min={0}
           max={55}
@@ -438,7 +442,7 @@ export function CalibrationLabView() {
           onChange={(x) => set({ maxTilt: x })}
         />
         <Slider
-          label="角點偵測雜訊 σ"
+          label={t("角點偵測雜訊 σ", "Corner detection noise σ")}
           value={config.cornerNoise}
           min={0}
           max={1}
@@ -447,7 +451,7 @@ export function CalibrationLabView() {
           onChange={(x) => set({ cornerNoise: x })}
         />
         <Slider
-          label="鏡頭真實 k1"
+          label={t("鏡頭真實 k1", "True lens k1")}
           value={config.k1}
           min={-0.4}
           max={0.2}
@@ -455,7 +459,7 @@ export function CalibrationLabView() {
           onChange={(x) => set({ k1: x })}
         />
         <Slider
-          label="程式裡填的格子大小"
+          label={t("程式裡填的格子大小", "Square size entered in code")}
           value={config.declaredSquare}
           min={15}
           max={25}
@@ -464,7 +468,7 @@ export function CalibrationLabView() {
           onChange={(x) => set({ declaredSquare: x })}
         />
         <Slider
-          label="Projector 對應雜訊 σ"
+          label={t("Projector 對應雜訊 σ", "Projector correspondence noise σ")}
           value={config.projectorNoise}
           min={0}
           max={1}
@@ -487,15 +491,33 @@ export function CalibrationLabView() {
             onChange={(e) => set({ estimateDistortion: e.target.checked })}
           />
           <span>
-            估計畸變（取消 = <code>CALIB_FIX_K1|K2|ZERO_TANGENT_DIST</code>）
+            {t(
+              <>
+                估計畸變（取消 = <code>CALIB_FIX_K1|K2|ZERO_TANGENT_DIST</code>
+                ）
+              </>,
+              <>
+                Estimate distortion (unchecked ={" "}
+                <code>CALIB_FIX_K1|K2|ZERO_TANGENT_DIST</code>)
+              </>,
+            )}
           </span>
         </label>
         <button className="calib-reset" onClick={() => setConfig(DEFAULT_LAB)}>
-          回到預設
+          {t("回到預設", "Reset to defaults")}
         </button>
         <p className="calib-note">
-          真實格子大小固定 20 mm；k3 固定 0（<code>CALIB_FIX_K3</code>
-          ）。角點直接用「真實投影 + 雜訊」，不做影像偵測。
+          {t(
+            <>
+              真實格子大小固定 20 mm；k3 固定 0（<code>CALIB_FIX_K3</code>
+              ）。角點直接用「真實投影 + 雜訊」，不做影像偵測。
+            </>,
+            <>
+              The true square size is fixed at 20 mm; k3 is fixed at 0 (
+              <code>CALIB_FIX_K3</code>). Corners come straight from “true
+              projection + noise”; no image detection is done.
+            </>,
+          )}
         </p>
       </div>
 
@@ -504,22 +526,34 @@ export function CalibrationLabView() {
       ) : (
         <div className="calib-results">
           <h4>
-            A. Camera：<code>cv.calibrateCamera</code>
+            {t(
+              <>
+                A. Camera：<code>cv.calibrateCamera</code>
+              </>,
+              <>
+                A. Camera: <code>cv.calibrateCamera</code>
+              </>,
+            )}
           </h4>
           {!lab.camera.ok ? (
-            <p className="calib-error">失敗：{lab.camera.reason}</p>
+            <p className="calib-error">
+              {t("失敗：", "Failed: ")}
+              {lab.camera.reason}
+            </p>
           ) : (
             <div className="calib-metrics">
               <div>
-                <span>RMS 重投影誤差</span>
+                <span>{t("RMS 重投影誤差", "RMS reprojection error")}</span>
                 <b>{fmt(lab.camera.rms, 3)} px</b>
               </div>
               <div>
-                <span>LM 迭代</span>
+                <span>{t("LM 迭代", "LM iterations")}</span>
                 <b>{lab.camera.iterations}</b>
               </div>
               <div>
-                <span>點雲 RMSE（見 B）</span>
+                <span>
+                  {t("點雲 RMSE（見 B）", "Point-cloud RMSE (see B)")}
+                </span>
                 <b
                   className={lab.scan && lab.scan.rmsEstimated > 1 ? "bad" : ""}
                 >
@@ -532,7 +566,7 @@ export function CalibrationLabView() {
           <div className="calib-two">
             <div>
               <div className="calib-view-picker">
-                <span>第</span>
+                <span>{t("第", "Image")}</span>
                 <select
                   value={v}
                   onChange={(e) => setView(Number(e.target.value))}
@@ -541,14 +575,19 @@ export function CalibrationLabView() {
                     <option key={i} value={i}>
                       {i + 1}
                       {lab.camera.ok
-                        ? `（${fmt(lab.camera.perViewRms[i], 2)} px）`
+                        ? t(
+                            `（${fmt(lab.camera.perViewRms[i], 2)} px）`,
+                            ` (${fmt(lab.camera.perViewRms[i], 2)} px)`,
+                          )
                         : ""}
                     </option>
                   ))}
                 </select>
                 <span>
-                  張影像：○ 角點；線段 = 重投影誤差 ×200；＋ 真實主點；◯
-                  估計主點
+                  {t(
+                    "張影像：○ 角點；線段 = 重投影誤差 ×200；＋ 真實主點；◯ 估計主點",
+                    ": ○ corners; segments = reprojection error ×200; ＋ true principal point; ◯ estimated principal point",
+                  )}
                 </span>
               </div>
               <ImagePlot
@@ -566,18 +605,36 @@ export function CalibrationLabView() {
               <table className="calib-table calib-pose">
                 <thead>
                   <tr>
-                    <th>第 {v + 1} 張的外參</th>
-                    <th>rvec（角度表示）</th>
+                    <th>
+                      {t(
+                        <>第 {v + 1} 張的外參</>,
+                        <>Extrinsics of image {v + 1}</>,
+                      )}
+                    </th>
+                    <th>{t("rvec（角度表示）", "rvec (in degrees)")}</th>
                     <th>tvec (mm)</th>
                     <th>
-                      <M>{"C = -R^\\top t"}</M>（相機在板座標）
+                      {t(
+                        <>
+                          <M>{"C = -R^\\top t"}</M>（相機在板座標）
+                        </>,
+                        <>
+                          <M>{"C = -R^\\top t"}</M> (camera in board frame)
+                        </>,
+                      )}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  <PoseReadout label="真值" pose={lab.truePoses[v]} />
+                  <PoseReadout
+                    label={t("真值", "Ground truth")}
+                    pose={lab.truePoses[v]}
+                  />
                   {lab.camera.ok && (
-                    <PoseReadout label="估計" pose={lab.camera.poses[v]} />
+                    <PoseReadout
+                      label={t("估計", "Estimated")}
+                      pose={lab.camera.poses[v]}
+                    />
                   )}
                 </tbody>
               </table>
@@ -585,17 +642,29 @@ export function CalibrationLabView() {
             <CalibScene
               frame="camera"
               objects={cameraObjects}
-              label="Camera 座標：虛線 = 真實板子姿態，綠 = 估計（黃 = 選取）"
+              label={t(
+                "Camera 座標：虛線 = 真實板子姿態，綠 = 估計（黃 = 選取）",
+                "Camera frame: dashed = true board poses, green = estimated (yellow = selected)",
+              )}
             />
           </div>
 
           <h4>
-            B. Projector：<code>calibrateCamera</code> +{" "}
-            <code>cv.stereoCalibrate</code>
+            {t(
+              <>
+                B. Projector：<code>calibrateCamera</code> +{" "}
+                <code>cv.stereoCalibrate</code>
+              </>,
+              <>
+                B. Projector: <code>calibrateCamera</code> +{" "}
+                <code>cv.stereoCalibrate</code>
+              </>,
+            )}
           </h4>
           {!lab.projector.ok ? (
             <p className="calib-error">
-              Projector 校正失敗：{lab.projector.reason}
+              {t("Projector 校正失敗：", "Projector calibration failed: ")}
+              {lab.projector.reason}
             </p>
           ) : (
             <IntrinsicsTable
@@ -615,23 +684,31 @@ export function CalibrationLabView() {
                   <b>{fmt(lab.stereo.rms, 3)} px</b>
                 </div>
                 <div>
-                  <span>R 誤差</span>
+                  <span>{t("R 誤差", "R error")}</span>
                   <b>
                     {fmt(rotationAngleDeg(lab.stereo.R, TRUE_STEREO.R), 3)}°
                   </b>
                 </div>
                 <div>
-                  <span>T 誤差</span>
+                  <span>{t("T 誤差", "T error")}</span>
                   <b>{fmt(norm3(sub3(lab.stereo.T, TRUE_STEREO.t)), 2)} mm</b>
                 </div>
                 <div>
                   <span>
-                    Baseline |T|（真值 {fmt(norm3(TRUE_STEREO.t), 1)}）
+                    {t(
+                      <>Baseline |T|（真值 {fmt(norm3(TRUE_STEREO.t), 1)}）</>,
+                      <>
+                        Baseline |T| (ground truth{" "}
+                        {fmt(norm3(TRUE_STEREO.t), 1)})
+                      </>,
+                    )}
                   </span>
                   <b>{fmt(norm3(lab.stereo.T), 1)} mm</b>
                 </div>
                 <div>
-                  <span>各張單獨估的 R,T 分散</span>
+                  <span>
+                    {t("各張單獨估的 R,T 分散", "Spread of per-image R,T")}
+                  </span>
                   <b>
                     {fmt(lab.stereo.spreadDeg, 2)}° /{" "}
                     {fmt(lab.stereo.spreadMm, 2)} mm
@@ -639,16 +716,35 @@ export function CalibrationLabView() {
                 </div>
               </div>
               <p className="calib-note">
-                <M>{"T"}</M> 真值 = [
-                {TRUE_STEREO.t.map((x) => fmt(x, 1)).join(", ")}
-                ]，估計 = [{lab.stereo.T.map((x) => fmt(x, 1)).join(", ")}]。
-                <M>{"T"}</M> 是「Camera 座標的點換到 Projector
-                座標」的平移，不是 Projector 的位置；位置是{" "}
-                <M>{"-R^\\top T"}</M> = [
-                {poseCenter({ R: lab.stereo.R, t: lab.stereo.T })
-                  .map((x) => fmt(x, 1))
-                  .join(", ")}
-                ]。
+                {t(
+                  <>
+                    <M>{"T"}</M> 真值 = [
+                    {TRUE_STEREO.t.map((x) => fmt(x, 1)).join(", ")}
+                    ]，估計 = [{lab.stereo.T.map((x) => fmt(x, 1)).join(", ")}
+                    ]。
+                    <M>{"T"}</M> 是「Camera 座標的點換到 Projector
+                    座標」的平移，不是 Projector 的位置；位置是{" "}
+                    <M>{"-R^\\top T"}</M> = [
+                    {poseCenter({ R: lab.stereo.R, t: lab.stereo.T })
+                      .map((x) => fmt(x, 1))
+                      .join(", ")}
+                    ]。
+                  </>,
+                  <>
+                    <M>{"T"}</M> ground truth = [
+                    {TRUE_STEREO.t.map((x) => fmt(x, 1)).join(", ")}
+                    ], estimated = [
+                    {lab.stereo.T.map((x) => fmt(x, 1)).join(", ")}].{" "}
+                    <M>{"T"}</M> is the translation that takes a point from
+                    Camera coordinates to Projector coordinates; it is not the
+                    Projector&apos;s position. The position is{" "}
+                    <M>{"-R^\\top T"}</M> = [
+                    {poseCenter({ R: lab.stereo.R, t: lab.stereo.T })
+                      .map((x) => fmt(x, 1))
+                      .join(", ")}
+                    ].
+                  </>,
+                )}
               </p>
             </>
           )}
@@ -656,38 +752,67 @@ export function CalibrationLabView() {
             <div className="calib-two">
               <div>
                 <h5>
-                  用估出的校正掃描球 + 牆（<code>triangulatePoints</code>）
+                  {t(
+                    <>
+                      用估出的校正掃描球 + 牆（<code>triangulatePoints</code>）
+                    </>,
+                    <>
+                      Scanning a sphere + wall with the estimated calibration (
+                      <code>triangulatePoints</code>)
+                    </>,
+                  )}
                 </h5>
                 <div className="calib-metrics">
                   <div>
-                    <span>RMSE（估計校正）</span>
+                    <span>
+                      {t("RMSE（估計校正）", "RMSE (estimated calibration)")}
+                    </span>
                     <b className={lab.scan.rmsEstimated > 1 ? "bad" : ""}>
                       {fmt(lab.scan.rmsEstimated, 3)} mm
                     </b>
                   </div>
                   <div>
-                    <span>RMSE（完美校正，只剩對應雜訊）</span>
+                    <span>
+                      {t(
+                        "RMSE（完美校正，只剩對應雜訊）",
+                        "RMSE (perfect calibration, correspondence noise only)",
+                      )}
+                    </span>
                     <b>{fmt(lab.scan.rmsIdeal, 3)} mm</b>
                   </div>
                   <div>
-                    <span>點雲尺度 / 真值</span>
+                    <span>
+                      {t("點雲尺度 / 真值", "Point-cloud scale / ground truth")}
+                    </span>
                     <b>{fmt(lab.scan.scale, 4)}</b>
                   </div>
                   <div>
-                    <span>點數</span>
+                    <span>{t("點數", "Points")}</span>
                     <b>{lab.scan.truth.length}</b>
                   </div>
                 </div>
                 <p className="calib-note">
-                  兩個 RMSE 用同一組帶雜訊的 Projector
-                  座標；差距完全來自校正誤差。點的顏色：綠 0 mm → 黃 1 mm → 紅 ≥
-                  2 mm。
+                  {t(
+                    <>
+                      兩個 RMSE 用同一組帶雜訊的 Projector
+                      座標；差距完全來自校正誤差。點的顏色：綠 0 mm → 黃 1 mm →
+                      紅 ≥ 2 mm。
+                    </>,
+                    <>
+                      Both RMSEs use the same noisy Projector coordinates, so
+                      the gap comes entirely from calibration error. Point
+                      colors: green 0 mm → yellow 1 mm → red ≥ 2 mm.
+                    </>,
+                  )}
                 </p>
               </div>
               <CalibScene
                 frame="camera"
                 objects={scanObjects}
-                label="綠 = Camera；紫 = 估計的 Projector；虛線 = 真實 Projector；點雲依 3D 誤差著色"
+                label={t(
+                  "綠 = Camera；紫 = 估計的 Projector；虛線 = 真實 Projector；點雲依 3D 誤差著色",
+                  "Green = Camera; purple = estimated Projector; dashed = true Projector; points colored by 3D error",
+                )}
               />
             </div>
           )}
@@ -695,32 +820,90 @@ export function CalibrationLabView() {
       )}
       <Tasks>
         <li>
-          把「角點偵測雜訊」與「Projector 對應雜訊」都調到
-          0：所有參數回到真值，RMS ≈ 0。這是在驗證演算法本身沒有問題。
+          {t(
+            <>
+              把「角點偵測雜訊」與「Projector 對應雜訊」都調到
+              0：所有參數回到真值，RMS ≈ 0。這是在驗證演算法本身沒有問題。
+            </>,
+            <>
+              Set both “Corner detection noise” and “Projector correspondence
+              noise” to 0: every parameter returns to the ground truth and RMS ≈
+              0. This checks that the algorithm itself is correct.
+            </>,
+          )}
         </li>
         <li>
-          把「最大傾角」調到 0°：Zhang 初始化失敗。再調到 5°：RMS
-          看起來仍然很小，但點雲誤差暴增。<b>RMS 小不代表校正正確</b>
-          ，只代表模型「解釋得了」這些角點。
+          {t(
+            <>
+              把「最大傾角」調到 0°：Zhang 初始化失敗。再調到 5°：RMS
+              看起來仍然很小，但點雲誤差暴增。<b>RMS 小不代表校正正確</b>
+              ，只代表模型「解釋得了」這些角點。
+            </>,
+            <>
+              Set “Max tilt” to 0°: Zhang initialization fails. Now try 5°: RMS
+              still looks small, but the point-cloud error shoots up.{" "}
+              <b>A small RMS doesn&apos;t mean the calibration is correct</b>;
+              it only means the model can “explain” these corners.
+            </>,
+          )}
         </li>
         <li>
-          取消「估計畸變」：RMS
-          變大，左圖的誤差線呈放射狀（越靠外越長）——這就是沒被模型吸收的 radial
-          distortion。
+          {t(
+            <>
+              取消「估計畸變」：RMS
+              變大，左圖的誤差線呈放射狀（越靠外越長）——這就是沒被模型吸收的
+              radial distortion。
+            </>,
+            <>
+              Uncheck “Estimate distortion”: RMS grows, and the error lines in
+              the left plot point radially (longer toward the edges). That is
+              the radial distortion the model no longer absorbs.
+            </>,
+          )}
         </li>
         <li>
-          把格子大小填成 22 mm（真值 20）：K 與 RMS 幾乎不變，但 tvec
-          和點雲尺度都放大 10%。<b>格子大小決定單位</b>，錯了也不會在 RMS
-          上露出馬腳。
+          {t(
+            <>
+              把格子大小填成 22 mm（真值 20）：K 與 RMS 幾乎不變，但 tvec
+              和點雲尺度都放大 10%。<b>格子大小決定單位</b>，錯了也不會在 RMS
+              上露出馬腳。
+            </>,
+            <>
+              Enter a square size of 22 mm (true value 20): K and RMS barely
+              change, but tvec and the point-cloud scale both grow by 10%.{" "}
+              <b>The square size sets the units</b>, and a wrong value never
+              shows up in the RMS.
+            </>,
+          )}
         </li>
         <li>
-          張數從 3 調到 20：看 fx、cx、點雲 RMSE
-          怎麼收斂；同時注意「各張單獨估的 R,T
-          分散」——這就是為什麼要用很多張做聯合最佳化。
+          {t(
+            <>
+              張數從 3 調到 20：看 fx、cx、點雲 RMSE
+              怎麼收斂；同時注意「各張單獨估的 R,T
+              分散」——這就是為什麼要用很多張做聯合最佳化。
+            </>,
+            <>
+              Raise the image count from 3 to 20: watch fx, cx and the
+              point-cloud RMSE converge, and keep an eye on “Spread of per-image
+              R,T”. That&apos;s why you use many images in a joint optimization.
+            </>,
+          )}
         </li>
         <li>
-          拉高 Projector 對應雜訊（相位雜訊）：Projector 的 K 與 R,T
-          都變差。Projector 只能靠相位「看」，所以相位品質直接決定它的校正品質。
+          {t(
+            <>
+              拉高 Projector 對應雜訊（相位雜訊）：Projector 的 K 與 R,T
+              都變差。Projector
+              只能靠相位「看」，所以相位品質直接決定它的校正品質。
+            </>,
+            <>
+              Raise the Projector correspondence noise (phase noise): the
+              Projector&apos;s K and R,T both get worse. The Projector can only
+              “see” through phase, so phase quality directly sets its
+              calibration quality.
+            </>,
+          )}
         </li>
       </Tasks>
     </div>
@@ -728,9 +911,15 @@ export function CalibrationLabView() {
 }
 
 const METHOD_LABEL: Record<RegistrationMethod, string> = {
-  none: "不統合（直接用各自的 Camera 座標）",
-  board: "校正板 + solvePnP",
-  markers: "參考球 + 剛體對齊（Kabsch）",
+  none: t(
+    "不統合（直接用各自的 Camera 座標）",
+    "No registration (each uses its own Camera frame)",
+  ),
+  board: t("校正板 + solvePnP", "Calibration board + solvePnP"),
+  markers: t(
+    "參考球 + 剛體對齊（Kabsch）",
+    "Reference spheres + rigid alignment (Kabsch)",
+  ),
 };
 
 export function RegistrationLabView() {
@@ -834,7 +1023,7 @@ export function RegistrationLabView() {
     <div className={`calib-lab ${stale ? "is-stale" : ""}`}>
       <div className="calib-controls">
         <fieldset className="calib-radio">
-          <legend>統合方法</legend>
+          <legend>{t("統合方法", "Registration method")}</legend>
           {(Object.keys(METHOD_LABEL) as RegistrationMethod[]).map((m) => (
             <label key={m}>
               <input
@@ -848,7 +1037,7 @@ export function RegistrationLabView() {
           ))}
         </fieldset>
         <Slider
-          label="校正板角點雜訊 σ"
+          label={t("校正板角點雜訊 σ", "Calibration board corner noise σ")}
           value={config.cornerNoise}
           min={0}
           max={1}
@@ -857,7 +1046,7 @@ export function RegistrationLabView() {
           onChange={(x) => set({ cornerNoise: x })}
         />
         <Slider
-          label="參考球中心雜訊 σ"
+          label={t("參考球中心雜訊 σ", "Reference sphere center noise σ")}
           value={config.markerNoise}
           min={0}
           max={0.5}
@@ -866,7 +1055,10 @@ export function RegistrationLabView() {
           onChange={(x) => set({ markerNoise: x })}
         />
         <Slider
-          label="在 B 的外參額外加旋轉誤差"
+          label={t(
+            "在 B 的外參額外加旋轉誤差",
+            "Extra rotation error on B's extrinsics",
+          )}
           value={config.rotationErrorB}
           min={0}
           max={2}
@@ -875,7 +1067,7 @@ export function RegistrationLabView() {
           onChange={(x) => set({ rotationErrorB: x })}
         />
         <Slider
-          label="Projector 對應雜訊 σ"
+          label={t("Projector 對應雜訊 σ", "Projector correspondence noise σ")}
           value={config.projectorNoise}
           min={0}
           max={1}
@@ -895,27 +1087,42 @@ export function RegistrationLabView() {
           className="calib-reset"
           onClick={() => setConfig(DEFAULT_REGISTRATION)}
         >
-          回到預設
+          {t("回到預設", "Reset to defaults")}
         </button>
         <p className="calib-note">
-          兩台 Scanner 的內參與 Camera–Projector
-          外參都當作已校正好（完美），這裡只看「裝置 →
-          世界」這一段。世界座標：原點 = 校正板第一個角點，Z 朝上，平台面 Z =
-          0。
+          {t(
+            <>
+              兩台 Scanner 的內參與 Camera–Projector
+              外參都當作已校正好（完美），這裡只看「裝置 →
+              世界」這一段。世界座標：原點 = 校正板第一個角點，Z 朝上，平台面 Z
+              = 0。
+            </>,
+            <>
+              Both Scanners&apos; intrinsics and Camera–Projector extrinsics are
+              treated as already (perfectly) calibrated; here you only look at
+              the “device → world” step. World frame: origin = first corner of
+              the calibration board, Z up, stage surface at Z = 0.
+            </>,
+          )}
         </p>
       </div>
       <div className="calib-results">
         <div className="calib-metrics">
           <div>
-            <span>A–B 一致性（不用真值）</span>
+            <span>
+              {t(
+                "A–B 一致性（不用真值）",
+                "A–B consistency (no ground truth needed)",
+              )}
+            </span>
             <b className={lab.consistency.rms > 0.5 ? "bad" : ""}>
               {Number.isFinite(lab.consistency.rms)
                 ? `${fmt(lab.consistency.rms, 3)} mm`
-                : "不適用：不在同一座標"}
+                : t("不適用：不在同一座標", "N/A: not in the same frame")}
             </b>
           </div>
           <div>
-            <span>重疊區比較點數</span>
+            <span>{t("重疊區比較點數", "Points compared in overlap")}</span>
             <b>{lab.consistency.points}</b>
           </div>
         </div>
@@ -923,10 +1130,12 @@ export function RegistrationLabView() {
           <thead>
             <tr>
               <th>Scanner</th>
-              <th>點數</th>
-              <th>姿態誤差（角度 / 位置）</th>
-              <th>平台高度（應為 0）</th>
-              <th>對真值 RMSE</th>
+              <th>{t("點數", "Points")}</th>
+              <th>
+                {t("姿態誤差（角度 / 位置）", "Pose error (angle / position)")}
+              </th>
+              <th>{t("平台高度（應為 0）", "Stage height (should be 0)")}</th>
+              <th>{t("對真值 RMSE", "RMSE vs. ground truth")}</th>
             </tr>
           </thead>
           <tbody>
@@ -950,28 +1159,77 @@ export function RegistrationLabView() {
         <CalibScene
           frame="world"
           objects={objects}
-          label="世界座標：藍 = A，橙 = B；虛線 = 真實相機位置；黃框 = 校正板；紅綠藍 = X Y Z 軸"
+          label={t(
+            "世界座標：藍 = A，橙 = B；虛線 = 真實相機位置；黃框 = 校正板；紅綠藍 = X Y Z 軸",
+            "World frame: blue = A, orange = B; dashed = true camera positions; yellow box = calibration board; red/green/blue = X/Y/Z axes",
+          )}
         />
       </div>
       <Tasks>
         <li>
-          選「不統合」：兩團點雲都畫在各自的 Camera
-          座標裡，彼此毫無關係，平台高度約 400 mm（= 相機到平台的距離）。
+          {t(
+            <>
+              選「不統合」：兩團點雲都畫在各自的 Camera
+              座標裡，彼此毫無關係，平台高度約 400 mm（= 相機到平台的距離）。
+            </>,
+            <>
+              Choose “No registration”: each point cloud is drawn in its own
+              Camera frame, unrelated to the other, and the stage height is
+              about 400 mm (= the camera-to-stage distance).
+            </>,
+          )}
         </li>
         <li>
-          切回「校正板 + solvePnP」：兩團點雲接在一起，平台高度回到 ≈
-          0。一張校正板同時解決了「對齊」和「高度零點」。
+          {t(
+            <>
+              切回「校正板 + solvePnP」：兩團點雲接在一起，平台高度回到 ≈
+              0。一張校正板同時解決了「對齊」和「高度零點」。
+            </>,
+            <>
+              Switch back to “Calibration board + solvePnP”: the two point
+              clouds join up and the stage height returns to ≈ 0. A single
+              calibration board handles both “alignment” and “height zero”.
+            </>,
+          )}
         </li>
         <li>
-          把 B 的旋轉誤差調到 0.2°、0.5°、1°：一致性 RMS 和 B
-          的平台高度一起變差。相機離物體約 400 mm，0.5° ≈ 3.5 mm 的位移。
+          {t(
+            <>
+              把 B 的旋轉誤差調到 0.2°、0.5°、1°：一致性 RMS 和 B
+              的平台高度一起變差。相機離物體約 400 mm，0.5° ≈ 3.5 mm 的位移。
+            </>,
+            <>
+              Set B&apos;s rotation error to 0.2°, 0.5°, 1°: the consistency RMS
+              and B&apos;s stage height get worse together. The camera is about
+              400 mm from the object, so 0.5° ≈ 3.5 mm of displacement.
+            </>,
+          )}
         </li>
         <li>
-          注意「一致性」不需要真值：實機上沒有真值時，就靠兩台在重疊區是否一致來發現問題。
+          {t(
+            <>
+              注意「一致性」不需要真值：實機上沒有真值時，就靠兩台在重疊區是否一致來發現問題。
+            </>,
+            <>
+              Note that “consistency” needs no ground truth: on real hardware,
+              where there is none, you catch problems by checking whether the
+              two scanners agree in the overlap.
+            </>,
+          )}
         </li>
         <li>
-          換成「參考球 + Kabsch」並拉高球心雜訊：至少要 3
-          顆不共線的球；球少或靠得太近時，雜訊會被放大成旋轉誤差。
+          {t(
+            <>
+              換成「參考球 + Kabsch」並拉高球心雜訊：至少要 3
+              顆不共線的球；球少或靠得太近時，雜訊會被放大成旋轉誤差。
+            </>,
+            <>
+              Switch to “Reference spheres + Kabsch” and raise the sphere center
+              noise: you need at least 3 non-collinear spheres; with too few
+              spheres, or spheres too close together, noise is amplified into
+              rotation error.
+            </>,
+          )}
         </li>
       </Tasks>
     </div>

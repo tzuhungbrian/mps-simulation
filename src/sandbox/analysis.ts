@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import type { WorldScan } from "./scanner";
 import { SURFACE_NAMES, type PcbPin } from "./pcb";
 
@@ -13,11 +14,11 @@ export interface ErrorStats {
 }
 
 export const FAILURE_CAUSES = [
-  ["background", "背景（沒有表面）"],
-  ["unlit", "Projector 未直接照明"],
-  ["clipped", "亮度飽和 clipping"],
-  ["lowModulation", "條紋調變過低"],
-  ["geometry", "三角量測無效"],
+  ["background", t("背景（沒有表面）", "Background (no surface)")],
+  ["unlit", t("Projector 未直接照明", "Not lit directly by the projector")],
+  ["clipped", t("亮度飽和 clipping", "Saturated (clipping)")],
+  ["lowModulation", t("條紋調變過低", "Fringe modulation too low")],
+  ["geometry", t("三角量測無效", "Triangulation failed")],
 ] as const;
 export type FailureCause = (typeof FAILURE_CAUSES)[number][0];
 

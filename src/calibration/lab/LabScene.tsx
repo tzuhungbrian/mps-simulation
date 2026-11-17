@@ -14,6 +14,7 @@ import {
   placementPose,
   type BoardPlacement,
 } from "./rig";
+import { t } from "../../i18n";
 
 const S = 0.01;
 /** OpenCV camera frame (x right, y down, z forward) → three.js display (y up). */
@@ -194,7 +195,10 @@ export default function LabScene({
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true });
     } catch {
-      el.textContent = "此瀏覽器無法使用 WebGL：仍可用右側滑桿擺放板子。";
+      el.textContent = t(
+        "此瀏覽器無法使用 WebGL：仍可用右側滑桿擺放板子。",
+        "WebGL is not available in this browser: you can still place the board with the sliders on the right.",
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
@@ -332,7 +336,7 @@ export default function LabScene({
     <div className="lab-scene">
       <div ref={host} className="lab-scene-canvas" />
       <button className="lab-scene-home" onClick={() => api.current?.home()}>
-        重設視角
+        {t("重設視角", "Reset view")}
       </button>
     </div>
   );

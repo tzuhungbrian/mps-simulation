@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { t } from "../i18n";
 
 /** Label + typed value + range on one compact row. */
 export function Field({
@@ -34,7 +35,7 @@ export function Field({
       <span className="sandbox-field-value">
         <input
           type="number"
-          aria-label={`${label} 數值`}
+          aria-label={t(`${label} 數值`, `${label} value`)}
           data-testid={testId}
           min={min}
           max={max}

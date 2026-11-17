@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { rasterize } from "../lib/images";
+import { t } from "../i18n";
 
 export default function PatternScene({
   frame,
@@ -21,14 +22,22 @@ export default function PatternScene({
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     } catch {
-      setError("此裝置無法建立 WebGL context；數學解算與 2D 影像仍可使用。");
+      setError(
+        t(
+          "此裝置無法建立 WebGL context；數學解算與 2D 影像仍可使用。",
+          "This device can't create a WebGL context; the math solver and 2D images still work.",
+        ),
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
     renderer.domElement.setAttribute(
       "aria-label",
-      "可旋轉的平面條紋 WebGL 示意，非 3D 量測",
+      t(
+        "可旋轉的平面條紋 WebGL 示意，非 3D 量測",
+        "Rotatable WebGL illustration of flat fringes, not a 3D measurement",
+      ),
     );
     renderer.domElement.dataset.testid = "webgl-canvas";
     parent.append(renderer.domElement);
@@ -121,8 +130,15 @@ export default function PatternScene({
           {error}
         </p>
       )}
-      <span className="scene-badge">Three.js / WebGL · 拖曳旋轉</span>
-      <span className="scene-note">僅平面紋理示意，不參與 phase 解算</span>
+      <span className="scene-badge">
+        {t("Three.js / WebGL · 拖曳旋轉", "Three.js / WebGL · Drag to rotate")}
+      </span>
+      <span className="scene-note">
+        {t(
+          "僅平面紋理示意，不參與 phase 解算",
+          "Flat texture illustration only; not used in the phase solve",
+        )}
+      </span>
     </div>
   );
 }

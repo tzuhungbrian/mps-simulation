@@ -1,4 +1,5 @@
 import type { runSimulation, SimulationConfig } from "../core/simulation";
+import { t } from "../i18n";
 
 /** Display-only RGB mapping. Numerical estimates always remain Float64 radians. */
 export function phaseRgb(phase: number): [number, number, number] {
@@ -20,7 +21,7 @@ export function rasterize(
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D 不可用");
+  if (!ctx) throw new Error(t("Canvas 2D 不可用", "Canvas 2D is unavailable"));
   const image = ctx.createImageData(width, height);
   for (let i = 0; i < width * height; i++) {
     const value = values[i];
@@ -57,7 +58,7 @@ export async function exportPng(
   c.width = 1600;
   c.height = 1120;
   const ctx = c.getContext("2d");
-  if (!ctx) throw new Error("Canvas 2D 不可用");
+  if (!ctx) throw new Error(t("Canvas 2D 不可用", "Canvas 2D is unavailable"));
   ctx.fillStyle = "#0c1017";
   ctx.fillRect(0, 0, c.width, c.height);
   const text = (
@@ -182,7 +183,10 @@ export async function exportPng(
   );
   const blob = await new Promise<Blob>((resolve, reject) =>
     c.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("PNG 編碼失敗"))),
+      (b) =>
+        b
+          ? resolve(b)
+          : reject(new Error(t("PNG 編碼失敗", "PNG encoding failed"))),
       "image/png",
     ),
   );

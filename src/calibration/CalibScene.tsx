@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { invertPose, applyPose, type Intrinsics, type Pose } from "./camera";
 import type { Vec3 } from "./linalg";
+import { t } from "../i18n";
 
 export type SceneObject =
   | {
@@ -133,8 +134,10 @@ export default function CalibScene({
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true });
     } catch {
-      el.textContent =
-        "此瀏覽器無法使用 WebGL，3D 圖無法顯示；數值結果不受影響。";
+      el.textContent = t(
+        "此瀏覽器無法使用 WebGL，3D 圖無法顯示；數值結果不受影響。",
+        "WebGL isn't available in this browser, so the 3D view can't be shown. The numeric results are unaffected.",
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
@@ -217,8 +220,15 @@ export default function CalibScene({
       />
       <figcaption>
         <span>{label}</span>
-        <span className="calib-scene-help">左鍵旋轉 · 右鍵平移 · 滾輪縮放</span>
-        <button onClick={() => api.current?.home()}>重設視角</button>
+        <span className="calib-scene-help">
+          {t(
+            "左鍵旋轉 · 右鍵平移 · 滾輪縮放",
+            "Left-drag to rotate · Right-drag to pan · Scroll to zoom",
+          )}
+        </span>
+        <button onClick={() => api.current?.home()}>
+          {t("重設視角", "Reset view")}
+        </button>
       </figcaption>
     </figure>
   );

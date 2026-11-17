@@ -45,6 +45,7 @@ import PathNav from "./path/PathNav";
 import { pathProgress } from "./path/progress";
 import { parseRoute, rememberRoute, routeUrl } from "./path/route";
 import type { Route } from "./path/stations";
+import { t } from "./i18n";
 const PatternScene = lazy(() => import("./components/PatternScene"));
 const Sandbox = lazy(() => import("./sandbox/Sandbox"));
 const StationPage = lazy(() => import("./path/StationPage"));
@@ -106,10 +107,13 @@ function Raster({
         data-testid={testId}
         aria-label={
           kind === "phase"
-            ? "Wrapped Phase 彩色圖，暗色為無效像素"
+            ? t(
+                "Wrapped Phase 彩色圖，暗色為無效像素",
+                "Wrapped phase color map; dark pixels are invalid",
+              )
             : kind === "valid"
-              ? "有效像素遮罩"
-              : "合成條紋量測影像"
+              ? t("有效像素遮罩", "Valid pixel mask")
+              : t("合成條紋量測影像", "Synthetic fringe measurement image")
         }
       />
       {probe && (
@@ -221,12 +225,20 @@ function initialState(): { config: SimulationConfig; message: string } {
     const saved = loadParameters(localStorage);
     return {
       config: saved ?? { ...DEFAULT_CONFIG },
-      message: saved ? "已還原此瀏覽器保存的參數。" : "",
+      message: saved
+        ? t(
+            "已還原此瀏覽器保存的參數。",
+            "Restored the parameters saved in this browser.",
+          )
+        : "",
     };
   } catch {
     return {
       config: { ...DEFAULT_CONFIG },
-      message: "無法讀取保存的參數，已使用預設值；原資料未覆寫。",
+      message: t(
+        "無法讀取保存的參數，已使用預設值；原資料未覆寫。",
+        "Couldn't read the saved parameters, so defaults are in use; the original data was not overwritten.",
+      ),
     };
   }
 }
@@ -332,9 +344,19 @@ export default function App() {
       if (JSON.stringify(readback) !== JSON.stringify(config))
         throw new Error("readback mismatch");
       setDirty(false);
-      notify("已保存參數至此瀏覽器。跨裝置請使用 JSON 匯出。");
+      notify(
+        t(
+          "已保存參數至此瀏覽器。跨裝置請使用 JSON 匯出。",
+          "Parameters saved to this browser. To move them to another device, use JSON export.",
+        ),
+      );
     } catch {
-      setImportError("保存失敗：瀏覽器儲存空間不可用。可改用 JSON 匯出。");
+      setImportError(
+        t(
+          "保存失敗：瀏覽器儲存空間不可用。可改用 JSON 匯出。",
+          "Save failed: browser storage is unavailable. Try JSON export instead.",
+        ),
+      );
     }
   };
   const exportJson = () => {
@@ -342,7 +364,9 @@ export default function App() {
       new Blob([serializeParameters(config)], { type: "application/json" }),
       "structured-light-parameters.json",
     );
-    notify("已匯出可重現的 JSON 參數。");
+    notify(
+      t("已匯出可重現的 JSON 參數。", "Exported reproducible JSON parameters."),
+    );
   };
   const exportCsv = () => {
     downloadBlob(
@@ -352,7 +376,10 @@ export default function App() {
       "structured-light-data.csv",
     );
     notify(
-      `已匯出全部 ${config.width * config.height} 個像素的 CSV；相位單位為 rad。`,
+      t(
+        `已匯出全部 ${config.width * config.height} 個像素的 CSV；相位單位為 rad。`,
+        `Exported a CSV of all ${config.width * config.height} pixels; phase is in rad.`,
+      ),
     );
   };
   const reset = () => {
@@ -360,12 +387,23 @@ export default function App() {
     setDirty(true);
     setProbeFraction(0.37);
     setProbeRowFraction(0.5);
-    notify("已重設目前實驗；不會覆寫已保存的參數。");
+    notify(
+      t(
+        "已重設目前實驗；不會覆寫已保存的參數。",
+        "Reset the current experiment; your saved parameters are not overwritten.",
+      ),
+    );
   };
   if (route.kind === "home") return <PathHome onGo={go} />;
   if (route.kind === "station")
     return (
-      <Suspense fallback={<div className="scene-loading">正在載入站點…</div>}>
+      <Suspense
+        fallback={
+          <div className="scene-loading">
+            {t("正在載入站點…", "Loading station…")}
+          </div>
+        }
+      >
         <StationPage n={route.n} part={route.part} onGo={go} />
       </Suspense>
     );
@@ -382,7 +420,11 @@ export default function App() {
   )
     return (
       <Suspense
-        fallback={<div className="scene-loading">正在建立 3D 沙盒…</div>}
+        fallback={
+          <div className="scene-loading">
+            {t("正在建立 3D 沙盒…", "Building the 3D sandbox…")}
+          </div>
+        }
       >
         <Sandbox
           key={sandboxView}
@@ -394,7 +436,11 @@ export default function App() {
   if (tab === "lab" && tool?.tool === "calib-lab")
     return (
       <Suspense
-        fallback={<div className="scene-loading">正在載入 3D 實驗室…</div>}
+        fallback={
+          <div className="scene-loading">
+            {t("正在載入 3D 實驗室…", "Loading the 3D lab…")}
+          </div>
+        }
       >
         <CalibrationLab
           nav={nav}
@@ -453,38 +499,48 @@ export default function App() {
           </span>
         </a>
         <div className="sidebar-label">LEARNING WORKSPACE</div>
-        <nav className="main-nav" aria-label="主導覽">
+        <nav className="main-nav" aria-label={t("主導覽", "Main navigation")}>
           <button
             className={tab === "lab" ? "active" : ""}
             onClick={() => setTab("lab")}
           >
             <FlaskConical size={18} />
-            互動實驗<span className="nav-shortcut">01</span>
+            {t("互動實驗", "Interactive lab")}
+            <span className="nav-shortcut">01</span>
           </button>
           <button
             className={tab === "notes" ? "active" : ""}
             onClick={() => setTab("notes")}
           >
             <BookOpen size={18} />
-            原理筆記
+            {t("原理筆記", "Notes")}
           </button>
           <button
             className={tab === "limits" ? "active" : ""}
             onClick={() => setTab("limits")}
           >
             <ShieldCheck size={18} />
-            實作邊界
+            {t("實作邊界", "Scope and limits")}
           </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="model-badge">
             <span className="live-dot" />
-            MVP 1 <span>數學實驗</span>
+            MVP 1 <span>{t("數學實驗", "Math lab")}</span>
           </div>
           <p>
-            先理解 phase，
-            <br />
-            再走進三維空間。
+            {t(
+              <>
+                先理解 phase，
+                <br />
+                再走進三維空間。
+              </>,
+              <>
+                Understand phase first,
+                <br />
+                then step into 3D.
+              </>,
+            )}
           </p>
           <div className="sidebar-version">
             <Code2 size={13} />
@@ -495,12 +551,14 @@ export default function App() {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumbs">
-            工作台
+            {t("工作台", "Workbench")}
             <ChevronRight size={13} />
-            <span>1D 自由實驗</span>
+            <span>{t("1D 自由實驗", "1D playground")}</span>
           </div>
           <div className="top-meta">
-            <span className="local-label">本機運算 · 無資料上傳</span>
+            <span className="local-label">
+              {t("本機運算 · 無資料上傳", "Runs locally · No data uploaded")}
+            </span>
             {nav}
           </div>
         </header>
@@ -514,17 +572,35 @@ export default function App() {
               </div>
               <h1>
                 {tab === "lab"
-                  ? "從三張條紋，讀懂相位。"
+                  ? t(
+                      "從三張條紋，讀懂相位。",
+                      "Read phase from three fringe images.",
+                    )
                   : tab === "notes"
-                    ? "讓每一個符號，都有意義。"
-                    : "知道模型沒有做什麼，同樣重要。"}
+                    ? t(
+                        "讓每一個符號，都有意義。",
+                        "Make every symbol mean something.",
+                      )
+                    : t(
+                        "知道模型沒有做什麼，同樣重要。",
+                        "Knowing what the model doesn't do matters just as much.",
+                      )}
               </h1>
               <p>
                 {tab === "lab"
-                  ? "調整光強、移動探針，觀察 Sinusoidal Fringe 如何成為可量測的 Phase。"
+                  ? t(
+                      "調整光強、移動探針，觀察 Sinusoidal Fringe 如何成為可量測的 Phase。",
+                      "Adjust intensity, move the probe, and watch a sinusoidal fringe become a measurable phase.",
+                    )
                   : tab === "notes"
-                    ? "從 intensity、相移到解包裹，一次理解一個環節。"
-                    : "可驗證的結果，建立在清楚的假設與限制之上。"}
+                    ? t(
+                        "從 intensity、相移到解包裹，一次理解一個環節。",
+                        "From intensity and phase shifting to unwrapping, one link at a time.",
+                      )
+                    : t(
+                        "可驗證的結果，建立在清楚的假設與限制之上。",
+                        "Verifiable results rest on clear assumptions and limits.",
+                      )}
               </p>
             </div>
             <button
@@ -532,10 +608,10 @@ export default function App() {
               onClick={() =>
                 go({ kind: "tool", tool: "guided", station: toolStation ?? 3 })
               }
-              aria-label="一步一步學"
+              aria-label={t("一步一步學", "Step by step")}
             >
               <CircleHelp size={18} />
-              <span>一步一步學</span>
+              <span>{t("一步一步學", "Step by step")}</span>
               <ArrowRight size={14} />
             </button>
           </div>
@@ -550,19 +626,20 @@ export default function App() {
                 <div className="toolbar-actions">
                   <button onClick={save}>
                     <Save size={14} />
-                    保存參數{dirty && <span className="unsaved-dot" />}
+                    {t("保存參數", "Save parameters")}
+                    {dirty && <span className="unsaved-dot" />}
                   </button>
                   <button
                     onClick={() => file.current?.click()}
-                    title="匯入 JSON 參數"
-                    aria-label="匯入參數"
+                    title={t("匯入 JSON 參數", "Import JSON parameters")}
+                    aria-label={t("匯入參數", "Import parameters")}
                   >
                     <Upload size={14} />
                   </button>
                   <button
                     onClick={exportJson}
-                    title="匯出 JSON 參數"
-                    aria-label="匯出 JSON 參數"
+                    title={t("匯出 JSON 參數", "Export JSON parameters")}
+                    aria-label={t("匯出 JSON 參數", "Export JSON parameters")}
                   >
                     <FileJson size={15} />
                   </button>
@@ -570,7 +647,14 @@ export default function App() {
                   <button
                     onClick={() =>
                       void exportPng(config, result, probeX, probeY)
-                        .then(() => notify("已匯出 PNG 實驗快照。"))
+                        .then(() =>
+                          notify(
+                            t(
+                              "已匯出 PNG 實驗快照。",
+                              "Exported a PNG snapshot.",
+                            ),
+                          ),
+                        )
                         .catch((e) => setImportError(String(e)))
                     }
                   >
@@ -588,23 +672,26 @@ export default function App() {
                   <section className="card captures-card">
                     <SectionTitle
                       number="01"
-                      title="投影與取樣"
+                      title={t("投影與取樣", "Projection and sampling")}
                       english="FRINGE PATTERNS"
                     >
-                      <div className="segmented" aria-label="影像檢視">
+                      <div
+                        className="segmented"
+                        aria-label={t("影像檢視", "Image view")}
+                      >
                         <button
                           className={view === "captures" ? "selected" : ""}
                           onClick={() => setView("captures")}
                         >
                           <ScanLine size={13} />
-                          2D 量測
+                          {t("2D 量測", "2D capture")}
                         </button>
                         <button
                           className={view === "scene" ? "selected" : ""}
                           onClick={() => setView("scene")}
                         >
                           <Box size={13} />
-                          WebGL 示意
+                          {t("WebGL 示意", "WebGL view")}
                         </button>
                       </div>
                     </SectionTitle>
@@ -644,7 +731,9 @@ export default function App() {
                     ) : (
                       <Suspense
                         fallback={
-                          <div className="scene-loading">載入 Three.js…</div>
+                          <div className="scene-loading">
+                            {t("載入 Three.js…", "Loading Three.js…")}
+                          </div>
                         }
                       >
                         <PatternScene
@@ -657,8 +746,16 @@ export default function App() {
                     <div className="card-footnote">
                       <Info size={13} />
                       <span>
-                        理想化、逐點線性 intensity 合成；不是 Camera–Projector
-                        幾何成像。
+                        {t(
+                          <>
+                            理想化、逐點線性 intensity 合成；不是
+                            Camera–Projector 幾何成像。
+                          </>,
+                          <>
+                            Idealized, per-pixel linear intensity synthesis; not
+                            camera–projector geometric imaging.
+                          </>,
+                        )}
                       </span>
                       <span className="push-right mono">
                         I<sub>k</sub> = A + B cos(φ + δ<sub>k</sub>)
@@ -668,12 +765,15 @@ export default function App() {
                   <section className="card intensity-card">
                     <SectionTitle
                       number="02"
-                      title="一維光強曲線"
+                      title={t("一維光強曲線", "1D intensity curve")}
                       english="INTENSITY PROFILE"
                     >
                       <span className="chart-instruction">
                         <MousePointer2 size={13} />
-                        拖曳曲線以移動探針
+                        {t(
+                          "拖曳曲線以移動探針",
+                          "Drag the curve to move the probe",
+                        )}
                       </span>
                     </SectionTitle>
                     <div className="chart-meta">
@@ -697,13 +797,18 @@ export default function App() {
                       testId="intensity-chart"
                     />
                     <div className="chart-bottom">
-                      <span>Camera / Projector 共用的一維座標（簡化）</span>
+                      <span>
+                        {t(
+                          "Camera / Projector 共用的一維座標（簡化）",
+                          "1D coordinate shared by camera and projector (simplified)",
+                        )}
+                      </span>
                       <span>x / (W − 1)</span>
                     </div>
                     <div className="probe-strip">
                       <div className="probe-position">
                         <Focus size={16} />
-                        <span>像素探針</span>
+                        <span>{t("像素探針", "Pixel probe")}</span>
                         <strong data-testid="probe-value">x = {probeX}</strong>
                         <span className="muted mono">y = {probeY}</span>
                       </div>
@@ -731,14 +836,17 @@ export default function App() {
                   <section className="card phase-card">
                     <SectionTitle
                       number="03"
-                      title="從量測解出相位"
+                      title={t(
+                        "從量測解出相位",
+                        "Recover phase from measurements",
+                      )}
                       english="PHASE RECOVERY"
                     >
                       <button
                         className="text-button"
                         onClick={() => setTab("notes")}
                       >
-                        查看推導
+                        {t("查看推導", "See the derivation")}
                         <ArrowRight size={13} />
                       </button>
                     </SectionTitle>
@@ -779,18 +887,25 @@ export default function App() {
                           probe={[probeX, probeY]}
                         />
                         <div className="phase-colorbar">
-                          <span>{mapView === "phase" ? "−π" : "無效"}</span>
+                          <span>
+                            {mapView === "phase" ? "−π" : t("無效", "Invalid")}
+                          </span>
                           <div
                             className={
                               mapView === "phase" ? "colorbar" : "validbar"
                             }
                           />
-                          <span>{mapView === "phase" ? "+π" : "有效"}</span>
+                          <span>
+                            {mapView === "phase" ? "+π" : t("有效", "Valid")}
+                          </span>
                         </div>
                       </div>
                       <div className="equation-area">
                         <span className="equation-label">
-                          三步解算 · 僅使用 I₁、I₂、I₃
+                          {t(
+                            "三步解算 · 僅使用 I₁、I₂、I₃",
+                            "Three-step solve · uses only I₁, I₂, I₃",
+                          )}
                         </span>
                         <div className="equation">
                           φ̂ = atan2 <span className="equation-paren">(</span>
@@ -801,15 +916,25 @@ export default function App() {
                           <span className="equation-paren">)</span>
                         </div>
                         <p>
-                          此處為 atan2 的兩個輸入，不是單純取商。
-                          <br />
-                          保留象限，得到 <span className="mono">
-                            [−π, π)
-                          </span>{" "}
-                          的 Wrapped Phase。
+                          {t(
+                            <>
+                              此處為 atan2 的兩個輸入，不是單純取商。
+                              <br />
+                              保留象限，得到{" "}
+                              <span className="mono">[−π, π)</span> 的 Wrapped
+                              Phase。
+                            </>,
+                            <>
+                              These are the two inputs of atan2, not a simple
+                              quotient.
+                              <br />
+                              Keeping the quadrant gives a wrapped phase in{" "}
+                              <span className="mono">[−π, π)</span>.
+                            </>,
+                          )}
                         </p>
                         <div className="estimated-value">
-                          <span>目前探針 φ̂</span>
+                          <span>{t("目前探針 φ̂", "Current probe φ̂")}</span>
                           <strong data-testid="estimated-phase">
                             {format(estimatedPhi)}
                             <small>rad</small>
@@ -817,7 +942,10 @@ export default function App() {
                         </div>
                         <div
                           className="probe-radiometry"
-                          aria-label="由 captures 估計的光強參數"
+                          aria-label={t(
+                            "由 captures 估計的光強參數",
+                            "Intensity parameters estimated from the captures",
+                          )}
                         >
                           <span>
                             Â ={" "}
@@ -852,7 +980,7 @@ export default function App() {
                           onChange={(e) => setShowUnwrap(e.target.checked)}
                         />
                         <span className="switch" />
-                        顯示 1D Unwrap
+                        {t("顯示 1D Unwrap", "Show 1D unwrap")}
                       </label>
                     </div>
                     <LineChart
@@ -867,19 +995,38 @@ export default function App() {
                     <div className="card-footnote warning">
                       <Info size={13} />
                       <span>
-                        Spatial Unwrap 僅恢復連續區段的相對
-                        phase；未知整數週期仍存在，不能當作絕對深度。
+                        {t(
+                          <>
+                            Spatial Unwrap 僅恢復連續區段的相對
+                            phase；未知整數週期仍存在，不能當作絕對深度。
+                          </>,
+                          <>
+                            Spatial unwrapping only restores relative phase
+                            within continuous segments; an unknown whole-cycle
+                            offset remains, so it can't serve as absolute depth.
+                          </>,
+                        )}
                       </span>
                     </div>
                   </section>
                   <section className="card temporal-card">
                     <SectionTitle
                       number="04"
-                      title="固定一點，看三次相移"
+                      title={t(
+                        "固定一點，看三次相移",
+                        "Fix one point, watch three shifts",
+                      )}
                       english="TEMPORAL SAMPLING"
                     >
                       <span className="subtle-badge">
-                        探針 x={probeX} · y={probeY}
+                        {t(
+                          <>
+                            探針 x={probeX} · y={probeY}
+                          </>,
+                          <>
+                            Probe x={probeX} · y={probeY}
+                          </>,
+                        )}
                       </span>
                     </SectionTitle>
                     <div className="temporal-layout">
@@ -904,20 +1051,44 @@ export default function App() {
                           }))}
                         />
                         <div className="chart-bottom">
-                          <span>虛線：由三筆量測擬合，不是額外曝光</span>
-                          <span>相移 δ</span>
+                          <span>
+                            {t(
+                              "虛線：由三筆量測擬合，不是額外曝光",
+                              "Dashed: fitted from three measurements, not an extra exposure",
+                            )}
+                          </span>
+                          <span>{t("相移 δ", "Phase shift δ")}</span>
                         </div>
                       </div>
                       <div className="temporal-copy">
                         <Waves size={22} />
                         <h3>
-                          空間位置不動，
-                          <br />
-                          只改變 Projector 的相移。
+                          {t(
+                            <>
+                              空間位置不動，
+                              <br />
+                              只改變 Projector 的相移。
+                            </>,
+                            <>
+                              The position stays put;
+                              <br />
+                              only the projector's phase shift changes.
+                            </>,
+                          )}
                         </h3>
                         <p>
-                          三次 intensity 的差異，告訴我們這個像素落在條紋的哪個
-                          phase，而非它有多亮。
+                          {t(
+                            <>
+                              三次 intensity
+                              的差異，告訴我們這個像素落在條紋的哪個
+                              phase，而非它有多亮。
+                            </>,
+                            <>
+                              The differences among the three intensities tell
+                              you which phase of the fringe this pixel sits on,
+                              not how bright it is.
+                            </>,
+                          )}
                         </p>
                       </div>
                     </div>
@@ -927,11 +1098,11 @@ export default function App() {
                   <section className="card parameters-card">
                     <div className="parameter-title">
                       <Settings2 size={16} />
-                      <h2>實驗參數</h2>
+                      <h2>{t("實驗參數", "Parameters")}</h2>
                       <button
                         onClick={reset}
-                        title="重設預設值"
-                        aria-label="重設預設值"
+                        title={t("重設預設值", "Reset to defaults")}
+                        aria-label={t("重設預設值", "Reset to defaults")}
                       >
                         <RotateCcw size={14} />
                       </button>
@@ -940,7 +1111,7 @@ export default function App() {
                       PROJECTED SIGNAL
                     </div>
                     <Control
-                      label="條紋頻率"
+                      label={t("條紋頻率", "Fringe frequency")}
                       english="Fringe frequency"
                       symbol="f"
                       value={config.frequency}
@@ -950,10 +1121,13 @@ export default function App() {
                       onChange={(v) => update("frequency", v)}
                       formatValue={(v) => v.toFixed(2).replace(/0$/, "")}
                       testId="frequency-value"
-                      hint="橫跨影像的週期數 · cycles / width"
+                      hint={t(
+                        "橫跨影像的週期數 · cycles / width",
+                        "Cycles across the image · cycles / width",
+                      )}
                     />
                     <Control
-                      label="初始相位"
+                      label={t("初始相位", "Phase offset")}
                       english="Phase offset"
                       symbol="φ₀"
                       value={config.phaseOffset}
@@ -964,7 +1138,7 @@ export default function App() {
                       formatValue={(v) => `${v.toFixed(2)} rad`}
                     />
                     <Control
-                      label="平均光強"
+                      label={t("平均光強", "Mean intensity")}
                       english="Mean intensity"
                       symbol="A"
                       value={config.mean}
@@ -974,7 +1148,7 @@ export default function App() {
                       onChange={(v) => update("mean", v)}
                     />
                     <Control
-                      label="調變振幅"
+                      label={t("調變振幅", "Modulation amplitude")}
                       english="Modulation amplitude"
                       symbol="B"
                       value={config.amplitude}
@@ -986,7 +1160,9 @@ export default function App() {
                     <div className="parameter-divider" />
                     <div className="parameter-section-label">
                       SYNTHETIC SENSOR{" "}
-                      <span className="mini-tag">簡化模型</span>
+                      <span className="mini-tag">
+                        {t("簡化模型", "Simplified model")}
+                      </span>
                     </div>
                     <Control
                       label="Gaussian Noise"
@@ -998,11 +1174,15 @@ export default function App() {
                       step={0.005}
                       onChange={(v) => update("noiseSigma", v)}
                       formatValue={(v) => v.toFixed(3)}
-                      hint="獨立加性雜訊；非完整 sensor noise"
+                      hint={t(
+                        "獨立加性雜訊；非完整 sensor noise",
+                        "Independent additive noise; not a full sensor noise model",
+                      )}
                     />
                     <div className="seed-control">
                       <label htmlFor="seed">
-                        固定隨機種子 <span>Seed</span>
+                        {t("固定隨機種子", "Fixed random seed")}{" "}
+                        <span>Seed</span>
                       </label>
                       <div>
                         <input
@@ -1022,8 +1202,8 @@ export default function App() {
                           }}
                         />
                         <button
-                          title="使用下一個種子"
-                          aria-label="下一個種子"
+                          title={t("使用下一個種子", "Use the next seed")}
+                          aria-label={t("下一個種子", "Next seed")}
                           onClick={() =>
                             update("seed", (config.seed + 1) >>> 0)
                           }
@@ -1035,11 +1215,11 @@ export default function App() {
                     <details className="advanced">
                       <summary>
                         <SlidersHorizontal size={13} />
-                        進階解算設定
+                        {t("進階解算設定", "Advanced solver settings")}
                         <ChevronRight size={12} />
                       </summary>
                       <Control
-                        label="有效振幅門檻"
+                        label={t("有效振幅門檻", "Minimum modulation")}
                         english="Minimum modulation"
                         symbol="Bmin"
                         value={config.minModulation}
@@ -1050,7 +1230,7 @@ export default function App() {
                         formatValue={(v) => v.toFixed(3)}
                       />
                       <label className="resolution-label">
-                        影像寬度
+                        {t("影像寬度", "Image width")}
                         <select
                           aria-label="Image width"
                           value={config.width}
@@ -1071,16 +1251,25 @@ export default function App() {
                     <div className="sensor-note">
                       <Info size={13} />
                       <p>
-                        Intensity 會硬截斷至 [0,
-                        1]；任一張達到上下限的像素將被判為無效。沒有 Gamma
-                        或量化。
+                        {t(
+                          <>
+                            Intensity 會硬截斷至 [0,
+                            1]；任一張達到上下限的像素將被判為無效。沒有 Gamma
+                            或量化。
+                          </>,
+                          <>
+                            Intensity is hard-clipped to [0, 1]; a pixel that
+                            hits either limit in any image is marked invalid. No
+                            gamma or quantization.
+                          </>,
+                        )}
                       </p>
                     </div>
                   </section>
                   <section className="card metrics-card">
                     <div className="metrics-title">
                       <Activity size={15} />
-                      <h2>量測品質</h2>
+                      <h2>{t("量測品質", "Measurement quality")}</h2>
                       <span className="live-pill">LIVE</span>
                     </div>
                     <div className="metric">
@@ -1096,7 +1285,10 @@ export default function App() {
                             : result.metrics.rmse.toExponential(2)}
                       </strong>
                       <span className="metric-unit">
-                        rad · 有效像素的 circular error
+                        {t(
+                          "rad · 有效像素的 circular error",
+                          "rad · circular error over valid pixels",
+                        )}
                       </span>
                     </div>
                     <div className="metric">
@@ -1119,23 +1311,40 @@ export default function App() {
                       </div>
                     </div>
                     <p className="metrics-note">
-                      Reference Phase 僅用於誤差評估，沒有輸入 Decoder 或
-                      Unwrap。
+                      {t(
+                        <>
+                          Reference Phase 僅用於誤差評估，沒有輸入 Decoder 或
+                          Unwrap。
+                        </>,
+                        <>
+                          The reference phase is used only for error evaluation;
+                          it never feeds the decoder or unwrapping.
+                        </>,
+                      )}
                     </p>
                     {result.metrics.validCount === 0 && (
                       <p className="no-valid" role="alert">
-                        目前沒有有效像素
+                        {t("目前沒有有效像素", "No valid pixels right now")}
                       </p>
                     )}
                   </section>
                   <div className="learning-tip">
                     <span>
                       <BookOpen size={15} />
-                      試試看
+                      {t("試試看", "Try this")}
                     </span>
                     <p>
-                      先把振幅 B 降低，再加入 Noise。為什麼亮度變化很小，Phase
-                      卻開始不穩定？
+                      {t(
+                        <>
+                          先把振幅 B 降低，再加入
+                          Noise。為什麼亮度變化很小，Phase 卻開始不穩定？
+                        </>,
+                        <>
+                          Lower the amplitude B, then add noise. Why does the
+                          phase become unstable even though the intensity barely
+                          changes?
+                        </>,
+                      )}
                     </p>
                     <button
                       onClick={() => {
@@ -1147,11 +1356,14 @@ export default function App() {
                         }));
                         setDirty(true);
                         notify(
-                          "已套用低振幅＋雜訊範例。比較 Circular RMSE，並觀察 phase 曲線。",
+                          t(
+                            "已套用低振幅＋雜訊範例。比較 Circular RMSE，並觀察 phase 曲線。",
+                            "Applied the low-amplitude + noise example. Compare the circular RMSE and watch the phase curve.",
+                          ),
                         );
                       }}
                     >
-                      套用這個實驗
+                      {t("套用這個實驗", "Apply this experiment")}
                       <ArrowRight size={13} />
                     </button>
                   </div>
@@ -1160,10 +1372,16 @@ export default function App() {
               <footer className="page-footer">
                 <span>
                   <ShieldCheck size={13} />
-                  Float64 數學解算 · 不使用 Ground Truth 重建
+                  {t(
+                    "Float64 數學解算 · 不使用 Ground Truth 重建",
+                    "Float64 math solve · No ground truth used in reconstruction",
+                  )}
                 </span>
                 <button onClick={() => setTab("limits")}>
-                  檢視假設、限制與後續階段
+                  {t(
+                    "檢視假設、限制與後續階段",
+                    "Review assumptions, limits, and next stages",
+                  )}
                   <ArrowRight size={13} />
                 </button>
               </footer>
@@ -1186,16 +1404,25 @@ export default function App() {
           if (!chosen) return;
           const generation = ++importGeneration.current;
           try {
-            if (chosen.size > 1_048_576) throw new Error("檔案超過 1 MB");
+            if (chosen.size > 1_048_576)
+              throw new Error(t("檔案超過 1 MB", "File is larger than 1 MB"));
             const next = parseParameters(await chosen.text());
             if (generation !== importGeneration.current) return;
             setConfig(next);
             setDirty(true);
-            notify("已匯入並驗證參數。尚未覆寫此瀏覽器保存的設定。");
+            notify(
+              t(
+                "已匯入並驗證參數。尚未覆寫此瀏覽器保存的設定。",
+                "Imported and validated the parameters. The settings saved in this browser are not overwritten yet.",
+              ),
+            );
           } catch (err) {
             if (generation !== importGeneration.current) return;
             setImportError(
-              `匯入失敗，原參數未變更：${err instanceof Error ? err.message : String(err)}`,
+              t(
+                `匯入失敗，原參數未變更：${err instanceof Error ? err.message : String(err)}`,
+                `Import failed; parameters unchanged: ${err instanceof Error ? err.message : String(err)}`,
+              ),
             );
           }
         }}
@@ -1208,7 +1435,7 @@ export default function App() {
           {importError ? <Info size={17} /> : <Check size={17} />}
           <span>{importError || message}</span>
           <button
-            aria-label="關閉通知"
+            aria-label={t("關閉通知", "Dismiss notification")}
             onClick={() => {
               setMessage("");
               setImportError("");
@@ -1227,48 +1454,117 @@ function Notes({ onBack }: { onBack: () => void }) {
     <div className="reading-layout">
       <section className="card reading-card">
         <span className="eyebrow mint">THE MODEL</span>
-        <h2>三張影像裡，藏著三個未知數。</h2>
+        <h2>
+          {t(
+            "三張影像裡，藏著三個未知數。",
+            "Three images hide three unknowns.",
+          )}
+        </h2>
         <p>
-          在固定像素上，平均光強 A、調變振幅 B 與 phase φ 都未知。改變 Projector
-          的 δ，取得三個 intensity，就能解出這三個量。
+          {t(
+            <>
+              在固定像素上，平均光強 A、調變振幅 B 與 phase φ 都未知。改變
+              Projector 的 δ，取得三個 intensity，就能解出這三個量。
+            </>,
+            <>
+              At a fixed pixel, the mean intensity A, modulation amplitude B,
+              and phase φ are all unknown. Change the projector's δ to get three
+              intensities, and you can solve for all three.
+            </>,
+          )}
         </p>
         <div className="large-equation">Iₖ(x, y) = A + B cos(φ(x) + δₖ)</div>
         <dl className="symbol-grid">
           <div>
             <dt>A</dt>
             <dd>
-              平均光強 / DC offset
-              <br />
-              <small>本 MVP 的空間均勻合成常數，不等同完整環境光模型。</small>
+              {t(
+                <>
+                  平均光強 / DC offset
+                  <br />
+                  <small>
+                    本 MVP 的空間均勻合成常數，不等同完整環境光模型。
+                  </small>
+                </>,
+                <>
+                  Mean intensity / DC offset
+                  <br />
+                  <small>
+                    A spatially uniform synthetic constant in this MVP, not a
+                    full ambient-light model.
+                  </small>
+                </>,
+              )}
             </dd>
           </div>
           <div>
             <dt>B</dt>
             <dd>
-              調變振幅 / Modulation
-              <br />
-              <small>條紋的明暗變化量。B 太低時，phase 會對 noise 敏感。</small>
+              {t(
+                <>
+                  調變振幅 / Modulation
+                  <br />
+                  <small>
+                    條紋的明暗變化量。B 太低時，phase 會對 noise 敏感。
+                  </small>
+                </>,
+                <>
+                  Modulation amplitude
+                  <br />
+                  <small>
+                    How much the fringes vary between bright and dark. When B is
+                    too low, phase becomes sensitive to noise.
+                  </small>
+                </>,
+              )}
             </dd>
           </div>
           <div>
             <dt>φ</dt>
             <dd>
-              像素所在的條紋位置
-              <br />
-              <small>φ(x) = 2πfx/(W−1) + φ₀；不是物體高度。</small>
+              {t(
+                <>
+                  像素所在的條紋位置
+                  <br />
+                  <small>φ(x) = 2πfx/(W−1) + φ₀；不是物體高度。</small>
+                </>,
+                <>
+                  The pixel's position on the fringe
+                  <br />
+                  <small>
+                    φ(x) = 2πfx/(W−1) + φ₀; not the object's height.
+                  </small>
+                </>,
+              )}
             </dd>
           </div>
           <div>
             <dt>δₖ</dt>
             <dd>
-              已知的 Projector 相移
-              <br />
-              <small>三步分別為 0、2π/3、4π/3（0°、120°、240°）。</small>
+              {t(
+                <>
+                  已知的 Projector 相移
+                  <br />
+                  <small>三步分別為 0、2π/3、4π/3（0°、120°、240°）。</small>
+                </>,
+                <>
+                  Known projector phase shift
+                  <br />
+                  <small>
+                    The three steps are 0, 2π/3, 4π/3 (0°, 120°, 240°).
+                  </small>
+                </>,
+              )}
             </dd>
           </div>
         </dl>
         <hr />
-        <h3>01 / 先消除 A，再利用象限恢復 φ</h3>
+        <h3>
+          {t(
+            "01 / 先消除 A，再利用象限恢復 φ",
+            "01 / Remove A first, then use the quadrant to recover φ",
+          )}
+        </h3>
         <div className="formula-block">
           N = √3(I₃ − I₂) = 3B sin φ<br />D = 2I₁ − I₂ − I₃ = 3B cos φ<br />
           φ̂ = wrap(atan2(N, D)) ∈ [−π, π)
@@ -1276,66 +1572,166 @@ function Notes({ onBack }: { onBack: () => void }) {
           B̂ = √(N² + D²) / 3
         </div>
         <p>
-          <strong>atan2(N, D) 不等於 atan(N/D)。</strong>分子、分母的符號讓
-          atan2 能辨識象限；一般除法會失去這些資訊。正負號也依照 cos(φ + δ)
-          的相移慣例，不能直接套用不同曝光順序的公式。
+          {t(
+            <>
+              <strong>atan2(N, D) 不等於 atan(N/D)。</strong>分子、分母的符號讓
+              atan2 能辨識象限；一般除法會失去這些資訊。正負號也依照 cos(φ + δ)
+              的相移慣例，不能直接套用不同曝光順序的公式。
+            </>,
+            <>
+              <strong>atan2(N, D) is not atan(N/D).</strong> The signs of the
+              numerator and denominator let atan2 identify the quadrant; plain
+              division loses that information. The signs also follow the cos(φ +
+              δ) phase-shift convention, so you can't reuse formulas written for
+              a different exposure order.
+            </>,
+          )}
         </p>
-        <h3>02 / Wrapped 不等於不正確</h3>
+        <h3>
+          {t("02 / Wrapped 不等於不正確", "02 / Wrapped doesn't mean wrong")}
+        </h3>
         <p>
-          −π 附近與 +π 附近的相位其實相鄰，因此評估用 circular difference：
-          <code>atan2(sin(φ̂−φref), cos(φ̂−φref))</code>，而不是直接相減。RMSE =
-          √mean(error²)，只計有效像素；沒有有效像素時回報 N/A，不回報 0。
+          {t(
+            <>
+              −π 附近與 +π 附近的相位其實相鄰，因此評估用 circular difference：
+              <code>atan2(sin(φ̂−φref), cos(φ̂−φref))</code>，而不是直接相減。RMSE
+              = √mean(error²)，只計有效像素；沒有有效像素時回報 N/A，不回報 0。
+            </>,
+            <>
+              Phases near −π and near +π are actually neighbors, so the
+              evaluation uses a circular difference:{" "}
+              <code>atan2(sin(φ̂−φref), cos(φ̂−φref))</code> instead of plain
+              subtraction. RMSE = √mean(error²), over valid pixels only; with no
+              valid pixels it reports N/A, not 0.
+            </>,
+          )}
         </p>
-        <h3>03 / Unwrap 解的是連續性，不是深度</h3>
+        <h3>
+          {t(
+            "03 / Unwrap 解的是連續性，不是深度",
+            "03 / Unwrapping solves continuity, not depth",
+          )}
+        </h3>
         <div className="formula-block">
           ψ₀ = φ̂₀
           <br />
           ψⱼ = ψⱼ₋₁ + wrap(φ̂ⱼ − φ̂ⱼ₋₁)
         </div>
         <p>
-          逐列從第一個有效像素開始，假設相鄰真實 phase 差值絕對值小於
-          π。跨過無效像素不補值，而是重新開始一個區段。每個區段仍有未知的 2π
-          整數偏移，不能藉由 reference 或已知 f 偷補 fringe order。
+          {t(
+            <>
+              逐列從第一個有效像素開始，假設相鄰真實 phase 差值絕對值小於
+              π。跨過無效像素不補值，而是重新開始一個區段。每個區段仍有未知的 2π
+              整數偏移，不能藉由 reference 或已知 f 偷補 fringe order。
+            </>,
+            <>
+              Each row starts at its first valid pixel and assumes the true
+              phase difference between neighbors is smaller than π in magnitude.
+              Invalid pixels are not filled in; a new segment starts after them.
+              Each segment still has an unknown whole-2π offset, and the fringe
+              order can't be sneaked in from the reference or the known f.
+            </>,
+          )}
         </p>
-        <h3>04 / 噪聲為什麼會被放大？</h3>
+        <h3>
+          {t("04 / 噪聲為什麼會被放大？", "04 / Why does noise get amplified?")}
+        </h3>
         <p>
-          低雜訊、未截斷、B 足夠大時，一階近似 <code>σφ ≈ √(2/3) σ / B</code>
-          。這是有效像素的局部近似，不是所有情況的保證。低 B、強 Noise、phase
-          unwrap 跳錯整個週期時，不再可靠。
+          {t(
+            <>
+              低雜訊、未截斷、B 足夠大時，一階近似{" "}
+              <code>σφ ≈ √(2/3) σ / B</code>
+              。這是有效像素的局部近似，不是所有情況的保證。低 B、強
+              Noise、phase unwrap 跳錯整個週期時，不再可靠。
+            </>,
+            <>
+              With low noise, no clipping, and a large enough B, the first-order
+              approximation is <code>σφ ≈ √(2/3) σ / B</code>. It is a local
+              approximation for valid pixels, not a guarantee for every case. It
+              stops being reliable with low B, strong noise, or when unwrapping
+              skips a whole cycle.
+            </>,
+          )}
         </p>
-        <h3>05 / 從相位走到 3D，還缺哪些步驟？</h3>
+        <h3>
+          {t(
+            "05 / 從相位走到 3D，還缺哪些步驟？",
+            "05 / What's still missing between phase and 3D?",
+          )}
+        </h3>
         <p>
-          先由多頻率或其他編碼解除絕對 fringe order，再將 phase 轉為 Projector
-          pixel correspondence。Camera Calibration 估計內參 K（焦距、主點）與
-          distortion；Camera–Projector Calibration 估計彼此的旋轉 R 與平移
-          t。最後以 Camera ray 和 Projector plane/ray 三角量測得到 3D。3D
-          沙盒目前已支援已知合成校正、單週期 correspondence
-          與三角量測；由校正板估參數及多頻 Micro PS 尚未實作。
+          {t(
+            <>
+              先由多頻率或其他編碼解除絕對 fringe order，再將 phase 轉為
+              Projector pixel correspondence。Camera Calibration 估計內參
+              K（焦距、主點）與 distortion；Camera–Projector Calibration
+              估計彼此的旋轉 R 與平移 t。最後以 Camera ray 和 Projector
+              plane/ray 三角量測得到 3D。3D 沙盒目前已支援已知合成校正、單週期
+              correspondence 與三角量測；由校正板估參數及多頻 Micro PS
+              尚未實作。
+            </>,
+            <>
+              First resolve the absolute fringe order with multiple frequencies
+              or another code, then turn phase into projector pixel
+              correspondence. Camera calibration estimates the intrinsics K
+              (focal length, principal point) and distortion; camera–projector
+              calibration estimates their relative rotation R and translation t.
+              Finally, triangulating the camera ray with the projector plane/ray
+              gives 3D. The 3D sandbox already supports known synthetic
+              calibration, single-period correspondence, and triangulation;
+              estimating parameters from a calibration board and multi-frequency
+              Micro PS are not implemented yet.
+            </>,
+          )}
         </p>
         <div className="reading-notice">
           <Info size={18} />
           <p>
-            這裡的 Camera 座標與 Projector 座標刻意共用同一個 x。這只是在學習
-            phase 解算，不代表兩台設備在真實世界會看到同一個像素。
+            {t(
+              <>
+                這裡的 Camera 座標與 Projector 座標刻意共用同一個
+                x。這只是在學習 phase
+                解算，不代表兩台設備在真實世界會看到同一個像素。
+              </>,
+              <>
+                Here the camera and projector coordinates deliberately share the
+                same x. This is only for learning the phase solve; it doesn't
+                mean the two devices see the same pixel in the real world.
+              </>,
+            )}
           </p>
         </div>
         <button className="primary-button" onClick={onBack}>
-          回到互動實驗
+          {t("回到互動實驗", "Back to the interactive lab")}
           <ArrowRight size={15} />
         </button>
       </section>
       <aside className="reading-aside">
-        <span className="sidebar-label">建議學習順序</span>
-        {[
-          "調整 A，觀察光強平移",
-          "調整 B，觀察明暗對比",
-          "調整 φ₀，觀察條紋位移",
-          "拖曳探針，讀取三次曝光",
-          "觀察 Wrapped 的 ±π 跳變",
-          "開啟 Relative Unwrap",
-          "降低 B、加入 Noise",
-          "匯出 CSV，檢查實際數據",
-        ].map((s, i) => (
+        <span className="sidebar-label">
+          {t("建議學習順序", "Suggested order")}
+        </span>
+        {t(
+          [
+            "調整 A，觀察光強平移",
+            "調整 B，觀察明暗對比",
+            "調整 φ₀，觀察條紋位移",
+            "拖曳探針，讀取三次曝光",
+            "觀察 Wrapped 的 ±π 跳變",
+            "開啟 Relative Unwrap",
+            "降低 B、加入 Noise",
+            "匯出 CSV，檢查實際數據",
+          ],
+          [
+            "Adjust A and watch the intensity shift",
+            "Adjust B and watch the contrast",
+            "Adjust φ₀ and watch the fringes move",
+            "Drag the probe to read three exposures",
+            "Watch the ±π jumps in the wrapped phase",
+            "Turn on relative unwrapping",
+            "Lower B and add noise",
+            "Export CSV and inspect the real data",
+          ],
+        ).map((s, i) => (
           <div key={s}>
             <span>{String(i + 1).padStart(2, "0")}</span>
             {s}
@@ -1351,89 +1747,177 @@ function Limits({ onBack }: { onBack: () => void }) {
       <section className="card reading-card">
         <div className="implementation-status">
           <span className="live-dot" />
-          已實作 · MVP 1
+          {t("已實作 · MVP 1", "Implemented · MVP 1")}
         </div>
-        <h2>先把數學鏈路做對。</h2>
+        <h2>{t("先把數學鏈路做對。", "Get the math chain right first.")}</h2>
         <p>
-          一維自由實驗是 intensity / phase 教學模型，其 WebGL
-          平面紋理不產生深度。 獨立的 3D
-          沙盒則已提供已知校正、單週期投影、遮擋與三角量測；這仍不是完整四階段
-          Scanner。
+          {t(
+            <>
+              一維自由實驗是 intensity / phase 教學模型，其 WebGL
+              平面紋理不產生深度。 獨立的 3D
+              沙盒則已提供已知校正、單週期投影、遮擋與三角量測；這仍不是完整四階段
+              Scanner。
+            </>,
+            <>
+              The 1D playground is a teaching model for intensity and phase; its
+              flat WebGL texture produces no depth. The separate 3D sandbox adds
+              known calibration, single-period projection, occlusion, and
+              triangulation; it is still not a complete four-stage scanner.
+            </>,
+          )}
         </p>
         <div className="boundary-grid">
           <div>
             <Check size={18} />
-            <h3>真實演算法</h3>
+            <h3>{t("真實演算法", "Real algorithms")}</h3>
             <p>
-              三步 intensity 解算、Â / B̂、Wrapped Phase、逐列相對 Spatial
-              Unwrap、有效像素遮罩。
+              {t(
+                <>
+                  三步 intensity 解算、Â / B̂、Wrapped Phase、逐列相對 Spatial
+                  Unwrap、有效像素遮罩。
+                </>,
+                <>
+                  Three-step intensity solve, Â / B̂, wrapped phase, row-wise
+                  relative spatial unwrapping, and a valid pixel mask.
+                </>,
+              )}
             </p>
           </div>
           <div>
             <Check size={18} />
-            <h3>可重現與評估</h3>
+            <h3>{t("可重現與評估", "Reproducible and measurable")}</h3>
             <p>
-              Mulberry32 Seed、Box–Muller Gaussian、Circular RMSE、Valid Pixel
-              Ratio、完整像素 CSV、PNG 與版本化 JSON。
+              {t(
+                <>
+                  Mulberry32 Seed、Box–Muller Gaussian、Circular RMSE、Valid
+                  Pixel Ratio、完整像素 CSV、PNG 與版本化 JSON。
+                </>,
+                <>
+                  Mulberry32 seed, Box–Muller Gaussian, circular RMSE, valid
+                  pixel ratio, full-pixel CSV, PNG, and versioned JSON.
+                </>,
+              )}
             </p>
           </div>
           <div>
             <Info size={18} />
-            <h3>刻意簡化</h3>
+            <h3>{t("刻意簡化", "Deliberate simplifications")}</h3>
             <p>
-              共用一維座標、均勻 A / B、線性 normalized intensity、獨立加性
-              Gaussian Noise 與 [0,1] hard clipping。不是
-              radiometry、Poisson/read noise、Gamma、量化或完整 saturation
-              物理模型。
+              {t(
+                <>
+                  共用一維座標、均勻 A / B、線性 normalized intensity、獨立加性
+                  Gaussian Noise 與 [0,1] hard clipping。不是
+                  radiometry、Poisson/read noise、Gamma、量化或完整 saturation
+                  物理模型。
+                </>,
+                <>
+                  A shared 1D coordinate, uniform A / B, linear normalized
+                  intensity, independent additive Gaussian noise, and [0,1] hard
+                  clipping. Not a physical model of radiometry, Poisson/read
+                  noise, gamma, quantization, or full saturation.
+                </>,
+              )}
             </p>
           </div>
           <div>
             <ShieldCheck size={18} />
-            <h3>Ground Truth 隔離</h3>
+            <h3>{t("Ground Truth 隔離", "Ground truth isolation")}</h3>
             <p>
-              referencePhase 由 forward model 產生，只進入 evaluator
-              與標記清楚的 CSV 欄位。Decoder 與 Unwrap 的函式不接受 Ground
-              Truth。
+              {t(
+                <>
+                  referencePhase 由 forward model 產生，只進入 evaluator
+                  與標記清楚的 CSV 欄位。Decoder 與 Unwrap 的函式不接受 Ground
+                  Truth。
+                </>,
+                <>
+                  referencePhase comes from the forward model and only reaches
+                  the evaluator and clearly labeled CSV columns. The decoder and
+                  unwrap functions never accept ground truth.
+                </>,
+              )}
             </p>
           </div>
         </div>
         <hr />
-        <h3>Validity 的明確定義</h3>
+        <h3>{t("Validity 的明確定義", "What “valid” means")}</h3>
         <p>
-          一個像素只有在三次曝光皆有限值、未達 [0,1] 邊界且估計 B̂ &gt;
-          門檻時才有效。Ratio 分母是全部像素，不是已選中的列；Phase RMSE
-          只評估有效像素，沒有 3D RMSE。硬截斷資料會被保守排除，可能使有效像素
-          RMSE 偏樂觀，所以必須與 Valid Ratio 一起看。
+          {t(
+            <>
+              一個像素只有在三次曝光皆有限值、未達 [0,1] 邊界且估計 B̂ &gt;
+              門檻時才有效。Ratio 分母是全部像素，不是已選中的列；Phase RMSE
+              只評估有效像素，沒有 3D
+              RMSE。硬截斷資料會被保守排除，可能使有效像素 RMSE
+              偏樂觀，所以必須與 Valid Ratio 一起看。
+            </>,
+            <>
+              A pixel is valid only if all three exposures are finite, none hits
+              the [0,1] limits, and the estimated B̂ &gt; the threshold. The
+              ratio's denominator is all pixels, not just the selected row;
+              phase RMSE covers valid pixels only, and there is no 3D RMSE.
+              Clipped data is conservatively excluded, which can make the
+              valid-pixel RMSE look optimistic, so always read it together with
+              the valid ratio.
+            </>,
+          )}
         </p>
-        <h3>Unwrap 的可識別性限制</h3>
+        <h3>
+          {t("Unwrap 的可識別性限制", "Identifiability limits of unwrapping")}
+        </h3>
         <p>
-          單頻只有相對 phase；有遮罩時各區段的週期偏移也不同。本版不報 Absolute
-          Unwrapped RMSE，不以真實 f 或 reference 對齊，不將 phase
-          偽裝成高度。即使 Circular RMSE 很低，Unwrap 仍可能跳錯 2π。
+          {t(
+            <>
+              單頻只有相對 phase；有遮罩時各區段的週期偏移也不同。本版不報
+              Absolute Unwrapped RMSE，不以真實 f 或 reference 對齊，不將 phase
+              偽裝成高度。即使 Circular RMSE 很低，Unwrap 仍可能跳錯 2π。
+            </>,
+            <>
+              A single frequency gives only relative phase; with a mask, each
+              segment can have a different cycle offset. This version doesn't
+              report an absolute unwrapped RMSE, doesn't align with the true f
+              or the reference, and doesn't disguise phase as height. Even with
+              a low circular RMSE, unwrapping can still jump by 2π.
+            </>,
+          )}
         </p>
         <button className="primary-button" onClick={onBack}>
-          回到互動實驗
+          {t("回到互動實驗", "Back to the interactive lab")}
           <ArrowRight size={15} />
         </button>
       </section>
       <section className="card reading-card roadmap-details">
-        <span className="eyebrow mint">開發範圍 / 已實作與後續</span>
-        <h2>四階段，逐步建立可驗證模型。</h2>
+        <span className="eyebrow mint">
+          {t("開發範圍 / 已實作與後續", "Scope / Done and next")}
+        </span>
+        <h2>
+          {t(
+            "四階段，逐步建立可驗證模型。",
+            "Four stages toward a verifiable model.",
+          )}
+        </h2>
         {[
           [
             "02",
             "Virtual 3D Scanner",
-            "Pinhole Camera–Projector 內外參、ray–surface intersection、可見性與遮擋、GT depth 隔離、幾何三角量測；再加入 calibration 誤差。",
+            t(
+              "Pinhole Camera–Projector 內外參、ray–surface intersection、可見性與遮擋、GT depth 隔離、幾何三角量測；再加入 calibration 誤差。",
+              "Pinhole camera–projector intrinsics and extrinsics, ray–surface intersection, visibility and occlusion, GT depth isolation, geometric triangulation; then calibration error.",
+            ),
           ],
           [
             "03",
             "Micro Phase Shifting",
-            "依 Gupta & Nayar（CVPR 2012）原文實作窄高頻帶 F+2 曝光、共享 offset / amplitude 假設、column correspondence 搜尋，並以相同曝光預算對比 Conventional PS。不是用三步 PS 換個名稱。",
+            t(
+              "依 Gupta & Nayar（CVPR 2012）原文實作窄高頻帶 F+2 曝光、共享 offset / amplitude 假設、column correspondence 搜尋，並以相同曝光預算對比 Conventional PS。不是用三步 PS 換個名稱。",
+              "Following Gupta & Nayar (CVPR 2012): narrow high-frequency band with F+2 exposures, shared offset / amplitude assumption, column correspondence search, and a comparison against conventional PS at the same exposure budget. Not just three-step PS under a new name.",
+            ),
           ],
           [
             "04",
             "Non-ideal Effects",
-            "Defocus PSF、Interreflection / transport、空間變動 radiometry、sensor noise、Gamma、saturation 與量化；加入 depth RMSE、失效率、參數掃描與誤差傳播。",
+            t(
+              "Defocus PSF、Interreflection / transport、空間變動 radiometry、sensor noise、Gamma、saturation 與量化；加入 depth RMSE、失效率、參數掃描與誤差傳播。",
+              "Defocus PSF, interreflection / transport, spatially varying radiometry, sensor noise, gamma, saturation, and quantization; plus depth RMSE, failure rate, parameter sweeps, and error propagation.",
+            ),
           ],
         ].map(([n, title, body]) => (
           <article key={n}>
@@ -1441,15 +1925,28 @@ function Limits({ onBack }: { onBack: () => void }) {
             <div>
               <h3>
                 {title}
-                <small>{n === "02" ? "基礎沙盒已支援" : "尚未實作"}</small>
+                <small>
+                  {n === "02"
+                    ? t("基礎沙盒已支援", "Basic sandbox available")
+                    : t("尚未實作", "Not implemented yet")}
+                </small>
               </h3>
               <p>{body}</p>
             </div>
           </article>
         ))}
         <p className="source-note">
-          研究參考：M. Gupta & S. K. Nayar, “Micro Phase Shifting,” CVPR
-          2012。原文與實作計畫見專案 README。
+          {t(
+            <>
+              研究參考：M. Gupta & S. K. Nayar, “Micro Phase Shifting,” CVPR
+              2012。原文與實作計畫見專案 README。
+            </>,
+            <>
+              Reference: M. Gupta & S. K. Nayar, “Micro Phase Shifting,” CVPR
+              2012. See the project README for the paper and implementation
+              plan.
+            </>,
+          )}
         </p>
       </section>
     </div>

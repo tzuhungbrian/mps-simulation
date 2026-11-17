@@ -106,6 +106,9 @@
 .unwrap-lesson {
   min-width: 0;
 }
+.unwrap-lesson > .lesson-instruction {
+  margin: 0 0 12px;
+}
 .lesson-panel.unwrap-panel {
   margin-bottom: 24px;
 }
@@ -280,6 +283,138 @@
   color: #8fe0c4;
   font-weight: 600;
 }
+.unwrap-step-demo {
+  margin: 8px 0 28px;
+  padding-top: 18px;
+  border-top: 1px solid #354657;
+}
+.unwrap-step-demo > p {
+  font-size: 18px;
+  line-height: 1.9;
+  color: #c4d0df;
+}
+.unwrap-step-demo .unwrap-feedback {
+  margin-top: 12px;
+}
+.unwrap-slider {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 6px;
+  font-size: 18px;
+  color: #d9e5f1;
+}
+.unwrap-slider b {
+  font-family: Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #e0e9f3;
+}
+.unwrap-slider small {
+  font-size: 15px;
+  color: #aec1d5;
+}
+.unwrap-slider input[type="range"] {
+  width: 100%;
+  min-height: 32px;
+  accent-color: #7ee4bf;
+}
+.temporal-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0 0 24px;
+  padding: 12px 16px;
+  border: 1px solid #354657;
+  border-radius: 7px;
+  font-size: 16px;
+  color: #d9e5f1;
+}
+.temporal-source legend {
+  padding: 0 6px;
+  font-size: 14px;
+  color: #aec1d5;
+}
+.temporal-source label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.temporal-source input {
+  accent-color: #7ee4bf;
+}
+.temporal-source .is-disabled {
+  color: #7d8da0;
+}
+.temporal-pixel {
+  margin: 0 0 8px;
+  font:
+    16px Consolas,
+    monospace;
+  color: #b9c9dc;
+}
+.temporal-table {
+  width: 100%;
+  margin-bottom: 14px;
+  border-collapse: collapse;
+  font:
+    15px/1.6 Consolas,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  color: #e0e9f3;
+}
+.temporal-table th {
+  padding: 4px 4px 6px;
+  border-bottom: 1px solid #354657;
+  text-align: right;
+  font-weight: 400;
+  color: #aec1d5;
+}
+.temporal-table td {
+  padding: 5px 4px;
+  text-align: right;
+}
+.temporal-table th:first-child,
+.temporal-table td:first-child {
+  text-align: left;
+}
+.unwrap-equation > span {
+  display: block;
+}
+.temporal-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 18px 0;
+}
+.temporal-compare > div {
+  min-width: 0;
+  padding: 12px 0;
+  border-top: 1px solid #3b5263;
+}
+.temporal-compare span {
+  display: block;
+  font-size: 16px;
+  color: #b9c9dc;
+  margin-bottom: 4px;
+}
+.temporal-compare b {
+  display: block;
+  font:
+    26px/1.5 Consolas,
+    monospace;
+  color: #e0e9f3;
+  font-variant-numeric: tabular-nums;
+}
+.temporal-compare small {
+  font-size: 15px;
+  color: #aec1d5;
+}
+@media (max-width: 680px) {
+  .temporal-compare {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
 .unwrap-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(220px, 28vw, 300px);
@@ -364,17 +499,22 @@
     order: 2;
     width: 100%;
   }
+  .unwrap-inspector .temporal-pixel,
+  .unwrap-inspector .temporal-table {
+    order: 2;
+    width: 100%;
+  }
 }
 @media (min-width: 561px) and (max-width: 680px) {
-  .with-unwrapping .lesson-progress.lesson-progress-four {
+  .with-unwrapping .lesson-progress.lesson-progress-five {
     display: flex;
   }
 }
-.lesson-overview.lesson-overview-four {
+.lesson-overview.lesson-overview-five {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
-.lesson-overview-four > svg {
+.lesson-overview-five > svg {
   display: none;
 }
 @media (max-width: 680px) {
@@ -402,12 +542,12 @@
   .unwrap-focus-calculation {
     font-size: 19px;
   }
-  .lesson-progress.lesson-progress-four {
+  .lesson-progress.lesson-progress-five {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px 18px;
   }
-  .lesson-overview.lesson-overview-four {
+  .lesson-overview.lesson-overview-five {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     row-gap: 24px;
   }

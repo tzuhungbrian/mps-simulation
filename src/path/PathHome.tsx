@@ -7,6 +7,7 @@ import {
   ListChecks,
   ScanLine,
 } from "lucide-react";
+import { t } from "../i18n";
 import PathNav, { ControlMark } from "./PathNav";
 import {
   CHAPTERS,
@@ -39,18 +40,39 @@ const COURSE: Record<number, [number, number]> = {
 };
 
 const ARTIFACTS: { label: string; from: string }[] = [
-  { label: "Camera 內參 K_c 與畸變", from: "第 2 站" },
-  { label: "絕對相位", from: "第 3–4 站" },
-  { label: "Projector 內參 K_p 與 R | t", from: "第 5 站" },
-  { label: "單套裝置的點雲", from: "第 6 站" },
-  { label: "各裝置的世界座標轉換", from: "第 8 站" },
-  { label: "融合後的高度圖", from: "第 9 站" },
+  {
+    label: t("Camera 內參 K_c 與畸變", "Camera intrinsics K_c and distortion"),
+    from: t("第 2 站", "Station 2"),
+  },
+  {
+    label: t("絕對相位", "Absolute phase"),
+    from: t("第 3–4 站", "Stations 3–4"),
+  },
+  {
+    label: t(
+      "Projector 內參 K_p 與 R | t",
+      "Projector intrinsics K_p and R | t",
+    ),
+    from: t("第 5 站", "Station 5"),
+  },
+  {
+    label: t("單套裝置的點雲", "Point cloud from a single rig"),
+    from: t("第 6 站", "Station 6"),
+  },
+  {
+    label: t("各裝置的世界座標轉換", "World transform of each device"),
+    from: t("第 8 站", "Station 8"),
+  },
+  {
+    label: t("融合後的高度圖", "Fused height map"),
+    from: t("第 9 站", "Station 9"),
+  },
 ];
 
 const CONTINUE_LABEL: Record<Part, string> = {
-  theory: "繼續讀理論",
-  lab: "回到實驗",
-  check: "回到檢核",
+  theory: t("繼續讀理論", "Keep reading the theory"),
+  lab: t("回到實驗", "Back to the lab"),
+  check: t("回到檢核", "Back to the check"),
 };
 
 function resumeTarget(p: PathProgress) {
@@ -96,12 +118,15 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
           Structured Light Lab
         </button>
         <p className="path-crumb">
-          學習路徑
+          {t("學習路徑", "Learning path")}
           {target && (
             <>
               <span aria-hidden="true">›</span>
               <b>
-                第 {st.n} / {STATIONS.length} 站 · {st.title}
+                {t(
+                  `第 ${st.n} / ${STATIONS.length} 站 · ${st.title}`,
+                  `Station ${st.n} / ${STATIONS.length} · ${st.title}`,
+                )}
               </b>
             </>
           )}
@@ -121,10 +146,15 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
             {target ? (
               <>
                 <h1 id="resume-title">
-                  {target.advanced ? "下一站" : "繼續"}：{st.title}
+                  {target.advanced
+                    ? t(`下一站：${st.title}`, `Next: ${st.title}`)
+                    : t(`繼續：${st.title}`, `Continue: ${st.title}`)}
                 </h1>
                 <p>{st.summary}</p>
-                <ul className="path-resume-parts" aria-label="本站狀態">
+                <ul
+                  className="path-resume-parts"
+                  aria-label={t("本站狀態", "This station's status")}
+                >
                   <li
                     className={
                       sp.theory
@@ -139,7 +169,7 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
                     ) : (
                       <BookOpen size={15} aria-hidden="true" />
                     )}
-                    理論
+                    {t("理論", "Theory")}
                   </li>
                   <li
                     className={
@@ -155,7 +185,7 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
                     ) : (
                       <FlaskConical size={15} aria-hidden="true" />
                     )}
-                    實驗
+                    {t("實驗", "Lab")}
                   </li>
                   <li
                     className={
@@ -167,18 +197,34 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
                     }
                   >
                     <ListChecks size={15} aria-hidden="true" />
-                    檢核{" "}
+                    {t("檢核", "Check")}{" "}
                     {st.checks.length ? `${passed}/${st.checks.length}` : ""}
                   </li>
                 </ul>
               </>
             ) : (
               <>
-                <h1 id="resume-title">從第 1 站開始：{st.title}</h1>
+                <h1 id="resume-title">
+                  {t(
+                    `從第 1 站開始：${st.title}`,
+                    `Start with Station 1: ${st.title}`,
+                  )}
+                </h1>
                 <p>
-                  九站依實際架設的順序排列：先認識相機模型與 Camera
-                  校正，再學相位與 Projector 校正，最後重建出點雲、做多視角
-                  Fusion。任何一站都可以直接進入。
+                  {t(
+                    <>
+                      九站依實際架設的順序排列：先認識相機模型與 Camera
+                      校正，再學相位與 Projector 校正，最後重建出點雲、做多視角
+                      Fusion。任何一站都可以直接進入。
+                    </>,
+                    <>
+                      The nine stations follow the order of a real setup: first
+                      the camera model and camera calibration, then phase and
+                      projector calibration, and finally point-cloud
+                      reconstruction and multi-view fusion. You can jump into
+                      any station directly.
+                    </>,
+                  )}
                 </p>
               </>
             )}
@@ -191,17 +237,20 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
           >
             {target
               ? target.advanced
-                ? `開始第 ${st.n} 站`
+                ? t(`開始第 ${st.n} 站`, `Start Station ${st.n}`)
                 : CONTINUE_LABEL[target.part]
-              : "開始第 1 站"}
+              : t("開始第 1 站", "Start Station 1")}
             <ArrowRight size={18} aria-hidden="true" />
           </button>
         </section>
 
         <section className="path-course" aria-labelledby="course-title">
-          <h2 id="course-title">九站路線</h2>
+          <h2 id="course-title">{t("九站路線", "The nine-station course")}</h2>
           <p className="path-course-note">
-            依實作順序排列；點任一站直接進入，通過條件只做提示。
+            {t(
+              "依實作順序排列；點任一站直接進入，通過條件只做提示。",
+              "Ordered the way you'd build it; click any station to jump in. Pass criteria are only hints.",
+            )}
           </p>
           <div className="path-map">
             <svg
@@ -229,12 +278,15 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
                 const isCurrent = s.n === st.n && !!target;
                 const status =
                   state === "planned"
-                    ? "規劃中"
+                    ? t("規劃中", "Planned")
                     : state === "done"
-                      ? "已通過"
+                      ? t("已通過", "Passed")
                       : state === "partial"
-                        ? `進行中 · 檢核 ${checksPassed(s, progress)}/${s.checks.length}`
-                        : "未開始";
+                        ? t(
+                            `進行中 · 檢核 ${checksPassed(s, progress)}/${s.checks.length}`,
+                            `In progress · Check ${checksPassed(s, progress)}/${s.checks.length}`,
+                          )
+                        : t("未開始", "Not started");
                 return (
                   <li
                     key={s.n}
@@ -275,42 +327,55 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
               );
             })}
           </p>
-          <ul className="path-legend" aria-label="圖例">
+          <ul className="path-legend" aria-label={t("圖例", "Legend")}>
             <li>
-              <ControlMark state="done" size={14} /> 已通過
+              <ControlMark state="done" size={14} /> {t("已通過", "Passed")}
             </li>
             <li>
-              <ControlMark state="partial" size={14} /> 進行中
+              <ControlMark state="partial" size={14} />{" "}
+              {t("進行中", "In progress")}
             </li>
             <li>
-              <ControlMark state="none" size={14} /> 未開始
+              <ControlMark state="none" size={14} />{" "}
+              {t("未開始", "Not started")}
             </li>
             <li>
-              <ControlMark state="partial" current size={14} /> 目前這一站
+              <ControlMark state="partial" current size={14} />{" "}
+              {t("目前這一站", "Current station")}
             </li>
             <li>
-              <ControlMark state="planned" size={14} /> 規劃中
+              <ControlMark state="planned" size={14} /> {t("規劃中", "Planned")}
             </li>
           </ul>
         </section>
 
         <aside className="path-artifacts" aria-labelledby="artifacts-title">
-          <h2 id="artifacts-title">我的專案產出</h2>
+          <h2 id="artifacts-title">
+            {t("我的專案產出", "My project outputs")}
+          </h2>
           <p>
-            目前各站使用參考值；你在實驗中得到的結果，下一階段才會帶到下一站。
+            {t(
+              "目前各站使用參考值；你在實驗中得到的結果，下一階段才會帶到下一站。",
+              "For now every station uses reference values; the results you get in the labs will carry over to the next station in a later release.",
+            )}
           </p>
           <ul>
             {ARTIFACTS.map((a) => (
               <li key={a.label}>
                 <b>{a.label}</b>
-                <span className="path-tag is-reference">參考值</span>
-                <small>{a.from}產出</small>
+                <span className="path-tag is-reference">
+                  {t("參考值", "Reference value")}
+                </span>
+                <small>{t(`${a.from}產出`, `From ${a.from}`)}</small>
               </li>
             ))}
           </ul>
           {!persistent && (
             <p className="path-warn" role="alert">
-              瀏覽器儲存空間不可用：進度只保留到關閉分頁為止。
+              {t(
+                "瀏覽器儲存空間不可用：進度只保留到關閉分頁為止。",
+                "Browser storage is unavailable: your progress is kept only until you close this tab.",
+              )}
             </p>
           )}
           {progress.current !== null && (
@@ -318,20 +383,30 @@ export default function PathHome({ onGo }: { onGo: (r: Route) => void }) {
               className="path-text-button"
               onClick={() => {
                 if (
-                  confirm("清除九站的閱讀、實驗與檢核紀錄？實驗參數不受影響。")
+                  confirm(
+                    t(
+                      "清除九站的閱讀、實驗與檢核紀錄？實驗參數不受影響。",
+                      "Clear your reading, lab and check records for all nine stations? Lab parameters are not affected.",
+                    ),
+                  )
                 )
                   pathProgress.reset();
               }}
             >
               <CircleDashed size={14} aria-hidden="true" />
-              重設進度
+              {t("重設進度", "Reset progress")}
             </button>
           )}
         </aside>
 
-        <nav className="path-workbench" aria-label="工作台">
-          <h2>工作台</h2>
-          <p>自由使用，不計入進度。</p>
+        <nav className="path-workbench" aria-label={t("工作台", "Workbench")}>
+          <h2>{t("工作台", "Workbench")}</h2>
+          <p>
+            {t(
+              "自由使用，不計入進度。",
+              "Use these freely; they don't count toward progress.",
+            )}
+          </p>
           <div>
             {WORKBENCH.map((w) => (
               <button

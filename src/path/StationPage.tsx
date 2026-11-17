@@ -9,6 +9,7 @@ import {
   ListChecks,
   ScanLine,
 } from "lucide-react";
+import { t } from "../i18n";
 import PathNav, { ControlMark } from "./PathNav";
 import {
   CHAPTERS,
@@ -30,13 +31,17 @@ import "../calibration/calibration.css";
 import "./path.css";
 
 const PARTS: { id: Part; label: string; Icon: typeof BookOpen }[] = [
-  { id: "theory", label: "理論", Icon: BookOpen },
-  { id: "lab", label: "實驗", Icon: FlaskConical },
-  { id: "check", label: "檢核", Icon: ListChecks },
+  { id: "theory", label: t("理論", "Theory"), Icon: BookOpen },
+  { id: "lab", label: t("實驗", "Lab"), Icon: FlaskConical },
+  { id: "check", label: t("檢核", "Check"), Icon: ListChecks },
 ];
 
 function SourceTag() {
-  return <span className="path-tag is-reference">參考值</span>;
+  return (
+    <span className="path-tag is-reference">
+      {t("參考值", "Reference value")}
+    </span>
+  );
 }
 
 function ActivityCard({
@@ -68,7 +73,7 @@ function ActivityCard({
           });
         }}
       >
-        開啟
+        {t("開啟", "Open")}
         <ArrowRight size={16} aria-hidden="true" />
       </button>
     </div>
@@ -79,22 +84,35 @@ function Inputs({ st }: { st: Station }) {
   if (!st.inputs.length)
     return (
       <p className="path-inputs-none">
-        這一站不需要前面站的產出，可以直接開始。
+        {t(
+          "這一站不需要前面站的產出，可以直接開始。",
+          "This station doesn't need anything from earlier stations, so you can start right away.",
+        )}
       </p>
     );
   return (
     <div className="path-inputs">
-      <h3>本站的輸入</h3>
+      <h3>{t("本站的輸入", "Inputs for this station")}</h3>
       <ul>
         {st.inputs.map((i) => (
           <li key={i.label}>
             <b>{i.label}</b>
-            <span>第 {i.from.join("–")} 站</span>
+            <span>
+              {t(
+                `第 ${i.from.join("–")} 站`,
+                `${i.from.length > 1 ? "Stations" : "Station"} ${i.from.join("–")}`,
+              )}
+            </span>
             <SourceTag />
           </li>
         ))}
       </ul>
-      <p>目前一律使用參考值；你在前面站得到的結果，下一階段才會帶進來。</p>
+      <p>
+        {t(
+          "目前一律使用參考值；你在前面站得到的結果，下一階段才會帶進來。",
+          "For now these always use reference values; the results you got at earlier stations will carry over in a later release.",
+        )}
+      </p>
     </div>
   );
 }
@@ -144,8 +162,11 @@ export default function StationPage({
           <h1 ref={heading}>{st.title}</h1>
           <p>{st.summary}</p>
           <small>
-            第 {n} / {STATIONS.length} 站 · {CHAPTERS[st.chapter]}
-            {st.output && <> · 產出：{st.output}</>}
+            {t(
+              `第 ${n} / ${STATIONS.length} 站 · ${CHAPTERS[st.chapter]}`,
+              `Station ${n} / ${STATIONS.length} · ${CHAPTERS[st.chapter]}`,
+            )}
+            {st.output && t(` · 產出：${st.output}`, ` · Output: ${st.output}`)}
           </small>
         </div>
         <div className="path-station-step">
@@ -157,7 +178,7 @@ export default function StationPage({
             }
           >
             <ArrowLeft size={16} aria-hidden="true" />
-            上一站
+            {t("上一站", "Previous")}
           </button>
           <button
             className="path-button"
@@ -166,13 +187,17 @@ export default function StationPage({
               next && onGo({ kind: "station", n: next.n, part: "theory" })
             }
           >
-            下一站
+            {t("下一站", "Next")}
             <ArrowRight size={16} aria-hidden="true" />
           </button>
         </div>
       </div>
 
-      <div className="path-parts" role="tablist" aria-label="本站內容">
+      <div
+        className="path-parts"
+        role="tablist"
+        aria-label={t("本站內容", "Station contents")}
+      >
         {PARTS.map(({ id, label, Icon }) => {
           const done =
             id === "theory"
@@ -195,7 +220,7 @@ export default function StationPage({
                   {passed}/{st.checks.length}
                 </span>
               )}
-              {done && <Check size={15} aria-label="已完成" />}
+              {done && <Check size={15} aria-label={t("已完成", "Done")} />}
             </button>
           );
         })}
@@ -214,7 +239,7 @@ export default function StationPage({
                     setPart("lab");
                   }}
                 >
-                  讀完了，前往實驗
+                  {t("讀完了，前往實驗", "Done reading, go to the lab")}
                   <ArrowRight size={18} aria-hidden="true" />
                 </button>
               </div>
@@ -224,7 +249,12 @@ export default function StationPage({
 
         {part === "lab" &&
           (st.planned ? (
-            <p className="path-planned">這一站還在規劃中，目前沒有實驗。</p>
+            <p className="path-planned">
+              {t(
+                "這一站還在規劃中，目前沒有實驗。",
+                "This station is still being planned; there's no lab yet.",
+              )}
+            </p>
           ) : (
             <>
               <Inputs st={st} />
@@ -255,7 +285,7 @@ export default function StationPage({
                   className={st.primary ? "path-button" : "path-button-primary"}
                   onClick={() => setPart("check")}
                 >
-                  前往檢核
+                  {t("前往檢核", "Go to the check")}
                   <ArrowRight size={18} aria-hidden="true" />
                 </button>
               </div>
@@ -264,15 +294,26 @@ export default function StationPage({
 
         {part === "check" &&
           (st.planned ? (
-            <p className="path-planned">這一站還在規劃中，目前沒有檢核項目。</p>
+            <p className="path-planned">
+              {t(
+                "這一站還在規劃中，目前沒有檢核項目。",
+                "This station is still being planned; there are no check items yet.",
+              )}
+            </p>
           ) : (
             <>
               <div className="path-checks">
-                <h2>通過條件</h2>
+                <h2>{t("通過條件", "Pass criteria")}</h2>
                 <p>
-                  這些是提示，不是關卡：沒有全部通過，也可以前往下一站。
+                  {t(
+                    "這些是提示，不是關卡：沒有全部通過，也可以前往下一站。",
+                    "These are hints, not gates: you can move on to the next station without passing them all.",
+                  )}
                   {st.checks.some((c) => c.auto) &&
-                    "標示「實驗室判定」的項目由 3D 實驗室自動勾選，達成一次就會保留。"}
+                    t(
+                      "標示「實驗室判定」的項目由 3D 實驗室自動勾選，達成一次就會保留。",
+                      ' Items marked "Checked by lab" are ticked automatically by the 3D lab and stay ticked once achieved.',
+                    )}
                 </p>
                 <ul>
                   {st.checks.map((c) => {
@@ -282,12 +323,18 @@ export default function StationPage({
                         {c.auto ? (
                           <>
                             {ok ? (
-                              <Check size={18} aria-label="已達成" />
+                              <Check
+                                size={18}
+                                aria-label={t("已達成", "Achieved")}
+                              />
                             ) : (
-                              <CircleDashed size={18} aria-label="尚未達成" />
+                              <CircleDashed
+                                size={18}
+                                aria-label={t("尚未達成", "Not yet achieved")}
+                              />
                             )}
                             <span>{c.text}</span>
-                            <small>實驗室判定</small>
+                            <small>{t("實驗室判定", "Checked by lab")}</small>
                           </>
                         ) : (
                           <label>
@@ -307,8 +354,14 @@ export default function StationPage({
                 </ul>
                 <p className="path-checks-summary" role="status">
                   {passed === st.checks.length
-                    ? "這一站全部通過。"
-                    : `已通過 ${passed} / ${st.checks.length} 項。`}
+                    ? t(
+                        "這一站全部通過。",
+                        "You've passed everything at this station.",
+                      )
+                    : t(
+                        `已通過 ${passed} / ${st.checks.length} 項。`,
+                        `Passed ${passed} / ${st.checks.length} items.`,
+                      )}
                 </p>
               </div>
               <div className="path-next">
@@ -319,7 +372,10 @@ export default function StationPage({
                       onGo({ kind: "station", n: next.n, part: "theory" })
                     }
                   >
-                    前往第 {next.n} 站：{next.title}
+                    {t(
+                      `前往第 ${next.n} 站：${next.title}`,
+                      `Go to Station ${next.n}: ${next.title}`,
+                    )}
                     <ArrowRight size={18} aria-hidden="true" />
                   </button>
                 ) : (
@@ -327,7 +383,7 @@ export default function StationPage({
                     className="path-button-primary"
                     onClick={() => onGo({ kind: "home" })}
                   >
-                    回到學習路徑
+                    {t("回到學習路徑", "Back to the learning path")}
                     <ArrowRight size={18} aria-hidden="true" />
                   </button>
                 )}

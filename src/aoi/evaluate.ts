@@ -19,6 +19,7 @@ import type { Device } from "../sandbox/devices";
 import { cellCenter, type GridSpec } from "./rig";
 import type { HeightMap } from "./reconstruct";
 import { codingRange, heightPer2Pi } from "./sensitivity";
+import { t } from "../i18n";
 
 /** Ground truth on the unified grid. Evaluation only: never passed to reconstruction or fusion. */
 export interface TruthMap {
@@ -88,20 +89,54 @@ export function buildTruthMap(
 
 /** Per-cell outcome; the first four are measured cells. */
 export const REASONS = [
-  ["ok", "準確（≤ 容許誤差）", "#5ee4bd"],
-  ["inaccurate", "有值但超出容許誤差", "#e8d36a"],
-  ["edgeMix", "邊緣混合（格內真值起伏）", "#9ab0ff"],
-  ["orderError", "條紋級次錯誤（unwrap 失敗）", "#ff5c8a"],
-  ["rangeAlias", "超出量測範圍（混疊）", "#c04bff"],
-  ["outsideCamera", "Camera FOV 外", "#3b4a5c"],
-  ["cameraOccluded", "Camera 視線被遮擋", "#6b5233"],
-  ["outsideProjector", "Projector FOV 外", "#2f5d7c"],
-  ["shadow", "Projector 陰影", "#1c2a3a"],
-  ["saturated", "亮度飽和", "#ffffff"],
-  ["defocus", "失焦導致調變不足", "#f29b4b"],
-  ["lowModulation", "條紋調變不足", "#b5653a"],
-  ["notSampled", "已解碼但無重建點落入此格", "#7d8da0"],
-  ["noSurface", "無表面", "#0b121c"],
+  ["ok", t("準確（≤ 容許誤差）", "Accurate (≤ tolerance)"), "#5ee4bd"],
+  [
+    "inaccurate",
+    t("有值但超出容許誤差", "Measured but outside tolerance"),
+    "#e8d36a",
+  ],
+  [
+    "edgeMix",
+    t(
+      "邊緣混合（格內真值起伏）",
+      "Edge mixing (ground truth varies within the cell)",
+    ),
+    "#9ab0ff",
+  ],
+  [
+    "orderError",
+    t("條紋級次錯誤（unwrap 失敗）", "Wrong fringe order (unwrapping failed)"),
+    "#ff5c8a",
+  ],
+  [
+    "rangeAlias",
+    t("超出量測範圍（混疊）", "Outside measurement range (aliasing)"),
+    "#c04bff",
+  ],
+  ["outsideCamera", t("Camera FOV 外", "Outside camera FOV"), "#3b4a5c"],
+  [
+    "cameraOccluded",
+    t("Camera 視線被遮擋", "Camera line of sight occluded"),
+    "#6b5233",
+  ],
+  [
+    "outsideProjector",
+    t("Projector FOV 外", "Outside projector FOV"),
+    "#2f5d7c",
+  ],
+  ["shadow", t("Projector 陰影", "Projector shadow"), "#1c2a3a"],
+  ["saturated", t("亮度飽和", "Saturated"), "#ffffff"],
+  ["defocus", t("失焦導致調變不足", "Low modulation from defocus"), "#f29b4b"],
+  ["lowModulation", t("條紋調變不足", "Low fringe modulation"), "#b5653a"],
+  [
+    "notSampled",
+    t(
+      "已解碼但無重建點落入此格",
+      "Decoded, but no reconstructed point falls in this cell",
+    ),
+    "#7d8da0",
+  ],
+  ["noSurface", t("無表面", "No surface"), "#0b121c"],
 ] as const;
 export type Reason = (typeof REASONS)[number][0];
 export const REASON_INDEX = Object.fromEntries(

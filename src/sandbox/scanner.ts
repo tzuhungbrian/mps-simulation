@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { t } from "../i18n";
 import {
   cameraRay,
   projectPoint,
@@ -244,11 +245,16 @@ export const PCB_SETUP: Partial<WorldConfig> = {
 
 /** PCB regions of interest (aim offsets from the board centre, mm). */
 export const PCB_REGIONS = [
-  ["center", "板中心", 0, 0],
-  ["passives", "R1 / C1 / C2 被動元件", -8.125, 9.375],
-  ["qfp", "U1 QFP 引腳列", -8.75, -2],
+  ["center", t("板中心", "Board center"), 0, 0],
+  [
+    "passives",
+    t("R1 / C1 / C2 被動元件", "R1 / C1 / C2 passives"),
+    -8.125,
+    9.375,
+  ],
+  ["qfp", t("U1 QFP 引腳列", "U1 QFP pin row"), -8.75, -2],
   ["soic", "U2 SOIC", 8.75, -7.5],
-  ["header", "J1 排針（4 mm 高）", 8.75, 6.25],
+  ["header", t("J1 排針（4 mm 高）", "J1 pin header (4 mm tall)"), 8.75, 6.25],
 ] as const;
 
 /** Devices look at this point; the multi-view grid is centred on it. */

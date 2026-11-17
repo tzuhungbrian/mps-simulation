@@ -7,6 +7,7 @@ import {
 } from "react";
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { t } from "../i18n";
 import { createViewControls } from "./viewControls";
 import {
   BOARD_SHAPES,
@@ -115,7 +116,9 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         resetView: () => runtime.current?.reset(),
         snapshot: () =>
           runtime.current?.shot() ??
-          Promise.reject(new Error("3D 視窗尚未就緒")),
+          Promise.reject(
+            new Error(t("3D 視窗尚未就緒", "The 3D view is not ready yet")),
+          ),
       }),
       [],
     );
@@ -130,7 +133,10 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         });
       } catch {
         setError(
-          "此裝置無法建立 WebGL2。仍可使用三步數學實驗，但無法顯示 3D 沙盒。",
+          t(
+            "此裝置無法建立 WebGL2。仍可使用三步數學實驗，但無法顯示 3D 沙盒。",
+            "This device can't create WebGL2. The three-step math lab still works, but the 3D sandbox can't be shown.",
+          ),
         );
         return;
       }
@@ -140,7 +146,10 @@ const WorldView = forwardRef<WorldViewApi, Props>(
       canvas.dataset.testid = "sandbox-canvas";
       canvas.setAttribute(
         "aria-label",
-        "3D 沙盒；左鍵點選物體、Camera 或 Projector 後拖曳彩色軸；按住滑鼠中鍵旋轉視角，滾輪縮放；WASD 移動視角，Q/E 轉向",
+        t(
+          "3D 沙盒；左鍵點選物體、Camera 或 Projector 後拖曳彩色軸；按住滑鼠中鍵旋轉視角，滾輪縮放；WASD 移動視角，Q/E 轉向",
+          "3D sandbox; left-click the object, camera or projector, then drag the colored axes; hold the middle mouse button to orbit, scroll to zoom; WASD to move, Q/E to turn",
+        ),
       );
       parent.append(canvas);
       const scene = new THREE.Scene();
@@ -155,8 +164,7 @@ const WorldView = forwardRef<WorldViewApi, Props>(
         home: (orbit) => {
           const p = latest.current;
           // Millimetre-scale AOI pieces and multi-view clouds need a close look at the aim point.
-          const close =
-            !!p.overlay || BOARD_SHAPES.includes(p.config.shape);
+          const close = !!p.overlay || BOARD_SHAPES.includes(p.config.shape);
           const distanceScale =
             Math.max(0.8, 1.25 / viewer.aspect) * (close ? 0.22 : 1);
           if (close) orbit.target.copy(display(rigTarget(p.config)));
@@ -606,7 +614,10 @@ const WorldView = forwardRef<WorldViewApi, Props>(
           new Promise((resolve, reject) => {
             render();
             canvas.toBlob(
-              (b) => (b ? resolve(b) : reject(new Error("PNG 編碼失敗"))),
+              (b) =>
+                b
+                  ? resolve(b)
+                  : reject(new Error(t("PNG 編碼失敗", "PNG encoding failed"))),
               "image/png",
             );
           }),

@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Route as RouteIcon, Search } from "lucide-react";
+import {
+  ChevronDown,
+  Languages,
+  Route as RouteIcon,
+  Search,
+} from "lucide-react";
+import { lang, setLang, t } from "../i18n";
 import { STATIONS, WORKBENCH, stationByN, type Route } from "./stations";
 import { stationState, usePathProgress, type StationState } from "./progress";
 import "./path.css";
@@ -52,20 +58,23 @@ function StationSwitcher({
     const all: Item[] = [
       {
         key: "home",
-        label: "學習路徑",
-        detail: "首頁：目前進度與九站路線",
+        label: t("學習路徑", "Learning path"),
+        detail: t(
+          "首頁：目前進度與九站路線",
+          "Home: your progress and the nine stations",
+        ),
         route: { kind: "home" },
       },
       ...STATIONS.map((s) => ({
         key: `s${s.n}`,
         n: s.n,
-        label: `第 ${s.n} 站 · ${s.title}`,
-        detail: s.planned ? "規劃中" : s.summary,
+        label: t(`第 ${s.n} 站 · ${s.title}`, `Station ${s.n} · ${s.title}`),
+        detail: s.planned ? t("規劃中", "Planned") : s.summary,
         route: { kind: "station", n: s.n, part: "theory" } as Route,
       })),
       ...WORKBENCH.map((w) => ({
         key: `w-${w.tool}`,
-        label: `工作台 · ${w.label}`,
+        label: t(`工作台 · ${w.label}`, `Workbench · ${w.label}`),
         detail: w.detail,
         route: { kind: "tool", tool: w.tool } as Route,
       })),
@@ -97,7 +106,7 @@ function StationSwitcher({
     <dialog
       ref={dialog}
       className="path-switcher"
-      aria-label="跳到站點或工作台"
+      aria-label={t("跳到站點或工作台", "Jump to a station or tool")}
       onClose={onClose}
       onClick={(e) => {
         if (e.target === dialog.current) onClose();
@@ -108,7 +117,10 @@ function StationSwitcher({
         <input
           ref={input}
           value={query}
-          placeholder="輸入站名或工具，例如「Projector」"
+          placeholder={t(
+            "輸入站名或工具，例如「Projector」",
+            'Type a station or tool, e.g. "Projector"',
+          )}
           role="combobox"
           aria-expanded="true"
           aria-controls="path-switcher-list"
@@ -134,7 +146,11 @@ function StationSwitcher({
         />
         <kbd>Esc</kbd>
       </div>
-      <ul id="path-switcher-list" role="listbox" aria-label="結果">
+      <ul
+        id="path-switcher-list"
+        role="listbox"
+        aria-label={t("結果", "Results")}
+      >
         {items.map((item, i) => {
           const st = item.n ? stationByN(item.n) : undefined;
           return (
@@ -165,7 +181,10 @@ function StationSwitcher({
         })}
         {!items.length && (
           <li className="path-switcher-empty">
-            沒有符合「{query}」的站點或工具。
+            {t(
+              `沒有符合「${query}」的站點或工具。`,
+              `No station or tool matches "${query}".`,
+            )}
           </li>
         )}
       </ul>
@@ -186,11 +205,16 @@ function WorkbenchMenu({ onGo }: { onGo: (r: Route) => void }) {
   return (
     <details className="path-menu" ref={ref}>
       <summary>
-        工作台
+        {t("工作台", "Workbench")}
         <ChevronDown size={15} aria-hidden="true" />
       </summary>
       <div className="path-menu-list">
-        <p>自由使用的工具，不計入進度。</p>
+        <p>
+          {t(
+            "自由使用的工具，不計入進度。",
+            "Free-use tools; not counted as progress.",
+          )}
+        </p>
         {WORKBENCH.map((w) => (
           <button
             key={w.tool}
@@ -236,41 +260,57 @@ export default function PathNav({
   return (
     <nav
       className={`path-nav${compact ? " is-compact" : ""}`}
-      aria-label="學習路徑導覽"
+      aria-label={t("學習路徑導覽", "Learning path navigation")}
     >
       {showHome && (
         <button
           className="path-nav-home"
           onClick={() => onGo({ kind: "home" })}
-          aria-label={compact ? "學習路徑" : undefined}
-          title="學習路徑"
+          aria-label={compact ? t("學習路徑", "Learning path") : undefined}
+          title={t("學習路徑", "Learning path")}
         >
           <RouteIcon size={16} aria-hidden="true" />
-          {!compact && "學習路徑"}
+          {!compact && t("學習路徑", "Learning path")}
         </button>
       )}
       {st && (
         <button
           className="path-nav-station"
           onClick={() => onGo({ kind: "station", n: st.n, part: "lab" })}
-          title={`回到第 ${st.n} 站：${st.title}`}
+          title={t(
+            `回到第 ${st.n} 站：${st.title}`,
+            `Back to station ${st.n}: ${st.title}`,
+          )}
         >
           {compact
-            ? `第 ${st.n} 站`
-            : `第 ${st.n} / ${STATIONS.length} 站 · ${st.title}`}
+            ? t(`第 ${st.n} 站`, `Station ${st.n}`)
+            : t(
+                `第 ${st.n} / ${STATIONS.length} 站 · ${st.title}`,
+                `Station ${st.n} / ${STATIONS.length} · ${st.title}`,
+              )}
         </button>
       )}
       <button
         className="path-nav-search"
         onClick={() => setOpen(true)}
         aria-keyshortcuts="Control+K"
-        aria-label={compact ? "跳到站點或工具" : undefined}
+        aria-label={t("跳到站點或工具", "Jump to a station or tool")}
       >
         <Search size={15} aria-hidden="true" />
-        {!compact && <span>跳到…</span>}
+        {!compact && <span>{t("跳到…", "Jump to…")}</span>}
         <kbd>Ctrl K</kbd>
       </button>
       <WorkbenchMenu onGo={onGo} />
+      <button
+        className="path-nav-lang"
+        onClick={() => setLang(lang === "en" ? "zh" : "en")}
+        lang={lang === "en" ? "zh-Hant" : "en"}
+        aria-label={lang === "en" ? "切換為繁體中文" : "Switch to English"}
+        title={lang === "en" ? "切換為繁體中文" : "Switch to English"}
+      >
+        <Languages size={15} aria-hidden="true" />
+        {lang === "en" ? "中文" : "EN"}
+      </button>
       <StationSwitcher open={open} onClose={() => setOpen(false)} onGo={onGo} />
     </nav>
   );

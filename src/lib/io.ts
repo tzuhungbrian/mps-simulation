@@ -3,6 +3,7 @@ import {
   type SimulationConfig,
   type runSimulation,
 } from "../core/simulation";
+import { t } from "../i18n";
 export const STORAGE_KEY = "structured-light-lab.parameters.v1";
 export function serializeParameters(config: SimulationConfig): string {
   return JSON.stringify(
@@ -12,7 +13,8 @@ export function serializeParameters(config: SimulationConfig): string {
   );
 }
 export function parseParameters(text: string): SimulationConfig {
-  if (text.length > 1_048_576) throw new Error("參數檔超過 1 MB");
+  if (text.length > 1_048_576)
+    throw new Error(t("參數檔超過 1 MB", "Parameter file exceeds 1 MB"));
   const envelope: unknown = JSON.parse(text);
   if (
     typeof envelope !== "object" ||
@@ -23,7 +25,12 @@ export function parseParameters(text: string): SimulationConfig {
     envelope.model !== "three-step-1d" ||
     !("config" in envelope)
   )
-    throw new Error("不支援的參數格式或模型版本");
+    throw new Error(
+      t(
+        "不支援的參數格式或模型版本",
+        "Unsupported parameter format or model version",
+      ),
+    );
   return parseConfig(envelope.config);
 }
 export function saveParameters(

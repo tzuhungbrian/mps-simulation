@@ -1,3 +1,4 @@
+import { t } from "../i18n";
 import { makePinhole, type Pinhole, type Vec3 } from "./geometry";
 
 /** A camera or projector at an absolute world position (mm); it always looks at the rig aim point. */
@@ -21,10 +22,10 @@ export const PAIR_CLASSES = [
 ] as const;
 export type PairClass = (typeof PAIR_CLASSES)[number];
 export const PAIR_CLASS_NAMES: Record<PairClass, string> = {
-  direct: "直視",
-  opposite: "反対側",
-  orthogonal: "直交",
-  same: "同じ側",
+  direct: t("直視", "Direct"),
+  opposite: t("反対側", "Opposite"),
+  orthogonal: t("直交", "Orthogonal"),
+  same: t("同じ側", "Same side"),
 };
 
 const RAD = Math.PI / 180;
@@ -167,39 +168,48 @@ const ring = (
 export const RIG_PRESETS: RigPreset[] = [
   {
     id: "aoi",
-    name: "AOI：1 直視 + 4 斜視 Camera × 4 Projector",
+    name: t(
+      "AOI：1 直視 + 4 斜視 Camera × 4 Projector",
+      "AOI: 1 direct + 4 oblique cameras × 4 projectors",
+    ),
     cameras: [
       {
-        name: "直視 Camera",
+        name: t("直視 Camera", "Direct camera"),
         tilt: 0,
         azimuth: 0,
         distance: 110,
         fov: 6,
         aperture: 4,
       },
-      ...ring("斜視 Camera", 35, 110, 7.5, 4),
+      ...ring(t("斜視 Camera", "Oblique camera"), 35, 110, 7.5, 4),
     ],
     projectors: ring("Projector", 30, 120, 8, 3),
   },
   {
     id: "aoi-oblique",
-    name: "AOI：4 斜視 Camera × 4 Projector（16 組斜視）",
-    cameras: ring("斜視 Camera", 35, 110, 7.5, 4),
+    name: t(
+      "AOI：4 斜視 Camera × 4 Projector（16 組斜視）",
+      "AOI: 4 oblique cameras × 4 projectors (16 oblique pairs)",
+    ),
+    cameras: ring(t("斜視 Camera", "Oblique camera"), 35, 110, 7.5, 4),
     projectors: ring("Projector", 30, 120, 8, 3),
   },
   {
     id: "aoi-two-projectors",
-    name: "AOI：1 直視 + 4 斜視 × 2 Projector",
+    name: t(
+      "AOI：1 直視 + 4 斜視 × 2 Projector",
+      "AOI: 1 direct + 4 oblique × 2 projectors",
+    ),
     cameras: [
       {
-        name: "直視 Camera",
+        name: t("直視 Camera", "Direct camera"),
         tilt: 0,
         azimuth: 0,
         distance: 110,
         fov: 6,
         aperture: 4,
       },
-      ...ring("斜視 Camera", 35, 110, 7.5, 4),
+      ...ring(t("斜視 Camera", "Oblique camera"), 35, 110, 7.5, 4),
     ],
     projectors: ring("Projector", 30, 120, 8, 3, [0, 180]),
   },

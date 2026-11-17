@@ -102,6 +102,21 @@
 .path-nav.is-compact .path-nav-search {
   min-width: 0;
 }
+.path-nav.is-compact .path-nav-search > kbd {
+  display: none;
+}
+.path-nav-lang {
+  color: #a6b4c4 !important;
+}
+@media (max-width: 720px) {
+  .path-nav-search {
+    min-width: 0;
+  }
+  .path-nav-search > span,
+  .path-nav-search > kbd {
+    display: none;
+  }
+}
 .path-nav kbd,
 .path-switcher kbd {
   margin-left: auto;

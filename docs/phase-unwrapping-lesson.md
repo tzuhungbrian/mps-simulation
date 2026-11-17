@@ -1,6 +1,15 @@
 # Phase Unwrapping 教學模型
 
-入口：`?workspace=guided` → 開始 → 「4 解開週期」，或從第 3 步的「下一步：理解 Phase Unwrapping」進入。
+入口：`?workspace=guided` → 開始 → 「4 Spatial」／「5 Temporal」，或從學習路徑第 4 站進入（`?workspace=guided&step=4`、`step=5`）。
+
+## 第 5 步：Temporal Unwrapping
+
+`src/lib/temporalLesson.ts` 合成一個帶深度斷層的斜平面：Projector 座標 `u(x) = 0.08 + 0.7·x/(W−1) + [x ≥ x₀]·c/16`，每組頻率 {1, 4, 16}（取自 3D 實驗室 `FRINGE.frequencies`）各拍三步相移，用 `decodeThreeStep` 解出 wrapped phase。邊界留白讓最粗一層不跨 0／2π 接縫。
+
+- 逐層：`k = round((r·Φ上一層 − φ) / 2π)`，`Φ = φ + 2πk`；單元測試確認和 3D 實驗室的 `unwrapTemporal` 一致。
+- 斷層比較不加雜訊。Spatial 只在每列第一個有效像素對齊真值，後續區段不重新對齊，避免掩蓋接錯。
+- 雜訊比較彙整 32 列，以合成真值計算級次錯誤（|Φ − Φ_true| > π）。預期：{1, 16} 在 σ ≈ 0.03 起出錯，{1, 4, 16} 在 0.08 內幾乎沒有。
+- 「3D 實驗室拍到的影像」資料來源目前停用；`TemporalData` 介面不綁定合成來源，之後可接上實驗室的解碼結果。
 
 ## 同一視野直接對照
 

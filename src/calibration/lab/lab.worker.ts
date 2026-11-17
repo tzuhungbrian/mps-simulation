@@ -68,7 +68,7 @@ export type LabResponse =
       type: "calibrate-projector";
       result: ProjectorCalibrationResult;
     }
-  | { id: number; ok: false; error: string };
+  | { id: number; ok: false; error: string; cvCode?: number };
 
 const scope = self as unknown as {
   postMessage: (message: LabResponse, transfer?: Transferable[]) => void;
@@ -134,15 +134,12 @@ scope.onmessage = async (event) => {
       });
     }
   } catch (e) {
+    // Workers cannot see the UI language: send the raw OpenCV code and let the page word it.
     scope.postMessage({
       id: req.id,
       ok: false,
-      error:
-        e instanceof Error
-          ? e.message
-          : typeof e === "number"
-            ? `OpenCV 例外（代碼 ${e}）`
-            : String(e),
+      error: e instanceof Error ? e.message : String(e),
+      cvCode: typeof e === "number" ? e : undefined,
     });
   }
 };

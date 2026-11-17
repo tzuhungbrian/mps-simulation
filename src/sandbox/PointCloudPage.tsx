@@ -7,6 +7,7 @@ import {
 } from "react";
 import { RotateCcw } from "lucide-react";
 import * as THREE from "three";
+import { t } from "../i18n";
 import {
   createWorld,
   LEGACY_UNIT_MM,
@@ -24,10 +25,10 @@ const mm = (v: number) => v.toFixed(v < 10 ? 3 : 1);
 /** Scene data are in mm; the view keeps its original scale of 25 mm per display unit. */
 const DISPLAY = 1 / LEGACY_UNIT_MM;
 const STATUS = {
-  success: ["成功", "ok"],
-  partial: ["部分", "warn"],
-  failed: ["失敗", "bad"],
-  hidden: ["看不到", "muted"],
+  success: [t("成功", "Success"), "ok"],
+  partial: [t("部分", "Partial"), "warn"],
+  failed: [t("失敗", "Failed"), "bad"],
+  hidden: [t("看不到", "Hidden"), "muted"],
 } as const;
 
 function PointCloudView({
@@ -59,7 +60,12 @@ function PointCloudView({
         preserveDrawingBuffer: true,
       });
     } catch {
-      setError("此裝置無法建立 WebGL，無法顯示 3D 點雲；右側統計仍可使用。");
+      setError(
+        t(
+          "此裝置無法建立 WebGL，無法顯示 3D 點雲；右側統計仍可使用。",
+          "This device can't create WebGL, so the 3D point cloud can't be shown; the statistics on the right still work.",
+        ),
+      );
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
@@ -68,7 +74,10 @@ function PointCloudView({
     canvas.dataset.testid = "analysis-canvas";
     canvas.setAttribute(
       "aria-label",
-      "重建點雲；按住滑鼠中鍵旋轉視角，右鍵平移，滾輪縮放；WASD 移動視角，Q/E 轉向，R 重設",
+      t(
+        "重建點雲；按住滑鼠中鍵旋轉視角，右鍵平移，滾輪縮放；WASD 移動視角，Q/E 轉向，R 重設",
+        "Reconstructed point cloud; hold the middle mouse button to orbit, right-drag to pan, scroll to zoom; WASD to move, Q/E to turn, R to reset",
+      ),
     );
     parent.append(canvas);
     const scene = new THREE.Scene();
@@ -214,7 +223,7 @@ function Histogram({ analysis }: { analysis: ScanAnalysis }) {
       className="analysis-histogram"
       viewBox={`0 0 ${w} ${h + 22}`}
       role="img"
-      aria-label="有號深度誤差直方圖"
+      aria-label={t("有號深度誤差直方圖", "Signed depth error histogram")}
     >
       <rect
         x={w / 2 - tol}
@@ -276,7 +285,9 @@ export default function PointCloudPage({
   if (!scan || !analysis)
     return (
       <div className="analysis-page">
-        <div className="sandbox-no-result">正在產生第一組掃描結果…</div>
+        <div className="sandbox-no-result">
+          {t("正在產生第一組掃描結果…", "Generating the first scan…")}
+        </div>
       </div>
     );
   const total = scan.metrics.totalCount;
@@ -289,7 +300,10 @@ export default function PointCloudPage({
     : null;
   return (
     <div className={`analysis-page ${stale ? "stale" : ""}`}>
-      <section className="analysis-viewport" aria-label="重建點雲">
+      <section
+        className="analysis-viewport"
+        aria-label={t("重建點雲", "Reconstructed point cloud")}
+      >
         <PointCloudView
           scan={scan}
           config={config}
@@ -304,14 +318,22 @@ export default function PointCloudPage({
             {colorMode === "error" ? (
               <>
                 <span className="swatch near" />
-                偏近
+                {t("偏近", "Too near")}
                 <span className="swatch zero" />
                 0
                 <span className="swatch far" />
-                偏遠（±{mm(analysis.histogram.range)} mm）
+                {t(
+                  <>偏遠（±{mm(analysis.histogram.range)} mm）</>,
+                  <>Too far (±{mm(analysis.histogram.range)} mm)</>,
+                )}
               </>
             ) : colorMode === "surface" ? (
-              ["物體", "地面", "晶片", "引腳"].map((name, i) => (
+              [
+                t("物體", "Object"),
+                t("地面", "Ground"),
+                t("晶片", "Chip"),
+                t("引腳", "Pin"),
+              ].map((name, i) => (
                 <span key={name}>
                   <span
                     className="swatch"
@@ -321,20 +343,20 @@ export default function PointCloudPage({
                 </span>
               ))
             ) : (
-              <>藍 → 紅：低 → 高</>
+              <>{t("藍 → 紅：低 → 高", "Blue → red: low → high")}</>
             )}
           </div>
           <div className="sandbox-view-buttons">
             <label>
-              著色
+              {t("著色", "Color by")}
               <select
-                aria-label="點雲著色方式"
+                aria-label={t("點雲著色方式", "Point-cloud coloring")}
                 value={colorMode}
                 onChange={(e) => setColorMode(e.target.value as ColorMode)}
               >
-                <option value="error">深度誤差</option>
-                <option value="height">高度</option>
-                <option value="surface">表面類別</option>
+                <option value="error">{t("深度誤差", "Depth error")}</option>
+                <option value="height">{t("高度", "Height")}</option>
+                <option value="surface">{t("表面類別", "Surface type")}</option>
               </select>
             </label>
             <label>
@@ -343,7 +365,7 @@ export default function PointCloudPage({
                 checked={showTruth}
                 onChange={(e) => setShowTruth(e.target.checked)}
               />
-              真實表面
+              {t("真實表面", "True surface")}
             </label>
             <label>
               <input
@@ -351,14 +373,14 @@ export default function PointCloudPage({
                 checked={showGround}
                 onChange={(e) => setShowGround(e.target.checked)}
               />
-              地面點
+              {t("地面點", "Ground points")}
             </label>
             <button onClick={() => resetView.current?.()}>
               <RotateCcw size={15} />
-              重設視角
+              {t("重設視角", "Reset view")}
             </button>
             <InfoButton
-              label="操作說明"
+              label={t("操作說明", "Controls")}
               open={showHelp}
               onToggle={() => setShowHelp((v) => !v)}
             />
@@ -366,36 +388,45 @@ export default function PointCloudPage({
         </div>
         {showHelp && (
           <div className="sandbox-overlay sandbox-overlay-bottom sandbox-play-help">
-            <span>中鍵：旋轉</span>
-            <span>右鍵：平移</span>
-            <span>滾輪：縮放</span>
-            <span>WASD／Q E：移動、轉向</span>
-            <span>R：重設視角</span>
+            <span>{t("中鍵：旋轉", "Middle button: orbit")}</span>
+            <span>{t("右鍵：平移", "Right button: pan")}</span>
+            <span>{t("滾輪：縮放", "Scroll: zoom")}</span>
+            <span>{t("WASD／Q E：移動、轉向", "WASD / Q E: move, turn")}</span>
+            <span>{t("R：重設視角", "R: reset view")}</span>
           </div>
         )}
         {stale && (
           <p className="analysis-stale" role="status">
-            場景已改，以下是上一組掃描；重掃完成後自動更新。
+            {t(
+              "場景已改，以下是上一組掃描；重掃完成後自動更新。",
+              "The scene changed; this is the previous scan. It updates automatically when the rescan finishes.",
+            )}
           </p>
         )}
       </section>
-      <aside className="analysis-panel" aria-label="誤差統計">
+      <aside
+        className="analysis-panel"
+        aria-label={t("誤差統計", "Error statistics")}
+      >
         <section>
-          <InfoHeading title="誤差摘要" level={2}>
+          <InfoHeading title={t("誤差摘要", "Error summary")} level={2}>
             <p>
-              誤差 = 重建 Camera Z − 真值 Camera Z。真值只用於評估，不參與重建。
+              {t(
+                "誤差 = 重建 Camera Z − 真值 Camera Z。真值只用於評估，不參與重建。",
+                "Error = reconstructed camera Z − true camera Z. Ground truth is used only for evaluation, never for reconstruction.",
+              )}
             </p>
           </InfoHeading>
           <dl className="analysis-stats" data-testid="analysis-stats">
             <div>
-              <dt>有效點</dt>
+              <dt>{t("有效點", "Valid points")}</dt>
               <dd>
                 {scan.metrics.validCount}
                 <small> / {total}</small>
               </dd>
             </div>
             <div>
-              <dt>容差內</dt>
+              <dt>{t("容差內", "Within tolerance")}</dt>
               <dd data-testid="analysis-accurate">
                 {analysis.accurate}
                 <small>
@@ -408,10 +439,10 @@ export default function PointCloudPage({
               [
                 ["RMSE", o?.rmse],
                 ["MAE", o?.mae],
-                ["偏差（平均）", o?.bias],
-                ["中位數 |e|", o?.median],
+                [t("偏差（平均）", "Bias (mean)"), o?.bias],
+                [t("中位數 |e|", "Median |e|"), o?.median],
                 ["P95 |e|", o?.p95],
-                ["最大 |e|", o?.max],
+                [t("最大 |e|", "Max |e|"), o?.max],
               ] as const
             ).map(([label, value]) => (
               <div key={label}>
@@ -421,10 +452,10 @@ export default function PointCloudPage({
             ))}
           </dl>
           <label className="sandbox-inline-field">
-            容差（mm）
+            {t("容差（mm）", "Tolerance (mm)")}
             <input
               type="number"
-              aria-label="誤差容差 mm"
+              aria-label={t("誤差容差 mm", "Error tolerance mm")}
               min={0.001}
               max={10}
               step={0.025}
@@ -437,20 +468,25 @@ export default function PointCloudPage({
           </label>
         </section>
         <section>
-          <InfoHeading title="誤差分布" level={2}>
-            <p>綠底＝容差範圍；超出範圍的點併入兩端。</p>
+          <InfoHeading title={t("誤差分布", "Error distribution")} level={2}>
+            <p>
+              {t(
+                "綠底＝容差範圍；超出範圍的點併入兩端。",
+                "Green band = tolerance; points outside the range are clamped into the end bins.",
+              )}
+            </p>
           </InfoHeading>
           <Histogram analysis={analysis} />
         </section>
         <section>
-          <h2>依表面</h2>
+          <h2>{t("依表面", "By surface")}</h2>
           <table className="analysis-table">
             <thead>
               <tr>
-                <th>表面</th>
-                <th>可見</th>
-                <th>有效</th>
-                <th>容差內</th>
+                <th>{t("表面", "Surface")}</th>
+                <th>{t("可見", "Visible")}</th>
+                <th>{t("有效", "Valid")}</th>
+                <th>{t("容差內", "In tolerance")}</th>
                 <th>RMSE</th>
               </tr>
             </thead>
@@ -468,7 +504,7 @@ export default function PointCloudPage({
           </table>
         </section>
         <section>
-          <h2>失效像素原因</h2>
+          <h2>{t("失效像素原因", "Failed pixel causes")}</h2>
           <ul className="analysis-causes">
             {FAILURE_CAUSES.map(([key, label]) => (
               <li key={key}>
@@ -486,10 +522,15 @@ export default function PointCloudPage({
         </section>
         {analysis.pins && pinTally && (
           <section data-testid="analysis-pins">
-            <InfoHeading title="PCB 引腳重建" level={2}>
+            <InfoHeading
+              title={t("PCB 引腳重建", "PCB pin reconstruction")}
+              level={2}
+            >
               <p>
-                成功＝可見像素中至少一半在容差內；部分＝有但不到一半；失敗＝看得到但沒有準確點；看不到＝Camera
-                視線被擋或在畫面外。
+                {t(
+                  "成功＝可見像素中至少一半在容差內；部分＝有但不到一半；失敗＝看得到但沒有準確點；看不到＝Camera 視線被擋或在畫面外。",
+                  "Success = at least half of the visible pixels are within tolerance; Partial = some, but fewer than half; Failed = visible but no accurate points; Hidden = the camera's view is blocked or the pin is outside the image.",
+                )}
               </p>
             </InfoHeading>
             <div className="analysis-pin-tally">
@@ -502,11 +543,11 @@ export default function PointCloudPage({
             <table className="analysis-table">
               <thead>
                 <tr>
-                  <th>引腳</th>
-                  <th>可見</th>
-                  <th>有效</th>
-                  <th>容差內</th>
-                  <th>結果</th>
+                  <th>{t("引腳", "Pin")}</th>
+                  <th>{t("可見", "Visible")}</th>
+                  <th>{t("有效", "Valid")}</th>
+                  <th>{t("容差內", "In tolerance")}</th>
+                  <th>{t("結果", "Result")}</th>
                 </tr>
               </thead>
               <tbody>
