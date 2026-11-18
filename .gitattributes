@@ -3,3 +3,5 @@
 *.png binary
 # Preserve genuine CSV exports, including their CRLF bytes.
 *.csv -text whitespace=cr-at-eol
+# Windows batch files need CRLF for labels / goto to work.
+*.cmd text eol=crlf
