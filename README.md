@@ -1,116 +1,128 @@
 # Structured Light Lab · 結構光實驗室
 
-React + TypeScript + Vite + Three.js / WebGL 的互動式教學研究專案。
+在瀏覽器裡動手學結構光的互動式教學與研究環境：從 Phase Shifting、Phase Unwrapping，到相機模型、Camera / Projector Calibration、三角量測、多視角座標統合與 Fusion。每一步都跑實際演算法，畫面上的相位、點雲與校正參數都是從模擬影像反算出來的。
 
-**已具備 MVP 1 一維數學實驗，以及 MVP 2 的已知校正、單週期 3D 掃描沙盒。不是完整四階段 Scanner。**
+React 19 + TypeScript + Vite + Three.js / WebGL，校正實驗另用 OpenCV.js。所有計算都在本機瀏覽器執行：沒有後端，不上傳量測或參數。
 
-介面預設繁體中文，保留英文技術名詞；頂部導覽列的「EN／中文」按鈕可切換為英文，選擇會記在瀏覽器裡，也可以直接用 `?lang=en` 開啟。文字以 `src/i18n.ts` 的 `t(中文, English)` 成對撰寫，少寫一種語言時型別檢查會失敗。所有計算都在本機瀏覽器執行，不使用後端、不上傳量測或參數。
+> **如實標示**：本專案使用一般 N 步 Phase Shifting，**沒有實作 Micro Phase Shifting**。所有結果都來自理想化的模擬，不代表實機 AOI 性能，也不能用於工業或醫療量測認證。
 
-## 啟動
+介面預設為繁體中文，技術名詞保留英文。頂部導覽列的「EN／中文」可切換成英文（會記在瀏覽器），也可以用 `?lang=en` 開啟。
 
-已於 Node.js 22.14.0 驗證；建議使用相容的 Node.js 22.12+ 或更新 LTS。
+## 快速開始
+
+需要 Node.js 22.12 以上（已在 22.14.0 驗證）。
 
 ```bash
 npm ci
-npm run dev
+npm run dev        # http://127.0.0.1:5173（只綁定 loopback）
 ```
 
-開啟 `http://127.0.0.1:5173`。伺服器只綁定 loopback，不預設公開到區域網路。
+第一次開啟會進入**學習路徑首頁**（九站）。同一個分頁裡如果上次停在某個工具，重新整理後會回到那個工具；加 `?path` 一定會回到首頁。
 
-```bash
-npm test                    # 純數學與參數 / CSV 單元測試
-npm run build               # strict TypeScript + Vite production build
-npx playwright install chromium
-npm run test:e2e            # 真正 Chromium；包含 WebGL、下載檔案內容與互動
-npm run test:production     # 同一套驗收測試改對 production dist 執行
-npm run preview             # 預覽 dist，預設 http://127.0.0.1:4173
-npm run format:check
-```
+## 學習路徑：九站
 
-`dist/` 是可部署的靜態網站；請使用 HTTP server，不要直接雙擊 index.html（ES module / file:// 限制）。依賴版本由 package-lock.json 鎖定。
+依照實際架設一套結構光系統的順序排列。每一站分成**理論**、**實驗**、**檢核**三部分，檢核清單會記錄進度；部分項目由 3D 校正實驗室自動判定。
 
-## 預設進入 3D 沙盒
+| 站  | 章節             | 主題                                   | 主要實驗                                                          |
+| --- | ---------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| 1   | 系統與 Camera    | 系統與相機模型（K、R \| t、射線相交）  | 3D 沙盒：擺放 Camera / Projector                                  |
+| 2   | 系統與 Camera    | Camera Calibration                     | 3D 校正實驗室：擺板子、拍照、OpenCV.js 校正；站內實驗 A           |
+| 3   | 相位與 Projector | Phase Shifting                         | 一步一步學第 1–3 步；1D 自由實驗                                  |
+| 4   | 相位與 Projector | Phase Unwrapping（Spatial / Temporal） | 一步一步學第 4–5 步；3D 沙盒的時間相位解包                        |
+| 5   | 相位與 Projector | Projector Calibration                  | 3D 校正實驗室：相位 → Projector 像素、stereoCalibrate；站內實驗 B |
+| 6   | 重建             | 掃描與重建                             | 3D 沙盒 + 點雲分析                                                |
+| 7   | 重建             | 誤差與診斷                             | 規劃中                                                            |
+| 8   | 多視角           | 多視角座標統合                         | 站內實驗 C：兩台 Scanner 的重疊區一致性                           |
+| 9   | 多視角           | 多視角 Fusion                          | AOI 多視角評估                                                    |
 
-首次開啟會進入 3D Sandbox。觀察視角採 city-builder 式操作：點場景後以 WASD 平移視角、Q / E 水平轉向、按住滑鼠中鍵旋轉、滾輪縮放、右鍵拖曳平移、R 重設。左鍵點選物體、Camera 或 Projector 後拖曳彩色軸移動它，也可用側欄滑桿；兩台裝置永遠對準物體目前的中心；預設 Camera 在物體正上方往下拍、Projector 與物體中心同高並沿 X 軸從側面照射，影像水平軸自動沿 baseline。物體可切換球體、方塊、斜板、夾角可調的 V 型槽，以及放大比例的 PCB 板（QFP、SOIC、排針、被動元件共 48 支引腳，板子／晶片／引腳各自材質；選用時自動套用俯拍檢測擺位）；物體與地面各有反射率、GGX 鏡面強度與粗糙度（可選金屬、塑膠、陶瓷等材質預設，或一鍵重設），並可開啟 1–3 次 Monte Carlo 互反射。「專注 3D 空間」會收起工具與圖表，只保留大視窗與操作；不是具有重力、碰撞或第一人稱行走的完整遊戲引擎。
+站點定義在 [src/path/stations.ts](src/path/stations.ts)。
 
-版面為單一畫面的編輯器式工作區：左側分頁參數（物體／裝置／投影／材質／其他，每個數值可拖滑桿或直接輸入）、中間 3D 視窗、右側指標與分頁結果（曝光影像／相位與深度／光傳輸）。改任何參數後約 0.3 秒自動在背景 Web Worker 重新掃描（也可按「重新掃描」）：正向模型以相同三角網格（BVH 加速）做 CPU 光線追蹤，計算 Camera 可見面、Projector 視野及遮擋、材質 BRDF 與可選的互反射，再從 N 張 intensity 解出 phase、（需要時）用單週期條紋解包成 column，利用已知校正做 ray–plane triangulation。點雲來自實際反算，不讀取表面真值。結果區另顯示直接光／間接光分量、深度誤差圖，以及同場景無互反射時的 RMSE 對照。重掃完成前，舊結果會變暗並從 3D 視窗移除點雲與射線，不冒充目前場景的量測。
+## 工作區與網址參數
 
-「投影」分頁可調條紋頻率 f（1–32 個週期）、相移步數 N（3–8）、條紋 offset / amplitude 與 Projector FOV。f > 1 時可開關「時間相位解包」：開啟時加投 N 張單週期條紋來決定條紋序；關閉時直接把包裹相位當第 0 個週期，可以看到歧義造成的錯誤重建。
+| 網址                                  | 內容                                                           |
+| ------------------------------------- | -------------------------------------------------------------- |
+| `?path`                               | 學習路徑首頁                                                   |
+| `?station=N`（`&part=lab` / `check`） | 第 N 站的理論 / 實驗 / 檢核                                    |
+| `?workspace=sandbox`                  | [3D 沙盒](#3d-沙盒)                                            |
+| `?workspace=analysis`                 | [點雲分析](#點雲分析)                                          |
+| `?workspace=aoi`                      | [AOI 多視角評估](#aoi-多視角評估)                              |
+| `?workspace=calib-lab`                | [Calibration 3D 實驗室](#calibration-課程與-3d-實驗室)         |
+| `?workspace=calibration`              | 相容舊網址，導向第 2 站理論                                    |
+| `?workspace=guided`（`&step=1`…`5`）  | [一步一步學](#一步一步學從-phase-shifting-到-phase-unwrapping) |
+| `?workspace=explore`                  | [1D 自由實驗](#1d-自由實驗)                                    |
+| `&station=N`                          | 從某一站進入工具時保留返回連結                                 |
+| `&lang=en`                            | 英文介面                                                       |
 
-所有場景參數變更（滑桿、拖曳物體／Camera／Projector、材質、匯入等）都可用 Ctrl+Z 復原、Ctrl+Y 或 Ctrl+Shift+Z 重做，頂端也有對應按鈕；一次連續拖曳算一步，最多保留 100 步。正在數字欄位內打字時，Ctrl+Z 留給瀏覽器的文字復原。
+模式選擇只存在此分頁的 sessionStorage；切換模式不會覆寫已保存的科學參數。
 
-預設只在整個 Projector 視野投 **一個完整正弦週期**、三步相移；多頻解包是一般的兩頻時間解包，不是 Micro PS。已知的理想 calibration 也不是從校正板估計的結果。詳見 [3D 沙盒模型與限制](docs/sandbox-model.md)。
+## 各工作區
 
-網址可明確指定：`?workspace=sandbox`、`?workspace=aoi`、`?workspace=guided`、`?workspace=explore`。模式選擇在此分頁保存；已保存的科學參數不會因切換模式被覆寫。
+### 3D 沙盒
 
-Camera 解析度可選 96×72 到 384×288，並可開啟 2×2 / 3×3 像素面積積分：跨在邊緣上的像素會混合兩個表面的條紋，小細節（如引腳）在低解析度時會重建錯誤或消失。
+單一畫面的編輯器式工作區：左側參數分頁（物體／裝置／投影／材質／其他）、中間 3D 視窗、右側指標與結果（曝光影像／相位與深度／光傳輸）。
 
-頂端「點雲分析」是獨立頁面：可旋轉的重建點雲（操控與 3D 沙盒相同：中鍵旋轉、右鍵平移、滾輪縮放、WASD／Q E 移動轉向、R 或「重設視角」回到預設；依深度誤差、高度或表面類別著色，可疊合真實表面線框）、RMSE / MAE / 平均偏差 / 中位數 / P95 / 最大誤差、可調容差與誤差直方圖、依表面統計、失效像素原因（背景、未照明、clipping、調變過低、三角量測無效）；PCB 另列每支引腳的可見、有效、容差內像素與「成功／部分／失敗／看不到」判定。這些全是讀取真值的評估資料，不參與重建。
+- **場景**：球體、方塊、斜板、夾角可調的 V 型槽，以及放大比例的 PCB 板（QFP、SOIC、排針、被動元件共 48 支引腳）。
+- **材質**：物體與地面各有反射率、GGX 鏡面強度與粗糙度（金屬、塑膠、陶瓷等預設），可開啟 1–3 次 Monte Carlo 互反射。
+- **條紋編碼**：頻率 f（1–32 週期）、相移步數 N（3–8）、offset / amplitude、Projector FOV。f > 1 時可開關時間相位解包；關閉時能直接看到級次歧義造成的錯誤重建。
+- **Camera**：解析度 96×72 到 384×288，可開 2×2 / 3×3 像素面積積分，觀察邊緣混合與小引腳在低解析度下的失效。
+- **重建流程**：改參數後約 0.3 秒在 Web Worker 自動重掃。正向模型以 BVH 加速的 CPU 光線追蹤產生 N 張影像，再解相位、（需要時）解包成 column、用已知校正做 ray–plane 三角量測。點雲來自實際反算，不讀表面真值；重掃完成前舊結果會變暗並從 3D 視窗移除。
+- **操作**：點場景後 WASD 平移、Q / E 轉向、中鍵旋轉、滾輪縮放、右鍵平移、R 重設。左鍵選物體或裝置後拖曳彩色軸移動。Ctrl+Z / Ctrl+Y（或 Ctrl+Shift+Z）復原與重做，最多 100 步，一次連續拖曳算一步。「專注 3D 空間」會收起側欄。
 
-## AOI Multi-view Simulation Mode
+預設的 calibration 是已知的理想值，不是從校正板估計的。模型細節與限制：[docs/sandbox-model.md](docs/sandbox-model.md)。
 
-沙盒頂端「AOI 多視角」或 `?workspace=aoi`。用來回答兩個問題：不同斜視 Pair 的 Measurement Range 應如何設定；各 Pair 的 3D 資料應如何使用與 Fusion。**使用一般 N 步 Phase Shifting，不是 Micro Phase Shifting；理想模擬精度不代表實際 AOI 性能。**
+### 點雲分析
 
-- **單位與座標**：mm；板面為高度 0 的基準面，板面 x = world X、y = world Z、高度 = world Y。所有 Pair、真值與 Fusion 共用同一個 ROI 格網。
-- **設備**：任意 1–8 台 Camera 與 Projector，各自設傾角、方位、距離、FOV、光圈。Pair 類別由幾何即時判定（Camera 傾角 ≤ 門檻為直視；|Δ方位| ≤ 45° 同じ側、≥ 135° 反対側、其餘直交），預設 4 斜視 × 4 Projector 得到反対側 4、直交 8、同じ側 4，但不假設台數。
-- **理論**（只用校正資訊）：平行近似 `|dφ/dh| = (2π/p)·|tanθp − tanθc·cosΔα|`；pinhole 幾何精確微分；每 2π 高度 `2π/|dφ/dh|`；單週期量測範圍 = 每 2π 高度，雙週期（外差）× r/(r−1)；`σφ = σI·√(2/N)/B`、`σh = σφ/|dφ/dh|`；級次錯誤機率、景深、依需求範圍反推的最高條紋頻率。
-- **模擬**：重用沙盒 BVH 光線追蹤、Lambert + GGX、N 步解碼與 ray–plane 三角量測；另加薄透鏡失焦（`c = f·A·|1/s − 1/s_f|`，σ = c/4；Projector 端以高斯 MTF 降低條紋對比、Camera 端逐像素散佈模糊）。單週期以校正基準面（視窗底部）決定級次，超出範圍會混疊。只模擬直接光，沒有互反射。
-- **場景**：階梯量規、Chip + 凹形焊錫 Fillet + 3 mm 高元件、沙盒 PCB（縮放為 40×30 mm）、可調高度的平面。
-- **有效量測圖**：每格原因為準確、超差、邊緣混合、級次錯、範圍混疊、Camera FOV 外、視線遮擋、Projector FOV 外、陰影、飽和、失焦、調變不足、無取樣。幾何原因使用真值，只供評估。
-- **Fusion**（不使用真值）：① 直視 + 斜視補洞、② 單一斜視、③ 斜視 + 斜視共識融合（與最多 Pair 一致的值勝出，剔除離群後 1/σ² 加權；σ 來自各 Pair 自己的調變 B、感測器雜訊規格與 |dφ/dh|）。Cross-pair Consistency Check 列出兩兩 Pair 的高度差，並以真值驗證「一致 / 矛盾」格的實際 RMSE。
-- **Benchmark**：RMSE / MAE / Bias、平坦區 RMSE、覆蓋率、失效比例、粗大誤差、各材質（板面 / 元件 / 電極 / Fillet）、Worker 內計算時間；可單獨或批次執行 Pair，固定 seed 的參數掃描（f₁、p₂/p₁、雜訊、平面高度、視窗底部）；匯出每格 CSV、摘要 JSON、批次 CSV。
-- **AOI 參考值**：可輸入廠商或實機的直視 / 反対側 / 直交 / 同じ側數值（每 2π 高度、範圍、感度比、高度雜訊比）並列比較；不進入任何計算，也不會使模擬結果過期。
-- **條紋編碼**：時間解包、單週期 + 基準面、粗 / 細雙週期（範圍 = R × 每 2π 高度）、雙週期外差（× r/(r−1)）。
-- **本機預設**：`src/local/*.preset.json`（已列入 `.gitignore`）會出現在「裝置擺位預設」的「本機：…」選項，用來放不可公開的設備配置與參考值。格式見 `src/sandbox/localPresets.ts` 的 `LocalPreset`。注意 `npm run build` 會把它打包進 `dist/`，含機密預設時不要公開發佈 build。
+可旋轉的重建點雲（操作同沙盒），可依深度誤差、高度或表面類別著色並疊合真實表面線框。提供 RMSE / MAE / 平均偏差 / 中位數 / P95 / 最大誤差、可調容差與誤差直方圖、依表面統計，以及失效像素原因（背景、未照明、clipping、調變過低、三角量測無效）。PCB 場景另列每支引腳的「成功／部分／失敗／看不到」判定。這些都是讀取真值的評估資料，不參與重建。
 
-資料路徑：`renderPair → { frames, clipped } → reconstructPair（條紋編碼 + 校正）→ binToGrid → Fusion`；真值只進入 `buildTruthMap / evaluatePair / scoreStrategy`。
+### AOI 多視角評估
 
-## 「一步一步學」：從 Phase Shifting 到 Phase Unwrapping
+回答兩個問題：不同斜視 Pair 的 Measurement Range 應如何設定；各 Pair 的 3D 資料應如何融合。
 
-如果想先理解三步相移，可以從沙盒返回新手導引：
+- **單位與座標**：mm；板面為高度 0 的基準面（x = world X、y = world Z、高度 = world Y）。所有 Pair、真值與 Fusion 共用同一個 ROI 格網。
+- **設備**：1–8 台 Camera 與 Projector，各自設傾角、方位、距離、FOV、光圈。Pair 類別由幾何即時判定：Camera 傾角 ≤ 門檻為直視；|Δ方位| ≤ 45° 為同じ側、≥ 135° 為反対側，其餘為直交。
+- **理論**（只用校正資訊）：平行近似 `|dφ/dh| = (2π/p)·|tanθp − tanθc·cosΔα|`；pinhole 精確微分；每 2π 高度 `2π/|dφ/dh|`；雙週期外差範圍 × r/(r−1)；`σφ = σI·√(2/N)/B`、`σh = σφ/|dφ/dh|`；級次錯誤機率、景深、依需求範圍反推的最高條紋頻率。
+- **模擬**：重用沙盒的光線追蹤、Lambert + GGX、N 步解碼與三角量測，另加薄透鏡失焦（`c = f·A·|1/s − 1/s_f|`，σ = c/4）。只模擬直接光，沒有互反射。
+- **場景**：階梯量規、Chip + 凹形焊錫 Fillet + 3 mm 元件、縮放為 40×30 mm 的沙盒 PCB、可調高度平面。
+- **有效量測圖**：每格標示準確、超差、邊緣混合、級次錯、範圍混疊、FOV 外、遮擋、陰影、飽和、失焦、調變不足或無取樣。
+- **Fusion**（不使用真值）：① 直視 + 斜視補洞、② 單一斜視、③ 斜視 + 斜視共識融合（剔除離群後 1/σ² 加權，σ 來自各 Pair 自己的調變、雜訊規格與 |dφ/dh|）。另有兩兩 Pair 的 Cross-pair Consistency Check。
+- **Benchmark**：RMSE / MAE / Bias、平坦區 RMSE、覆蓋率、失效比例、粗大誤差、各材質誤差、計算時間；固定 seed 的參數掃描；匯出每格 CSV、摘要 JSON、批次 CSV。
+- **AOI 參考值**：可輸入廠商或實機數值並列比較，只用於顯示，不進入任何計算。
 
-1. **看三張照片**：知道是同一個場景的三次曝光，只有投影條紋相移不同。
-2. **讀一個像素**：拖曳探針，讀三個亮度；圖旁直接解釋縱軸與橫軸。
-3. **算出 Phase**：顯示實際 decoder 的結果，再按需開啟 Relative Unwrap 與公式。
-4. **Spatial 解包**：同一張圖預設疊合 Wrapped／Relative Unwrapped，維持 rad 與共同座標。選擇像素後，圖上 φ／Φ 標籤、同色數值與逐點計算式同步。斷層高度滑桿（0–2 圈）讓學員自己找出超過半圈就整段接錯一圈的門檻。
-5. **Temporal 解包**：用和 3D 實驗室相同的 {1, 4, 16} 三組頻率，逐層計算 k = round((r·Φ − φ) / 2π)；比較斷層上的 Spatial 與 Temporal，用雜訊滑桿比較 {1, 4, 16} 與 {1, 16} 的級次錯誤率（|r·ε| < π），最後把絕對相位換成 Projector 像素 u_p。
+資料路徑：`renderPair → { frames, clipped } → reconstructPair → binToGrid → Fusion`；真值只進入 `buildTruthMap / evaluatePair / scoreStrategy`。
 
-前 3 步旁有同步的 3D 示意：Projector 把條紋投到牆上、Camera 拍下；第 2 步顯示所選像素的 Camera 射線，第 3 步顯示同一個 φ̂ 對應的候選 Projector 光平面。候選使用相同材質，不以真值選中其中一張。第 4 步刻意拿掉側邊 3D 圖，集中看一個相位概念；主沙盒不受影響。此示意不計算教學數值。
+### Calibration 課程與 3D 實驗室
 
-第 4 步的加減 2π 練習、k 候選、無效遮罩與詳細公式均保留。第 4–5 步的斷層與雜訊實驗使用合成真值評分，解算本身不讀真值。數學與測試邊界見 [Phase Unwrapping 教學模型](docs/phase-unwrapping-lesson.md)。
+- **課程**（第 2、5、8 站的理論）：概念與公式，逐一對照 OpenCV 的 `calibrateCamera`、`solvePnP`、`stereoCalibrate`、`triangulatePoints`。
+- **站內實驗 A / B / C**：Camera 校正、Projector 校正、兩台 Scanner 的座標統合。使用專案自己的 TypeScript 數學核心（Zhang 法初值 + Levenberg–Marquardt，見 [src/calibration/](src/calibration/)）。角點是「真值投影 + 雜訊」，**沒有做影像偵測**。
+- **3D 實驗室**（`?workspace=calib-lab`）：親手擺放校正板、鎖對焦、拍照。從渲染影像偵測棋盤角點並做 sub-pixel 精修，再交給瀏覽器裡的 OpenCV.js 校正；Projector 校正用水平 + 垂直的時間相位解包，把角點換成 Projector 像素。校正助理會檢查張數、對焦一致、九宮格覆蓋、傾斜方向與 RMS，並自動勾選第 2、5 站的檢核項目。也模擬了對焦呼吸。
 
-Phase 是條紋內的位置，不是物體高度。教學開始會套用乾淨、兩個條紋週期的參數，但不覆寫保存記錄。切換「自由實驗」可取得完整參數、Noise、統計、PNG / CSV / JSON 與 WebGL 示意。模式選擇只在此分頁的 sessionStorage 保存，不混入科學參數 JSON。
+### 一步一步學：從 Phase Shifting 到 Phase Unwrapping
 
-教學正文 18–20px，曲線刻度 14px，自由實驗參數標籤 16px；實際驗證 390 / 620 / 1440px 寬度，不只看全螢幕截圖。
+1. **看三張照片**：同一個場景的三次曝光，只有條紋相移不同。
+2. **讀一個像素**：拖曳探針，讀三個亮度。
+3. **算出 Phase**：顯示實際 decoder 的結果，可開啟 Relative Unwrap 與公式。
+4. **Spatial 解包**：疊合 Wrapped／Relative Unwrapped；用斷層高度滑桿（0–2 圈）找出「超過半圈就接錯一整圈」的門檻。
+5. **Temporal 解包**：用 {1, 4, 16} 三組頻率逐層算 `k = round((r·Φ − φ) / 2π)`；用雜訊滑桿比較 {1, 4, 16} 與 {1, 16} 的級次錯誤率（|r·ε| < π），最後換成 Projector 像素 u_p。
 
-## 可以做什麼
+前 3 步旁有同步的 3D 示意（Projector 投條紋、Camera 拍攝、像素射線與候選光平面）；示意不參與計算。Phase 是條紋內的位置，不是物體高度。數學與測試邊界見 [docs/phase-unwrapping-lesson.md](docs/phase-unwrapping-lesson.md)。
 
-- 三張 Sinusoidal Fringe：相移 0°、120°、240°，可調頻率 f、初始 phase φ₀、DC mean A、振幅 B。
-- 拖曳一維 intensity / phase 曲線的探針，或點擊影像選取 x、y；鍵盤左右鍵移動曲線探針。
-- 同時觀察每點 I₁ / I₂ / I₃、Wrapped Phase、Relative 1D Unwrapped Phase、Â、B̂ 與 validity mask。
-- 固定像素的 temporal 曲線：由三筆量測擬合，不使用真值、不額外生成曝光。
-- 獨立加性 Gaussian Noise、固定 Seed、[0,1] hard clipping；這兩項是方便學習的簡化數學擾動，**不是 MVP 4 的完整物理模型**。
-- Circular Phase RMSE（rad）、Valid Pixel Ratio（全部像素為分母）。全無效時 RMSE 為 N/A。
-- 「原理筆記」包含公式、符號慣例、unwrap 可識別性限制與 calibration / triangulation 的下一步概念。
-- 「實作邊界」與 roadmap 明確區分已完成、簡化模型與尚未實作。
-- Three.js / WebGL 可旋轉的平面條紋示意；不參與量測或反解。WebGL 不可用時仍可進行 2D 數學實驗。
+### 1D 自由實驗
 
-## 自由實驗模式的進一步練習
+三步相移的一維數學實驗：可調頻率 f、初始相位 φ₀、DC mean A、振幅 B、Gaussian Noise 與 Seed；拖曳 intensity / phase 曲線上的探針（也可用左右鍵），同時看 I₁–I₃、Wrapped Phase、Relative Unwrapped Phase、Â、B̂ 與 validity mask，以及 Circular Phase RMSE 與 Valid Pixel Ratio。WebGL 不可用時這個模式仍可使用。
 
-1. 保持 Noise=0，改變 A。三條 intensity 曲線整體上下移動，但 phase 不應改變（尚未 clipping 時）。
-2. 改變 B，觀察 intensity 對比。B=0 且 Noise=0 時，所有像素必須無效，不能解出看似正確的 phase。
-3. 移動 φ₀，觀察條紋位移與 Wrapped 的 ±π 邊界。
-4. 拖曳探針，同時讀取三個 intensity；比較底部固定一點的 temporal 取樣。
-5. 關閉 / 開啟 1D Unwrap，觀察週期如何被連起來。不要把相對 phase 誤當高度。
-6. 點「套用這個實驗」載入低振幅 + Noise；比較 RMSE、Valid Ratio 與 Unwrap 錯誤。
-7. 改 Seed，觀察 noise 改變；回到原 Seed，影像與統計會重現。
-8. 將 A 調到接近 1，觀察 clipping 造成無效像素。只看剩餘有效像素的 RMSE 可能過度樂觀。
+建議的練習：
 
-完整的 [驗證紀錄與實際匯出產物](docs/verification.md)。
+1. Noise=0，改變 A：intensity 整體上下移動，phase 不變（尚未 clipping 時）。
+2. B=0 且 Noise=0：所有像素都必須無效，不能解出看似正確的 phase。
+3. 移動 φ₀，觀察 Wrapped 的 ±π 邊界。
+4. 開關 1D Unwrap，觀察週期如何被連起來。相對 phase 不是高度。
+5. 「套用這個實驗」載入低振幅 + Noise，比較 RMSE、Valid Ratio 與 Unwrap 錯誤。
+6. 改 Seed 再改回來：影像與統計會重現。
+7. A 接近 1：clipping 造成無效像素，只看剩餘像素的 RMSE 可能過度樂觀。
 
-## 數學模型
+## 數學模型（1D）
 
-所有數值使用 Float64。影像寬高為 W,H；x=0…W−1。
+所有數值使用 Float64。影像寬高為 W, H；x = 0…W−1。
 
 ```text
 φ(x) = 2π f x/(W−1) + φ₀
@@ -125,17 +137,15 @@ D = 2I₁ − I₂ − I₃
 B̂ = hypot(N,D)/3
 ```
 
-解碼器的 phase 正負號與 **cos(φ+δ)** 及曝光順序綁定；任意交換影像或使用不同相移慣例，不能照抄相同公式。
+- 解碼器的正負號與 **cos(φ+δ)** 及曝光順序綁定；交換影像或改用其他相移慣例，不能照抄同一公式。
+- 像素有效的條件：三次曝光都是有限值、沒有 clipping、B̂ > minModulation。無效 phase 為 NaN，CSV 中留白，不以 0 取代。
+- 逐列 Spatial Unwrap 在每個有效連續區段內累加相鄰最短 phase 差；各區段保留未知的 2π 整數偏移。
 
-每個像素必須三次曝光均為有限值、clipped mask=0 且 B̂ 大於 minModulation 才有效；無效 phase 以 NaN 表示，CSV 輸出為空白，不能以 0 取代。
+推導與 Monte Carlo 驗證：[docs/math-validation.md](docs/math-validation.md)。
 
-逐列 Spatial Unwrap：各有效連續區段的第一點保留 Wrapped 值；其後累加相鄰最短 phase 差。無效缺口與新列會重設錨點。需要相鄰真實 phase 差值絕對值 < π，輸入設定拒絕 Nyquist 等號，但這不能保證有 Noise 時不會 cycle slip。
+## 真值隔離
 
-**各區段都保留未知的 2π 整數偏移。本版不提供 Absolute Phase、Projector correspondence、depth 或 3D RMSE。**
-
-數學推導、驗證範圍與實測 Monte Carlo 結果：[docs/math-validation.md](docs/math-validation.md)。
-
-## Ground Truth 隔離
+本專案最重要的設計原則：**結果必須是算出來的。**
 
 ```text
 SimulationConfig → generateCaptures ── frames / clipped ─→ decodeThreeStep
@@ -147,106 +157,101 @@ SimulationConfig → generateCaptures ── frames / clipped ─→ decodeThree
                        └─ referencePhase ─→ evaluatePhase ← wrapped / valid
 ```
 
-- Decoder 只接收三張 intensity、門檻與 clipping mask；不接受 f、φ₀、reference、深度或 fringe order。
-- Unwrap 只接收 wrapped、valid、width；不藉由合成設定補週期。
-- referencePhase 只用於 evaluator，以及明確標記的 CSV reference 欄位。
-- CSV / PNG / 圖表均呈現實際解算陣列，不用真值替換失敗結果。
-- 測試故意破壞真值，確認解碼和 unwrap 不變，只有評估誤差改變。
+- Decoder 只接收 intensity、門檻與 clipping mask；不接受 f、φ₀、reference、深度或級次。
+- Unwrap、三角量測、Fusion 都不讀真值；真值只進入 evaluator 與明確標示的 reference 欄位。
+- CSV / PNG / 圖表呈現實際解算結果，不用真值替換失敗。
+- 測試會故意破壞真值，確認重建不變，只有評估誤差改變。
 
-## 保存與匯出
+## 保存與匯出（1D 自由實驗）
 
-### 保存參數
+- **保存參數**：寫入目前 origin 的 localStorage 並讀回驗證，不是跨裝置備份。黃點代表有未保存的修改；「重設」不刪除已保存記錄。
+- **JSON**：跨裝置重現用。欄位會驗證型別、範圍、有限值與 Nyquist 條件，不強制轉型、不補缺漏；檔案超過 1 MB 或 schema 錯誤時拒絕，目前實驗不變。
 
-「保存參數」只保存到目前 origin 的 localStorage，重新載入可還原；操作後會讀回驗證。**localStorage 不是跨裝置備份。**
-
-- 調整參數不會自動覆寫已保存記錄；黃點代表有未保存修改。
-- 「重設」僅改變目前實驗，不刪除已保存記錄。
-- 連續匯入採最後選取的檔案優先；較舊的非同步讀取結果與錯誤通知不得覆蓋較新的結果。
-- JSON 匯出 / 匯入用於跨裝置與跨工作階段重現。格式：
-
-```json
-{
-  "schemaVersion": 1,
-  "model": "three-step-1d",
-  "config": {
-    "width": 512,
-    "height": 192,
-    "frequency": 6,
-    "phaseOffset": 0.6,
-    "mean": 0.5,
-    "amplitude": 0.4,
-    "noiseSigma": 0,
-    "minModulation": 0.02,
-    "seed": 42
+  ```json
+  {
+    "schemaVersion": 1,
+    "model": "three-step-1d",
+    "config": {
+      "width": 512,
+      "height": 192,
+      "frequency": 6,
+      "phaseOffset": 0.6,
+      "mean": 0.5,
+      "amplitude": 0.4,
+      "noiseSigma": 0,
+      "minModulation": 0.02,
+      "seed": 42
+    }
   }
-}
+  ```
+
+- **CSV**：全部 W×H 像素（預設 98,304 列），含 x/y（0-based、row-major）、I₁–I₃、Â/B̂、wrapped / unwrapped / reference phase（rad）、valid、clipped。以 `#` 開頭的 metadata 行與 UTF-8 BOM 請在外部工具中略過。
+- **PNG**：1600×1120 的 8-bit 視覺化快照，不能取代 Float64 原始數據；數值分析請用 CSV + JSON。
+
+沙盒與 AOI 模式各有自己的 CSV / JSON 匯出。
+
+## 開發
+
+```bash
+npm test                    # Vitest：數學核心、IO、沙盒、AOI、校正
+npm run build               # strict TypeScript + Vite production build → dist/
+npx playwright install chromium
+npm run test:e2e            # Playwright + 真正的 Chromium（WebGL、下載檔內容、互動）
+npm run test:production     # 同一套 e2e 改對 production build 執行
+npm run preview             # 預覽 dist，http://127.0.0.1:4173
+npm run format:check        # Prettier
 ```
 
-所有欄位皆驗證型別、範圍、有限值與 Nyquist 條件；不強制轉換字串、不自動補缺漏。schema / model 錯誤或檔案超過 1 MB 時拒絕，且目前實驗與已保存參數不變。額外 config 欄位會移除；不執行任何匯入內容。
+- `dist/` 是靜態網站，請用 HTTP server 提供；直接開 `index.html`（file://）會因 ES module 限制而失敗。
+- 新增介面文字一律用 [src/i18n.ts](src/i18n.ts) 的 `t(中文, English)` 成對撰寫，少一種語言會讓型別檢查失敗。
+- **本機機密預設**：`src/local/*.preset.json`（已列入 `.gitignore`）會出現在 AOI「裝置擺位預設」的「本機：…」選項，用來放不可公開的設備配置與廠商參考值，格式見 [src/sandbox/localPresets.ts](src/sandbox/localPresets.ts) 的 `LocalPreset`。**`npm run build` 會把它打包進 `dist/`，含機密預設時不要公開發佈 build。**
 
-### CSV
-
-匯出**全部 W×H 像素**，包含 metadata、config、每個像素的 x/y、I₁–I₃、估計 A/B、wrapped_rad、unwrapped_relative_rad、reference_phase_rad、valid、clipped。前導 `#` 為 metadata 註解；第三方分析工具請略過註解行與 UTF-8 BOM。
-
-- x,y 為 0-based，row-major。
-- 所有 phase 單位為 rad，intensity 為 normalized [0,1]；不是 8-bit camera raw data。
-- reference_phase_rad 明確表示合成評估真值，不是重建結果。
-- 無效 estimate 欄位留白，valid=0。
-- 預設 512×192 會有 98,304 筆資料列，另有表頭與 metadata。
-
-### PNG
-
-匯出 1600×1120 實驗快照：三次 capture、Wrapped Phase、valid mask、所選列的 Relative Unwrapped 曲線、參數、Seed、RMSE、Ratio 與模型限制。PNG 是 8-bit 顯示視覺化，**不是 Float64 原始量測的替代品**；要做數值分析請用 CSV + JSON。
-
-## 原始碼結構
+### 原始碼結構
 
 ```text
-src/core/simulation.ts       純數學 forward / decode / unwrap / evaluation
-src/core/simulation.test.ts  解析解、四象限、分支、遮罩、GT 隔離、Monte Carlo
-src/lib/io.ts                版本化參數驗證與 localStorage 邊界、全像素 CSV
-src/lib/io.test.ts           round-trip、拒絕無效輸入、保存原子性與 CSV
-src/lib/images.ts            顯示用 raster、PNG 與 Blob 下載
-src/components/LineChart.tsx SVG 曲線、pointer / keyboard 探針
-src/components/PatternScene.tsx Three.js 平面紋理示意與資源清理
-src/App.tsx                 繁體中文實驗介面、原理筆記、實作範圍
-src/styles.css              響應式暗色研究工作區、reduced motion / contrast
- e2e/                       實際 Chromium 的互動與檔案驗證
+src/
+  App.tsx, main.tsx    路由、工作區切換、1D 自由實驗介面
+  i18n.ts              繁中／英文成對字串
+  path/                學習路徑首頁、九站定義、站點頁、進度、網址路由
+  core/simulation.ts   1D 正向模型、三步解碼、unwrap、評估（純數學）
+  lib/                 參數驗證與 localStorage、CSV / PNG 匯出、教學頁的數學
+  components/          一步一步學、Unwrapping 教學、曲線圖、3D 示意
+  sandbox/             3D 沙盒：幾何、BVH 光傳輸、掃描 Worker、點雲分析、PCB
+  aoi/                 AOI 多視角：rig、渲染、重建、靈敏度理論、Fusion、評估、匯出
+  calibration/         相機模型、線性代數、LM、校正數學核心與課程
+    lab/               3D 校正實驗室：渲染、角點偵測、相位解碼、OpenCV.js、助理
+e2e/                   Playwright 驗收測試
+scripts/               自動截圖與驗證證據產生
+docs/                  模型說明、數學驗證、驗證紀錄與 evidence/
 ```
 
-沒有先前的程式基線或 Git repository，本次不擅自初始化 Git、不自動 commit。
+## 文件
 
-## 四階段開發與驗收
+| 文件                                                               | 內容                              |
+| ------------------------------------------------------------------ | --------------------------------- |
+| [docs/sandbox-model.md](docs/sandbox-model.md)                     | 3D 沙盒的正向模型、重建與限制     |
+| [docs/phase-unwrapping-lesson.md](docs/phase-unwrapping-lesson.md) | Phase Unwrapping 教學的數學與測試 |
+| [docs/math-validation.md](docs/math-validation.md)                 | 1D 數學推導與 Monte Carlo 結果    |
+| [docs/verification.md](docs/verification.md)                       | 驗證紀錄與實際匯出產物            |
+| [PRODUCT.md](PRODUCT.md)                                           | 產品目標、使用者、原則與 roadmap  |
+| [DESIGN.md](DESIGN.md)                                             | 視覺與介面設計系統                |
 
-| 階段                     | 狀態                               | 主要驗收                                                                                                                                            |
-| ------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 · Phase Shifting       | 本次 MVP                           | 真實三步反解、相對 1D Unwrap、可互動曲線、數學測試與可重現匯出                                                                                      |
-| 2 · Virtual 3D Scanner   | 已知校正單週期沙盒已實作           | Pinhole camera / projector、內外參、distortion、ray / mesh 交點、projector 可見性與遮擋、independent GT buffers、從 correspondence 做 triangulation |
-| 3 · Micro Phase Shifting | 尚未實作                           | 根據原文的窄高頻帶、共享 offset / amplitude 假設、F+2 影像、消除 cosine ambiguity 的多頻 column 搜尋；與同曝光預算 Conventional PS 比較             |
-| 4 · Non-ideal Effects    | 互反射 / GGX 材質已實作（3D 沙盒） | Defocus PSF、Gamma / quantization、空間變動反射率、noise / calibration 誤差傳播、depth RMSE 與失效率分析                                            |
+## 開發階段
 
-### MVP 2 必須遵守的資料路徑
+| 階段                     | 狀態                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| 1 · Phase Shifting       | 完成：1D 實驗、一步一步學、Spatial / Temporal 解包                                             |
+| 2 · Virtual 3D Scanner   | 完成：3D 沙盒、點雲分析、Camera / Projector 校正、座標統合、AOI 多視角                         |
+| 3 · Micro Phase Shifting | **尚未實作**                                                                                   |
+| 4 · Non-ideal Effects    | 部分：互反射、GGX 材質、薄透鏡失焦（AOI）、對焦呼吸（校正實驗室）；第 7 站「誤差與診斷」規劃中 |
 
-1. Projector 使用自己的 Kp、Rp、tp 與 pattern phase，不能沿 Camera x 直接畫條紋。
-2. Camera pixel ray 與表面求交，經 Projector 投影及可見性判斷生成 captures；解碼只讀 captures。
-3. 先設計可驗證的 absolute correspondence 編碼，再以 Camera ray 與 Projector plane/ray 三角量測。
-4. GT world position / depth 只能供 evaluator，不傳給 triangulation。
-5. 測試已知平面、斜平面、球面、遮擋、基線退化、雜訊與 calibration 擾動；報告深度單位與座標框架。
+Micro Phase Shifting 參考：M. Gupta and S. K. Nayar, **Micro Phase Shifting**, CVPR 2012（[作者頁](https://www.cs.columbia.edu/CAVE/projects/MicroPhaseShifting/)、[PDF](https://cave.cs.columbia.edu/Statics/publications/pdfs/Gupta_CVPR12.pdf)）。F+2 方法依賴窄高頻帶與近似共享的 offset / amplitude；在依原文實作之前，不把單頻三步 PS、一般 heterodyne 或讀取真值後減少曝光數稱作 Micro PS。
 
-### MVP 3 研究參考
+## 限制
 
-M. Gupta and S. K. Nayar, **Micro Phase Shifting**, CVPR 2012。
-
-- 作者研究頁：https://www.cs.columbia.edu/CAVE/projects/MicroPhaseShifting/
-- 原文 PDF：https://cave.cs.columbia.edu/Statics/publications/pdfs/Gupta_CVPR12.pdf
-
-F+2 方法不是任意多頻 pattern 都成立：窄高頻帶與近似共享光強 offset / amplitude 是關鍵假設。未實作前，不把單頻三步 PS、一般 heterodyne 或讀取真值後減少曝光數，稱作 Micro PS。後續需對照原文公式與頻率選擇、ambiguity 處理、共同曝光預算及假設失效案例。
-
-## 刻意未支援與限制
-
-- 一維模式不做幾何成像；3D 沙盒已提供理想合成 Camera Captures、三維物體、遮擋、三角量測與點雲，但沒有真實相機接入或 calibration 求解。
-- 無 subsurface scattering、motion、Gamma、Poisson / read noise、量化。互反射與 GGX 鏡面只在 3D 沙盒的 CPU 正向模型中；Defocus 只在 AOI 模式（薄透鏡 + 高斯近似），AOI 模式不含互反射；一維模式都沒有。
-- 數值流程是 CPU 運算（3D 掃描在 Web Worker）；大量像素匯出可能需要幾秒，不是 GPU accelerated reconstruction。WebGL 單獨 lazy-load；沙盒用於觀察幾何與光路，量測則是獨立的 CPU 光線追蹤，不從螢幕截圖讀回。
-- 同一 Seed + config 在相同 JS 數學實作中可重現；浮點 transcendentals 不承諾跨所有引擎 bitwise identical。
-- Validity 是明確門檻規則，不是統計置信度；純雜訊也可能跨過門檻。
-- Circular RMSE 無法診斷 unwrap 的 2π 整數錯誤，也不代表 depth 準確度。
-- 沒有測試真實 Camera / Projector 裝置；此專案用於理解，不用於工業或醫療量測認證。
+- 沒有接真實 Camera / Projector；所有影像都是合成的。
+- 沒有 subsurface scattering、motion、Gamma、Poisson / read noise、量化。互反射只在 3D 沙盒；失焦只在 AOI 模式與校正實驗室；1D 模式都沒有。
+- 3D 沙盒用已知的理想校正；從校正板估出的參數目前只在校正實驗中使用。
+- 數值運算在 CPU（3D 掃描在 Web Worker），不是 GPU 重建；大型匯出可能需要幾秒。
+- 同一 Seed + config 在相同 JS 實作下可重現，但不保證跨瀏覽器引擎 bitwise identical。
+- Validity 是明確的門檻規則，不是統計置信度；Circular RMSE 無法偵測 2π 整數錯誤，也不代表深度精度。
