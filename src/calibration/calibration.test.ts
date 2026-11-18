@@ -15,8 +15,10 @@ import {
 import {
   DEFAULT_LAB,
   DEFAULT_REGISTRATION,
+  SCANNERS,
   TRUE_PROJECTOR,
   TRUE_STEREO,
+  exaggerateRegistration,
   runCalibrationLab,
   runRegistrationLab,
 } from "./simulate";
@@ -233,5 +235,25 @@ describe("registration lab", () => {
     });
     expect(bad.scanners[1].poseErrorDeg).toBeGreaterThan(0.4);
     expect(bad.consistency.rms).toBeGreaterThan(good.consistency.rms + 0.5);
+  });
+
+  it("hand-measured (rough) extrinsics are far less consistent than board registration on the same scans", () => {
+    const after = runRegistrationLab(DEFAULT_REGISTRATION);
+    const before = runRegistrationLab({
+      ...DEFAULT_REGISTRATION,
+      method: "rough",
+    });
+    after.scanners.forEach((s, i) =>
+      expect(s.cameraCloud).toEqual(before.scanners[i].cameraCloud),
+    );
+    expect(before.scanners[0].poseErrorDeg).toBeCloseTo(2, 6);
+    expect(before.consistency.rms).toBeGreaterThan(5 * after.consistency.rms);
+    const same = exaggerateRegistration(after.scanners[1], SCANNERS[1], 1);
+    expect(same.cloud).toBe(after.scanners[1].worldCloud);
+    const big = exaggerateRegistration(after.scanners[1], SCANNERS[1], 20);
+    expect(rotationAngleDeg(big.pose!.R, SCANNERS[1].camera.R)).toBeCloseTo(
+      20 * after.scanners[1].poseErrorDeg,
+      3,
+    );
   });
 });

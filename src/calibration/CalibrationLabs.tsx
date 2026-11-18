@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
-import CalibScene, { type SceneObject } from "./CalibScene";
+import CalibScene, { type SceneObject, type SceneSync } from "./CalibScene";
 import {
   applyPose,
   poseCenter,
@@ -29,11 +29,13 @@ import {
   TRUE_PROJECTOR,
   TRUE_SQUARE_MM,
   TRUE_STEREO,
+  exaggerateRegistration,
   runCalibrationLab,
   runRegistrationLab,
   type CalibrationLab,
   type CalibrationLabConfig,
   type RegistrationConfig,
+  type RegistrationLab,
   type RegistrationMethod,
 } from "./simulate";
 
@@ -910,11 +912,12 @@ export function CalibrationLabView() {
   );
 }
 
-const METHOD_LABEL: Record<RegistrationMethod, string> = {
-  none: t(
-    "不統合（直接用各自的 Camera 座標）",
-    "No registration (each uses its own Camera frame)",
-  ),
+type AfterMethod = Exclude<RegistrationMethod, "rough">;
+const REGISTRATION_FOCUS = {
+  center: [SCENE.DOME_C[0], SCENE.DOME_C[1], 0] as Vec3,
+  radius: 100,
+};
+const METHOD_LABEL: Record<AfterMethod, string> = {
   board: t("校正板 + solvePnP", "Calibration board + solvePnP"),
   markers: t(
     "參考球 + 剛體對齊（Kabsch）",
@@ -922,109 +925,197 @@ const METHOD_LABEL: Record<RegistrationMethod, string> = {
   ),
 };
 
+function registrationObjects(lab: RegistrationLab, k: number): SceneObject[] {
+  const { STAGE, DOME_C, DOME_R } = SCENE;
+  const footprint = Math.sqrt(DOME_R * DOME_R - DOME_C[2] * DOME_C[2]);
+  const objs: SceneObject[] = [
+    {
+      kind: "line",
+      points: [
+        [STAGE.x[0], STAGE.y[0], 0],
+        [STAGE.x[1], STAGE.y[0], 0],
+        [STAGE.x[1], STAGE.y[1], 0],
+        [STAGE.x[0], STAGE.y[1], 0],
+      ],
+      color: COLORS.truth,
+      closed: true,
+    },
+    {
+      kind: "line",
+      points: boardOutline(IDENTITY, TRUE_SQUARE_MM),
+      color: COLORS.selected,
+      closed: true,
+      dashed: true,
+    },
+    {
+      kind: "line",
+      points: Array.from({ length: 48 }, (_, i): Vec3 => [
+        DOME_C[0] + footprint * Math.cos((i / 48) * 2 * Math.PI),
+        DOME_C[1] + footprint * Math.sin((i / 48) * 2 * Math.PI),
+        0,
+      ]),
+      color: COLORS.truth,
+      closed: true,
+    },
+    {
+      kind: "line",
+      points: [
+        [0, 0, 0],
+        [40, 0, 0],
+      ],
+      color: "#ff6b6b",
+    },
+    {
+      kind: "line",
+      points: [
+        [0, 0, 0],
+        [0, 40, 0],
+      ],
+      color: "#5ee45e",
+    },
+    {
+      kind: "line",
+      points: [
+        [0, 0, 0],
+        [0, 0, 40],
+      ],
+      color: "#6c9cff",
+    },
+  ];
+  if (lab.config.method === "markers")
+    objs.push({
+      kind: "points",
+      points: MARKERS,
+      color: COLORS.selected,
+      size: 8,
+    });
+  lab.scanners.forEach((s, i) => {
+    const truth = SCANNERS[i];
+    const color = s.name === "A" ? COLORS.a : COLORS.b;
+    const shown = exaggerateRegistration(s, truth, k);
+    objs.push({
+      kind: "frustum",
+      pose: truth.camera,
+      K: TRUE_CAMERA,
+      color: COLORS.truth,
+      depth: 90,
+      dashed: true,
+    });
+    if (shown.pose)
+      objs.push({
+        kind: "frustum",
+        pose: shown.pose,
+        K: TRUE_CAMERA,
+        color,
+        depth: 90,
+      });
+    objs.push({ kind: "points", points: shown.cloud, color, size: 2 });
+  });
+  return objs;
+}
+
 export function RegistrationLabView() {
   const [config, setConfig] =
     useState<RegistrationConfig>(DEFAULT_REGISTRATION);
+  const [exaggerate, setExaggerate] = useState(1);
+  const [sync] = useState<SceneSync>(() => new Set());
   const deferred = useDeferredValue(config);
   const stale = deferred !== config;
-  const lab = useMemo(() => runRegistrationLab(deferred), [deferred]);
+  const after = useMemo(() => runRegistrationLab(deferred), [deferred]);
+  const before = useMemo(
+    () => runRegistrationLab({ ...deferred, method: "rough" }),
+    [deferred],
+  );
   const set = (patch: Partial<RegistrationConfig>) =>
     setConfig((c) => ({ ...c, ...patch }));
-
-  const objects = useMemo((): SceneObject[] => {
-    const { STAGE, DOME_C, DOME_R } = SCENE;
-    const footprint = Math.sqrt(DOME_R * DOME_R - DOME_C[2] * DOME_C[2]);
-    const objs: SceneObject[] = [
-      {
-        kind: "line",
-        points: [
-          [STAGE.x[0], STAGE.y[0], 0],
-          [STAGE.x[1], STAGE.y[0], 0],
-          [STAGE.x[1], STAGE.y[1], 0],
-          [STAGE.x[0], STAGE.y[1], 0],
-        ],
-        color: COLORS.truth,
-        closed: true,
-      },
-      {
-        kind: "line",
-        points: boardOutline(IDENTITY, TRUE_SQUARE_MM),
-        color: COLORS.selected,
-        closed: true,
-        dashed: true,
-      },
-      {
-        kind: "line",
-        points: Array.from({ length: 48 }, (_, i): Vec3 => [
-          DOME_C[0] + footprint * Math.cos((i / 48) * 2 * Math.PI),
-          DOME_C[1] + footprint * Math.sin((i / 48) * 2 * Math.PI),
-          0,
-        ]),
-        color: COLORS.truth,
-        closed: true,
-      },
-      {
-        kind: "line",
-        points: [
-          [0, 0, 0],
-          [40, 0, 0],
-        ],
-        color: "#ff6b6b",
-      },
-      {
-        kind: "line",
-        points: [
-          [0, 0, 0],
-          [0, 40, 0],
-        ],
-        color: "#5ee45e",
-      },
-      {
-        kind: "line",
-        points: [
-          [0, 0, 0],
-          [0, 0, 40],
-        ],
-        color: "#6c9cff",
-      },
-    ];
-    if (config.method === "markers")
-      objs.push({
-        kind: "points",
-        points: MARKERS,
-        color: COLORS.selected,
-        size: 8,
-      });
-    lab.scanners.forEach((s, i) => {
-      const truth = SCANNERS[i];
-      const color = s.name === "A" ? COLORS.a : COLORS.b;
-      objs.push({
-        kind: "frustum",
-        pose: truth.camera,
-        K: TRUE_CAMERA,
-        color: COLORS.truth,
-        depth: 90,
-        dashed: true,
-      });
-      if (s.estimatedPose)
-        objs.push({
-          kind: "frustum",
-          pose: s.estimatedPose,
-          K: TRUE_CAMERA,
-          color,
-          depth: 90,
-        });
-      objs.push({ kind: "points", points: s.worldCloud, color, size: 2 });
-    });
-    return objs;
-  }, [lab, config.method]);
+  const beforeObjects = useMemo(
+    () => registrationObjects(before, exaggerate),
+    [before, exaggerate],
+  );
+  const afterObjects = useMemo(
+    () => registrationObjects(after, exaggerate),
+    [after, exaggerate],
+  );
+  const afterLabel = METHOD_LABEL[config.method as AfterMethod];
+  const flag = (v: number, digits: number, limit: number) => (
+    <span className={Math.abs(v) > limit ? "bad" : ""}>{fmt(v, digits)}</span>
+  );
+  const rows: { label: string; cell: (lab: RegistrationLab) => ReactNode }[] = [
+    {
+      label: t("A–B 一致性（不用真值）", "A–B consistency (no ground truth)"),
+      cell: (lab) => (
+        <>
+          <b>{flag(lab.consistency.rms, 3, 0.5)} mm</b>{" "}
+          <small>
+            {t(
+              `（重疊區 ${lab.consistency.points} 點）`,
+              `(${lab.consistency.points} overlap points)`,
+            )}
+          </small>
+        </>
+      ),
+    },
+    {
+      label: t("平台高度 A / B（應為 0）", "Stage height A / B (should be 0)"),
+      cell: (lab) => (
+        <>
+          {flag(lab.scanners[0].stageHeight, 2, 0.3)} /{" "}
+          {flag(lab.scanners[1].stageHeight, 2, 0.3)} mm
+        </>
+      ),
+    },
+    ...[0, 1].map((i) => ({
+      label: t(
+        `${"AB"[i]} 姿態誤差（角度 / 位置）`,
+        `${"AB"[i]} pose error (angle / position)`,
+      ),
+      cell: (lab: RegistrationLab) => (
+        <>
+          {flag(lab.scanners[i].poseErrorDeg, 3, 0.1)}° /{" "}
+          {flag(lab.scanners[i].poseErrorMm, 2, 0.5)} mm
+        </>
+      ),
+    })),
+    {
+      label: t("對真值 RMSE A / B", "RMSE vs. ground truth A / B"),
+      cell: (lab) => (
+        <>
+          {flag(lab.scanners[0].rms, 3, 0.5)} /{" "}
+          {flag(lab.scanners[1].rms, 3, 0.5)} mm
+        </>
+      ),
+    },
+  ];
 
   return (
     <div className={`calib-lab ${stale ? "is-stale" : ""}`}>
       <div className="calib-controls">
+        <fieldset className="calib-radio calib-group">
+          <legend>
+            {t("Before：手量外參", "Before: hand-measured extrinsics")}
+          </legend>
+          <Slider
+            label={t("角度誤差", "Angle error")}
+            value={config.roughRotationDeg}
+            min={0}
+            max={5}
+            step={0.1}
+            unit="°"
+            onChange={(x) => set({ roughRotationDeg: x })}
+          />
+          <Slider
+            label={t("位置誤差", "Position error")}
+            value={config.roughShiftMm}
+            min={0}
+            max={20}
+            step={0.5}
+            unit="mm"
+            onChange={(x) => set({ roughShiftMm: x })}
+          />
+        </fieldset>
         <fieldset className="calib-radio">
-          <legend>{t("統合方法", "Registration method")}</legend>
-          {(Object.keys(METHOD_LABEL) as RegistrationMethod[]).map((m) => (
+          <legend>{t("After：統合方法", "After: registration method")}</legend>
+          {(Object.keys(METHOD_LABEL) as AfterMethod[]).map((m) => (
             <label key={m}>
               <input
                 type="radio"
@@ -1056,8 +1147,8 @@ export function RegistrationLabView() {
         />
         <Slider
           label={t(
-            "在 B 的外參額外加旋轉誤差",
-            "Extra rotation error on B's extrinsics",
+            "After：在 B 的外參額外加旋轉誤差",
+            "After: extra rotation error on B's extrinsics",
           )}
           value={config.rotationErrorB}
           min={0}
@@ -1107,101 +1198,133 @@ export function RegistrationLabView() {
         </p>
       </div>
       <div className="calib-results">
-        <div className="calib-metrics">
-          <div>
-            <span>
-              {t(
-                "A–B 一致性（不用真值）",
-                "A–B consistency (no ground truth needed)",
-              )}
-            </span>
-            <b className={lab.consistency.rms > 0.5 ? "bad" : ""}>
-              {Number.isFinite(lab.consistency.rms)
-                ? `${fmt(lab.consistency.rms, 3)} mm`
-                : t("不適用：不在同一座標", "N/A: not in the same frame")}
-            </b>
-          </div>
-          <div>
-            <span>{t("重疊區比較點數", "Points compared in overlap")}</span>
-            <b>{lab.consistency.points}</b>
-          </div>
-        </div>
-        <table className="calib-table">
+        <table className="calib-table calib-compare-table">
           <thead>
             <tr>
-              <th>Scanner</th>
-              <th>{t("點數", "Points")}</th>
-              <th>
-                {t("姿態誤差（角度 / 位置）", "Pose error (angle / position)")}
+              <th />
+              <th className="is-before">
+                {t("Before：手量外參", "Before: hand-measured")}
               </th>
-              <th>{t("平台高度（應為 0）", "Stage height (should be 0)")}</th>
-              <th>{t("對真值 RMSE", "RMSE vs. ground truth")}</th>
+              <th className="is-after">After：{afterLabel}</th>
             </tr>
           </thead>
           <tbody>
-            {lab.scanners.map((s) => (
-              <tr key={s.name}>
-                <td style={{ color: s.name === "A" ? COLORS.a : COLORS.b }}>
-                  {s.name}
-                </td>
-                <td>{s.worldCloud.length}</td>
-                <td>
-                  {fmt(s.poseErrorDeg, 3)}° / {fmt(s.poseErrorMm, 2)} mm
-                </td>
-                <td className={Math.abs(s.stageHeight) > 0.3 ? "bad" : ""}>
-                  {fmt(s.stageHeight, 3)} mm
-                </td>
-                <td className={s.rms > 0.5 ? "bad" : ""}>{fmt(s.rms, 3)} mm</td>
+            {rows.map((r) => (
+              <tr key={r.label}>
+                <th scope="row">{r.label}</th>
+                <td>{r.cell(before)}</td>
+                <td>{r.cell(after)}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <CalibScene
-          frame="world"
-          objects={objects}
-          label={t(
-            "世界座標：藍 = A，橙 = B；虛線 = 真實相機位置；黃框 = 校正板；紅綠藍 = X Y Z 軸",
-            "World frame: blue = A, orange = B; dashed = true camera positions; yellow box = calibration board; red/green/blue = X/Y/Z axes",
+        <div className="calib-compare-bar">
+          <Slider
+            label={t("3D 圖誤差放大倍率", "3D view error magnification")}
+            value={exaggerate}
+            min={1}
+            max={50}
+            step={1}
+            unit="×"
+            onChange={setExaggerate}
+          />
+          <p className="calib-note">
+            {t(
+              "只把姿態偏差（估計 vs. 真實外參）在 3D 圖中放大，量測雜訊與上表數值不變。",
+              "Only the pose deviation (estimated vs. true extrinsics) is magnified in the 3D views; measurement noise and the numbers above are unchanged.",
+            )}
+          </p>
+        </div>
+        <div className="calib-compare">
+          <section>
+            <h5 className="calib-compare-title is-before">
+              Before
+              <span>{t("手量外參", "Hand-measured extrinsics")}</span>
+            </h5>
+            <CalibScene
+              frame="world"
+              objects={beforeObjects}
+              sync={sync}
+              focus={REGISTRATION_FOCUS}
+              label={t("藍 = A，橙 = B", "Blue = A, orange = B")}
+            />
+          </section>
+          <section>
+            <h5 className="calib-compare-title is-after">
+              After
+              <span>{afterLabel}</span>
+            </h5>
+            <CalibScene
+              frame="world"
+              objects={afterObjects}
+              sync={sync}
+              focus={REGISTRATION_FOCUS}
+              label={t("藍 = A，橙 = B", "Blue = A, orange = B")}
+            />
+          </section>
+        </div>
+        <p className="calib-note">
+          {t(
+            "兩邊視角連動。虛線 = 真實相機位置，實線 = 估計位置；黃框 = 校正板；紅綠藍 = X Y Z 軸。",
+            "The two views move together. Dashed = true camera positions, solid = estimated; yellow box = calibration board; red/green/blue = X/Y/Z axes.",
           )}
-        />
+        </p>
       </div>
       <Tasks>
         <li>
           {t(
             <>
-              選「不統合」：兩團點雲都畫在各自的 Camera
-              座標裡，彼此毫無關係，平台高度約 400 mm（= 相機到平台的距離）。
+              先比較左右兩張圖：左邊用手量的外參（2°、5 mm
+              的誤差），兩台的圓頂錯開成兩層、平台也不在 Z = 0；右邊用校正板 +
+              solvePnP，兩團點雲合成一個。看表中 A–B 一致性差了多少倍。
             </>,
             <>
-              Choose “No registration”: each point cloud is drawn in its own
-              Camera frame, unrelated to the other, and the stage height is
-              about 400 mm (= the camera-to-stage distance).
-            </>,
-          )}
-        </li>
-        <li>
-          {t(
-            <>
-              切回「校正板 + solvePnP」：兩團點雲接在一起，平台高度回到 ≈
-              0。一張校正板同時解決了「對齊」和「高度零點」。
-            </>,
-            <>
-              Switch back to “Calibration board + solvePnP”: the two point
-              clouds join up and the stage height returns to ≈ 0. A single
-              calibration board handles both “alignment” and “height zero”.
+              Compare the two views first: the left uses hand-measured
+              extrinsics (2°, 5 mm error) and the two domes split into two
+              layers, with the stage off Z = 0; the right uses a calibration
+              board + solvePnP and the two clouds merge into one. Check how many
+              times larger the A–B consistency is on the left in the table.
             </>,
           )}
         </li>
         <li>
           {t(
             <>
-              把 B 的旋轉誤差調到 0.2°、0.5°、1°：一致性 RMS 和 B
-              的平台高度一起變差。相機離物體約 400 mm，0.5° ≈ 3.5 mm 的位移。
+              把「手量外參」的角度誤差降到 0.2°：左邊仍然比右邊差。相機離物體約
+              400 mm，0.2° 就是 ≈ 1.4
+              mm；手量很難達到這個精度，所以才需要校正板。
+            </>,
+            <>
+              Lower the hand-measured angle error to 0.2°: the left is still
+              worse than the right. The camera is about 400 mm away, so 0.2° ≈
+              1.4 mm; hand measurement rarely gets that close, which is why you
+              use a calibration board.
+            </>,
+          )}
+        </li>
+        <li>
+          {t(
+            <>
+              把「3D 圖誤差放大倍率」拉到
+              ×20：右邊本來看不出來的殘留誤差也會變成可見的錯位；左邊則會飛得很誇張。
+            </>,
+            <>
+              Drag “3D view error magnification” to ×20: the residual error on
+              the right, invisible before, now shows up as a visible offset; the
+              left flies apart dramatically.
+            </>,
+          )}
+        </li>
+        <li>
+          {t(
+            <>
+              把 B 的旋轉誤差調到 0.2°、0.5°、1°：右邊的一致性 RMS 和 B
+              的平台高度一起變差。0.5° ≈ 3.5 mm 的位移。
             </>,
             <>
               Set B&apos;s rotation error to 0.2°, 0.5°, 1°: the consistency RMS
-              and B&apos;s stage height get worse together. The camera is about
-              400 mm from the object, so 0.5° ≈ 3.5 mm of displacement.
+              and B&apos;s stage height on the right get worse together. 0.5° ≈
+              3.5 mm of displacement.
             </>,
           )}
         </li>

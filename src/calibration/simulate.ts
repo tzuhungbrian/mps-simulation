@@ -30,6 +30,7 @@ import {
   rigidTransform,
   rodrigues,
   rotationAngleDeg,
+  rotationToVector,
   scale3,
   sub3,
   symmetricEigen,
@@ -398,10 +399,15 @@ export function runCalibrationLab(
 
 // ---------------------------------------------------------------- Lab C
 
-export type RegistrationMethod = "none" | "board" | "markers";
+/** "rough" = hand-measured extrinsics (the before state). */
+export type RegistrationMethod = "rough" | "board" | "markers";
 
 export interface RegistrationConfig {
   method: RegistrationMethod;
+  /** Hand-measured extrinsics: rotation error, degrees. */
+  roughRotationDeg: number;
+  /** Hand-measured extrinsics: camera position error, mm. */
+  roughShiftMm: number;
   /** Board corner noise for solvePnP, px. */
   cornerNoise: number;
   /** Marker centre noise for Kabsch, mm. */
@@ -415,6 +421,8 @@ export interface RegistrationConfig {
 
 export const DEFAULT_REGISTRATION: RegistrationConfig = {
   method: "board",
+  roughRotationDeg: 2,
+  roughShiftMm: 5,
   cornerNoise: 0.2,
   markerNoise: 0.05,
   rotationErrorB: 0,
@@ -468,7 +476,7 @@ export interface ScannerResult {
   worldCloud: Vec3[];
   truth: Vec3[];
   onStage: boolean[];
-  /** Estimated world → camera pose (null for "none"). */
+  /** Estimated world → camera pose (null if solvePnP failed). */
   estimatedPose: Pose | null;
   rms: number;
   /** Mean height of stage points: the height-zero offset, mm. */
@@ -537,6 +545,8 @@ export function runRegistrationLab(
   config: RegistrationConfig,
 ): RegistrationLab {
   const random = createSeededRandom(config.seed);
+  // Separate stream so every method sees the same scans.
+  const poseRandom = createSeededRandom(config.seed * 7919 + 17);
   const board = boardPoints(TRUE_SQUARE_MM);
   const scanners = SCANNERS.map((s): ScannerResult => {
     const { cloud, truth, onStage } = scanScene(
@@ -545,23 +555,54 @@ export function runRegistrationLab(
       random,
     );
     let estimated: Pose | null = null;
-    if (config.method === "board") {
+    if (config.method === "rough") {
+      const axis = normalize3([
+        gaussian(poseRandom),
+        gaussian(poseRandom),
+        gaussian(poseRandom),
+      ]);
+      const shift = scale3(
+        normalize3([
+          gaussian(poseRandom),
+          gaussian(poseRandom),
+          gaussian(poseRandom),
+        ]),
+        config.roughShiftMm,
+      );
+      const Q = rodrigues(
+        scale3(axis, (config.roughRotationDeg * Math.PI) / 180),
+      );
+      const R = matMul(Q, s.camera.R);
+      estimated = {
+        R,
+        t: scale3(mul3(R, add3(poseCenter(s.camera), shift)), -1),
+      };
+    } else if (config.method === "board") {
       const corners = board.map((X) =>
-        noisy(project(TRUE_CAMERA, s.camera, X)!, config.cornerNoise, random),
+        noisy(
+          project(TRUE_CAMERA, s.camera, X)!,
+          config.cornerNoise,
+          poseRandom,
+        ),
       );
       estimated = solvePnP(board, corners, TRUE_CAMERA)?.pose ?? null;
     } else if (config.method === "markers") {
       const measured = MARKERS.map((M) =>
         add3(applyPose(s.camera, M), [
-          config.markerNoise * gaussian(random),
-          config.markerNoise * gaussian(random),
-          config.markerNoise * gaussian(random),
+          config.markerNoise * gaussian(poseRandom),
+          config.markerNoise * gaussian(poseRandom),
+          config.markerNoise * gaussian(poseRandom),
         ]),
       );
       const fit = rigidTransform(measured, MARKERS);
       estimated = invertPose({ R: fit.R, t: fit.t });
     }
-    if (estimated && s.name === "B" && config.rotationErrorB) {
+    if (
+      estimated &&
+      s.name === "B" &&
+      config.method !== "rough" &&
+      config.rotationErrorB
+    ) {
       // Rotate about the camera's own x axis: the camera centre stays put.
       const Q = rodrigues([(config.rotationErrorB * Math.PI) / 180, 0, 0]);
       estimated = { R: matMul(Q, estimated.R), t: mul3(Q, estimated.t) };
@@ -594,56 +635,105 @@ export function runRegistrationLab(
         : NaN,
     };
   });
-  return {
-    config,
-    scanners,
-    consistency:
-      config.method === "none"
-        ? { rms: NaN, points: 0 }
-        : cloudConsistency(scanners),
+  return { config, scanners, consistency: cloudConsistency(scanners) };
+}
+
+/**
+ * Display only: scale the registration error (estimated vs. true camera → world)
+ * by k about the scene centre. k = 1 reproduces worldCloud / estimatedPose.
+ */
+export function exaggerateRegistration(
+  s: ScannerResult,
+  truth: Scanner,
+  k: number,
+): { cloud: Vec3[]; pose: Pose | null } {
+  if (!s.estimatedPose || k === 1)
+    return { cloud: s.worldCloud, pose: s.estimatedPose };
+  const D = composePose(invertPose(s.estimatedPose), truth.camera);
+  const Rk = rodrigues(scale3(rotationToVector(D.R), k));
+  const shift = sub3(applyPose(D, TARGET), TARGET);
+  const Dk: Pose = {
+    R: Rk,
+    t: add3(sub3(TARGET, mul3(Rk, TARGET)), scale3(shift, k)),
   };
+  const toWorld = composePose(Dk, invertPose(truth.camera));
+  return {
+    cloud: s.cameraCloud.map((X) => applyPose(toWorld, X)),
+    pose: invertPose(toWorld),
+  };
+}
+
+function pointHash(points: Vec3[], cell: number) {
+  const key = (i: number, j: number, k: number) => `${i},${j},${k}`;
+  const map = new Map<string, Vec3[]>();
+  for (const p of points) {
+    const k = key(...(p.map((v) => Math.floor(v / cell)) as Vec3));
+    const list = map.get(k);
+    if (list) list.push(p);
+    else map.set(k, [p]);
+  }
+  /** Points within `cell` of x. */
+  return (x: Vec3): Vec3[] => {
+    const out: Vec3[] = [];
+    const [i, j, k] = x.map((v) => Math.floor(v / cell));
+    for (let di = -1; di <= 1; di++)
+      for (let dj = -1; dj <= 1; dj++)
+        for (let dk = -1; dk <= 1; dk++)
+          for (const q of map.get(key(i + di, j + dj, k + dk)) ?? [])
+            if (norm3(sub3(q, x)) <= cell) out.push(q);
+    return out;
+  };
+}
+
+function fitPlane(points: Vec3[]) {
+  const c = scale3(
+    points.reduce<Vec3>((acc, q) => add3(acc, q), [0, 0, 0]),
+    1 / points.length,
+  );
+  const cov = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  for (const q of points) {
+    const d = sub3(q, c);
+    for (let r = 0; r < 3; r++)
+      for (let col = 0; col < 3; col++) cov[r][col] += d[r] * d[col];
+  }
+  return { c, normal: symmetricEigen(cov).vectors[0] };
 }
 
 /** Truth-free cloud-to-cloud distance: B points to local planes fitted on A. */
 function cloudConsistency(s: ScannerResult[]): { rms: number; points: number } {
-  const radius = 5,
-    a = s[0].worldCloud;
-  const key = (x: number, y: number, z: number) =>
-    `${Math.floor(x / radius)},${Math.floor(y / radius)},${Math.floor(z / radius)}`;
-  const hash = new Map<string, Vec3[]>();
-  for (const p of a) {
-    const k = key(...p);
-    const list = hash.get(k);
-    if (list) list.push(p);
-    else hash.set(k, [p]);
-  }
+  const a = s[0].worldCloud;
+  // Wide search finds A even when B is far off; the plane itself stays local.
+  const wide = pointHash(a, 15),
+    local = pointHash(a, 5);
   let sum = 0,
     n = 0;
   for (const p of s[1].worldCloud) {
-    const near: Vec3[] = [];
-    const [i, j, k] = p.map((v) => Math.floor(v / radius));
-    for (let di = -1; di <= 1; di++)
-      for (let dj = -1; dj <= 1; dj++)
-        for (let dk = -1; dk <= 1; dk++)
-          for (const q of hash.get(`${i + di},${j + dj},${k + dk}`) ?? [])
-            if (norm3(sub3(q, p)) <= radius) near.push(q);
-    if (near.length < 6) continue;
-    const c = scale3(
-      near.reduce<Vec3>((acc, q) => add3(acc, q), [0, 0, 0]),
-      1 / near.length,
-    );
-    const cov = [
-      [0, 0, 0],
-      [0, 0, 0],
-      [0, 0, 0],
-    ];
-    for (const q of near) {
-      const d = sub3(q, c);
-      for (let r = 0; r < 3; r++)
-        for (let col = 0; col < 3; col++) cov[r][col] += d[r] * d[col];
+    let q0: Vec3 | null = null,
+      best = Infinity;
+    for (const q of wide(p)) {
+      const d = norm3(sub3(q, p));
+      if (d < best) [best, q0] = [d, q];
     }
-    const normal = symmetricEigen(cov).vectors[0];
-    const dist = dot3(sub3(p, c), normal);
+    if (!q0) continue;
+    let near = local(q0);
+    if (near.length < 6) continue;
+    let plane = fitPlane(near);
+    // Refit around p's foot point so a sideways offset doesn't tilt the patch.
+    const foot = sub3(
+      p,
+      scale3(plane.normal, dot3(sub3(p, plane.c), plane.normal)),
+    );
+    near = local(foot);
+    if (near.length < 6) continue;
+    plane = fitPlane(near);
+    const dist = dot3(sub3(p, plane.c), plane.normal);
+    // Foot far from the patch centre = beyond A's coverage: don't extrapolate.
+    const offset = norm3(sub3(sub3(p, scale3(plane.normal, dist)), plane.c));
+    if (offset > 2.5) continue;
     sum += dist * dist;
     n++;
   }

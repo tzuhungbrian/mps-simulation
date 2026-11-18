@@ -32,6 +32,11 @@ export type SceneObject =
 /** camera: OpenCV camera frame (y down, z forward). world: Z-up stage frame. */
 export type SceneFrame = "camera" | "world";
 
+/** Scenes sharing one set orbit together. */
+export type SceneSync = Set<
+  (position: THREE.Vector3, target: THREE.Vector3) => void
+>;
+
 const SCALE = 0.01;
 const toDisplay = (frame: SceneFrame, [x, y, z]: Vec3) =>
   frame === "camera"
@@ -117,10 +122,15 @@ export default function CalibScene({
   frame,
   objects,
   label,
+  sync,
+  focus,
 }: {
   frame: SceneFrame;
   objects: SceneObject[];
   label: string;
+  sync?: SceneSync;
+  /** Home view frames this region instead of everything. */
+  focus?: { center: Vec3; radius: number };
 }) {
   const host = useRef<HTMLDivElement>(null);
   const api = useRef<{
@@ -149,7 +159,25 @@ export default function CalibScene({
     let content: THREE.Group | null = null;
     let currentFrame: SceneFrame = frame;
     const render = () => renderer.render(scene, viewer);
-    orbit.addEventListener("change", render);
+    let following = false;
+    const follow = (position: THREE.Vector3, target: THREE.Vector3) => {
+      following = true;
+      viewer.position.copy(position);
+      orbit.target.copy(target);
+      orbit.update();
+      render();
+      following = false;
+    };
+    const broadcast = () => {
+      if (following || !sync) return;
+      for (const other of sync)
+        if (other !== follow) other(viewer.position, orbit.target);
+    };
+    sync?.add(follow);
+    orbit.addEventListener("change", () => {
+      render();
+      broadcast();
+    });
     const resize = () => {
       const w = el.clientWidth,
         h = el.clientHeight;
@@ -160,9 +188,14 @@ export default function CalibScene({
     };
     const home = () => {
       if (!content) return;
-      const sphere = new THREE.Box3()
-        .setFromObject(content)
-        .getBoundingSphere(new THREE.Sphere());
+      const sphere = focus
+        ? new THREE.Sphere(
+            toDisplay(currentFrame, focus.center),
+            focus.radius * SCALE,
+          )
+        : new THREE.Box3()
+            .setFromObject(content)
+            .getBoundingSphere(new THREE.Sphere());
       const dir =
         currentFrame === "camera"
           ? new THREE.Vector3(0.75, 0.55, 0.9)
@@ -173,6 +206,7 @@ export default function CalibScene({
         .add(dir.normalize().multiplyScalar(sphere.radius * 2.3));
       orbit.update();
       render();
+      broadcast();
     };
     api.current = {
       set: (objects, f) => {
@@ -197,6 +231,7 @@ export default function CalibScene({
     observer.observe(el);
     resize();
     return () => {
+      sync?.delete(follow);
       observer.disconnect();
       orbit.dispose();
       renderer.dispose();

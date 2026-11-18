@@ -322,6 +322,57 @@
 .calib-reset {
   align-self: flex-start;
 }
+.calib-group > .calib-slider {
+  display: grid;
+}
+.calib-compare-table tbody th {
+  color: #93a4b8;
+  font-weight: 400;
+}
+.calib-compare-table small {
+  color: #7f8fa3;
+}
+.calib-compare-table .is-before,
+.calib-compare-title.is-before {
+  color: #ff9b85;
+}
+.calib-compare-table .is-after,
+.calib-compare-title.is-after {
+  color: #5ee4bd;
+}
+.calib-compare-bar {
+  display: grid;
+  gap: 2px;
+  max-width: 440px;
+  margin: 4px 0 10px;
+}
+.calib-compare-bar .calib-note {
+  margin: 0;
+}
+.calib-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+.calib-compare section {
+  min-width: 0;
+}
+.calib-compare .calib-scene-canvas {
+  height: 320px;
+}
+.calib-compare-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.calib-compare-title span {
+  color: #a6b4c4;
+  font-size: 13px;
+  font-weight: 400;
+}
 .calib-results {
   min-width: 0;
 }
